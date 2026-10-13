@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMT Quotation Tool</title>
+<link rel="stylesheet" href="/static/quotation_tool/quotation.css">
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-left">
+    <div>
+      <div class="hdr-logo">Aeliya Marine Tech — Quotation Tool</div>
+      <div class="hdr-sub">aeliyamarinetech.com</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <button class="hdr-search-btn" onclick="openSearchModal()">🔍 Search <span>Zoho · Atlas · Al Reza</span></button>
+    <span id="hdrUser" style="font-size:12px;color:#93C5FD"></span>
+    <a href="/manager" id="mgrLink" style="display:none" target="_blank" class="mgr-link">Manager Dashboard ↗</a>
+    <a href="/logout" class="mgr-link" style="border-color:#F87171;color:#F87171" onmouseover="this.style.background='#F87171';this.style.color='#1E3A5F'" onmouseout="this.style.background='';this.style.color='#F87171'">Sign Out</a>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- Input card -->
+  <div class="card">
+    <div class="input-row">
+      <div class="sku-col">
+        <label>Enter SKUs  (one per line or comma-separated)</label>
+        <textarea id="skuInput" placeholder="e.g. 1258&#10;25158&#10;109028"></textarea>
+      </div>
+      <div class="right-col">
+        <div class="name-rate-row">
+          <div class="field-group">
+            <label>USD → INR</label>
+            <div class="rate-display" id="rateDisplay">—</div>
+            <span class="hint" style="text-align:center">
+              <a href="#" id="refreshRate" style="color:#1A56DB;text-decoration:none;font-size:11px">↺ Refresh</a>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="lookupBtn" onclick="lookupSKUs()">▶&nbsp; Look Up SKUs</button>
+      <button class="btn btn-ghost" onclick="clearCache()">Clear Cache</button>
+      <button class="btn btn-teal img-down-btn" id="imgDownTopBtn" onclick="openImgModal('all')" style="display:none">&#128247;&nbsp; Download All Images</button>
+      <button class="btn btn-ghost img-down-btn" id="imgDownSelTopBtn" onclick="openImgModal('selected')" style="display:none">Download Selected</button>
+      <span id="status"></span>
+    </div>
+    <div id="progress"><div id="progressBar"></div></div>
+  </div>
+
+  <!-- Results -->
+  <div class="card" style="padding:14px 16px">
+    <div class="results-wrap">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th style="width:4%"><input type="checkbox" id="imgSelAll" class="img-sel" title="Select all found SKUs for image download" onchange="toggleAllImageSelections(this.checked)"></th>
+            <th>SKU</th>
+            <th>Sr No</th>
+            <th style="width:20%;text-align:left">Description</th>
+            <th style="width:9%">Condition</th>
+            <th style="width:8%">Product Details &amp; Pictures</th>
+            <th style="width:6%">Available QTY</th>
+            <th style="width:9%">Rate/Pcs (USD)</th>
+            <th style="width:9%">Rate/Pcs (INR)</th>
+            <th style="width:6%">Shipping</th>
+            <th style="width:8%">Lead Time</th>
+            <th style="width:6%">Image</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody">
+          <tr><td colspan="12" class="empty-state">Enter SKUs above and click Look Up</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Search Modal -->
+  <div id="searchModal" onclick="srchModalBgClick(event)">
+    <div class="srch-box">
+      <div class="srch-head">
+        <div class="srch-bar-row">
+          <input type="text" id="searchInput" placeholder="Search by name, SKU, brand, model, MPN…" maxlength="160" autofocus>
+          <button class="go" id="searchBtn" onclick="searchAll()">Search All</button>
+        </div>
+        <div class="srch-meta">
+          <div class="filter-tabs" id="filterTabs" style="display:none">
+            <span class="tab active" data-src="all"    onclick="filterResults('all')">All <span class="cnt" id="cnt-all">0</span></span>
+            <span class="tab"        data-src="zoho"   onclick="filterResults('zoho')">Zoho <span class="cnt" id="cnt-zoho">0</span></span>
+            <span class="tab"        data-src="atlas"  onclick="filterResults('atlas')">Atlas Ship <span class="cnt" id="cnt-atlas">0</span></span>
+            <span class="tab"        data-src="alreza" onclick="filterResults('alreza')">Al Reza <span class="cnt" id="cnt-alreza">0</span></span>
+          </div>
+          <button class="btn btn-primary" id="copySkusBtn" style="display:none;padding:4px 12px;font-size:12px" onclick="copyAllSkus()">📋 Copy SKUs to Quote</button>
+          <span id="srchClear" class="srch-clear" style="display:none" onclick="clearSearch()">✕ Clear search</span>
+          <button class="srch-close" onclick="closeSearchModal()" title="Close">✕</button>
+        </div>
+
+        <!-- Loading shimmer -->
+        <div id="searchLoading" style="display:none;padding-bottom:10px">
+          <div class="loading-row">
+            <div class="loading-bar"></div><div class="loading-bar"></div><div class="loading-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="srch-body">
+        <div id="resultsGrid"></div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Image Download Modal -->
+  <div id="imgModal" onclick="imgModalBgClick(event)">
+    <div class="img-modal-box" onclick="event.stopPropagation()">
+      <button class="img-modal-close" onclick="closeImgModal()">&#215;</button>
+      <div class="img-modal-title">&#128247; Download Product Images</div>
+      <div class="img-modal-sub" id="imgModalSub">Choose how to save images for the current SKUs</div>
+      <div class="img-opts">
+        <div class="img-opt selected" id="optZip" onclick="selectImgOpt('zip')">
+          <div class="img-opt-icon">&#128230;</div>
+          <div class="img-opt-title">Download ZIP</div>
+          <div class="img-opt-desc">All images packed into a single ZIP file and downloaded to your browser's download folder</div>
+        </div>
+        <div class="img-opt" id="optFolder" onclick="selectImgOpt('folder')">
+          <div class="img-opt-icon">&#128193;</div>
+          <div class="img-opt-title">Save to Folder</div>
+          <div class="img-opt-desc">Pick a folder on your computer and save each image directly into it (Chrome/Edge only)</div>
+        </div>
+      </div>
+      <div class="img-modal-footer">
+        <span id="imgProgress"></span>
+        <button class="btn btn-ghost" onclick="closeImgModal()">Cancel</button>
+        <button class="btn btn-teal" id="imgGoBtn" onclick="startImgDownload()">&#9654;&nbsp; Start Download</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" onclick="closeLightbox(event)">
+    <span id="lightbox-close" onclick="closeLightbox()">✕</span>
+    <img id="lightbox-img" src="" alt="">
+    <div id="lightbox-caption"></div>
+  </div>
+
+  <!-- Copy bar -->
+  <div class="card" style="padding:14px 20px">
+    <div class="copy-section">
+      <div class="copy-group">
+        <div class="copy-group-label">Formal Quote &middot; Table</div>
+        <div class="copy-group-btns">
+          <button class="btn btn-orange" onclick="copyFormal('USD')">$ USD</button>
+          <button class="btn btn-green"  onclick="copyFormal('INR')">&#8377; INR</button>
+        </div>
+      </div>
+      <div class="copy-group">
+        <div class="copy-group-label">Email &middot; Full Letter</div>
+        <div class="copy-group-btns">
+          <button class="btn btn-orange" onclick="copyFormalLetter('USD')">$ USD</button>
+          <button class="btn btn-green"  onclick="copyFormalLetter('INR')">&#8377; INR</button>
+        </div>
+      </div>
+      <div class="copy-group">
+        <div class="copy-group-label">WhatsApp</div>
+        <div class="copy-group-btns">
+          <button class="btn btn-orange" onclick="copyWA('USD')">$ USD</button>
+          <button class="btn btn-green"  onclick="copyWA('INR')">&#8377; INR</button>
+        </div>
+      </div>
+      <div class="copy-group img-down-btn" id="imgDownGroup" style="display:none">
+        <div class="copy-group-label">Images</div>
+        <div class="copy-group-btns">
+          <button class="btn btn-teal" id="imgDownBtn" onclick="openImgModal('all')">&#128247;&nbsp; All</button>
+          <button class="btn btn-ghost" id="imgDownSelBtn" onclick="openImgModal('selected')">Download Selected</button>
+        </div>
+      </div>
+      <span id="copyStatus" style="align-self:center"></span>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">Double-click a row to open the product page &nbsp;|&nbsp; Shift+Enter to look up</div>
+
+<script src="/static/quotation_tool/quotation.js"></script>
+</body>
+</html>

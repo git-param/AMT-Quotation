@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="shortcut icon" href="/favicon.ico" type="image/svg+xml">
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMT Manager Dashboard</title>
+<link rel="stylesheet" href="/static/manager_dashboard/manager.css">
+</head>
+<body>
+
+<div class="hdr">
+  <div>
+    <div class="hdr-logo">AMT Manager Dashboard</div>
+    <div class="hdr-sub">Quotation activity overview</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <button class="refresh-btn" onclick="loadStats()">↺ Refresh</button>
+    <span class="last-updated" id="lastUpdated"></span>
+    <span id="hdrUser" style="font-size:12px;color:#93C5FD"></span>
+    <a href="/" class="back-link">← Quotation Tool</a>
+    <a href="/logout" class="back-link" style="border-color:#F87171;color:#F87171">Sign Out</a>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- Summary cards -->
+  <div class="cards">
+    <div class="card"><span class="card-icon">🔍</span><div class="card-val" id="c-searches">—</div><div class="card-lbl">Searches Today</div></div>
+    <div class="card"><span class="card-icon">📦</span><div class="card-val" id="c-skus">—</div><div class="card-lbl">SKUs Looked Up Today</div></div>
+    <div class="card"><span class="card-icon">✅</span><div class="card-val" id="c-found">—</div><div class="card-lbl">SKUs Found Today</div></div>
+    <div class="card"><span class="card-icon">📋</span><div class="card-val" id="c-copies">—</div><div class="card-lbl">Quotations Copied Today</div></div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-row">
+    <div class="panel">
+      <div class="panel-title">Searches per Day — Last 14 Days</div>
+      <canvas id="chartDays" height="120"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Top Users by SKUs Searched</div>
+      <canvas id="chartUsers" height="160"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Copy Type Breakdown</div>
+      <canvas id="chartCopies" height="160"></canvas>
+    </div>
+  </div>
+
+  <!-- Tables -->
+  <div class="tables-row">
+    <div class="panel">
+      <div class="panel-title">Recent Searches</div>
+      <div style="overflow-x:auto;max-height:340px;overflow-y:auto">
+        <table class="tbl">
+          <thead><tr>
+            <th>User</th><th>SKUs</th><th>Found</th><th>Not Found</th><th>Time</th>
+          </tr></thead>
+          <tbody id="tblRecent"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Top Searched SKUs (All Time)</div>
+      <div style="overflow-x:auto;max-height:340px;overflow-y:auto">
+        <table class="tbl">
+          <thead><tr><th>SKU</th><th>Times Searched</th></tr></thead>
+          <tbody id="tblTopSkus"><tr><td colspan="2" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Management -->
+  <div class="user-grid" style="margin-bottom:18px">
+    <!-- Add user -->
+    <div class="panel">
+      <div class="panel-title">Add New User</div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Username</label>
+          <input type="text" id="newUsername" placeholder="e.g. priya" maxlength="40">
+        </div>
+        <div class="form-field">
+          <label>Password</label>
+          <input type="password" id="newPassword" placeholder="min 4 chars" maxlength="80">
+        </div>
+        <div class="form-field" style="max-width:110px">
+          <label>Role</label>
+          <select id="newRole">
+            <option value="user">User</option>
+            <option value="manager">Manager</option>
+          </select>
+        </div>
+        <button class="btn-sm btn-add" onclick="addUser()">Add</button>
+      </div>
+      <div class="msg" id="addMsg"></div>
+    </div>
+
+    <!-- Reset password -->
+    <div class="panel">
+      <div class="panel-title">Reset User Password</div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Select User</label>
+          <select id="resetUserId"></select>
+        </div>
+        <div class="form-field">
+          <label>New Password</label>
+          <input type="password" id="resetPassword" placeholder="min 4 chars" maxlength="80">
+        </div>
+        <button class="btn-sm btn-pwd" onclick="resetPassword()">Reset</button>
+      </div>
+      <div class="msg" id="resetMsg"></div>
+    </div>
+  </div>
+
+  <!-- User list -->
+  <div class="panel" style="margin-bottom:18px">
+    <div class="panel-title">All Users</div>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr>
+          <th>Username</th><th>Role</th><th>Created</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="usersList"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="msg" id="deleteMsg"></div>
+  </div>
+
+  <!-- User breakdown -->
+  <div class="panel">
+    <div class="panel-title">User Activity (All Time)</div>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr>
+          <th>User</th><th>Searches</th><th>SKUs Looked Up</th><th>SKUs Found</th><th>Hit Rate</th><th>Last Active</th>
+        </tr></thead>
+        <tbody id="tblUsers"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script src="/static/manager_dashboard/manager.js"></script>
+</body>
+</html>

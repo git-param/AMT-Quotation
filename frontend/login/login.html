@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="shortcut icon" href="/favicon.ico" type="image/svg+xml">
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMT Quotation — Login</title>
+<link rel="stylesheet" href="/static/login/login.css">
+</head>
+<body>
+<div class="logo-area">
+  <h1>Aeliya Marine Tech</h1>
+  <p>Quotation Tool — Please sign in</p>
+</div>
+<div class="card">
+  <div class="error" id="errMsg"></div>
+  <form id="loginForm" onsubmit="doLogin(event)">
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn-login" type="submit" id="loginBtn">Sign In</button>
+  </form>
+</div>
+<div class="footer-note">aeliyamarinetech.com</div>
+
+<script src="/static/login/login.js"></script>
+</body>
+</html>
