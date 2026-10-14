@@ -257,7 +257,59 @@ ENQUIRY_SCHEMA = (
     "ON client_enquiries(created_by, id)",
 )
 
+ENQUIRY_LINE_SCHEMA = (
+    "CREATE TABLE enquiry_sku_lines ("
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "enquiry_id INTEGER NOT NULL REFERENCES client_enquiries(id) "
+    "ON DELETE RESTRICT, sku TEXT NOT NULL "
+    "CHECK (length(trim(sku)) BETWEEN 1 AND 100), "
+    "description TEXT NOT NULL "
+    "CHECK (length(trim(description)) BETWEEN 1 AND 2000), "
+    "quantity_milli INTEGER NOT NULL "
+    "CHECK (quantity_milli BETWEEN 1 AND 999999999), "
+    "unit_price_minor INTEGER NOT NULL "
+    "CHECK (unit_price_minor BETWEEN 0 AND 99999999999), "
+    "currency TEXT NOT NULL CHECK (currency IN ('USD', 'INR')), "
+    "is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)), "
+    "created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "updated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "created_at TEXT NOT NULL DEFAULT "
+    "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), "
+    "updated_at TEXT NOT NULL DEFAULT "
+    "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))",
+    "CREATE INDEX idx_enquiry_lines_active "
+    "ON enquiry_sku_lines(enquiry_id, is_active, id)",
+    "CREATE TABLE enquiry_line_revisions ("
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "line_id INTEGER NOT NULL REFERENCES enquiry_sku_lines(id) "
+    "ON DELETE RESTRICT, "
+    "snapshot_json TEXT NOT NULL, "
+    "action TEXT NOT NULL CHECK (action IN ('create', 'edit', 'remove')), "
+    "actor_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "created_at TEXT NOT NULL DEFAULT "
+    "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))",
+    "CREATE INDEX idx_line_revisions_line "
+    "ON enquiry_line_revisions(line_id, id)",
+)
+
+ENQUIRY_DEAL_SCHEMA = (
+    "ALTER TABLE client_enquiries ADD COLUMN deal_currency TEXT "
+    "CHECK (deal_currency IN ('USD', 'INR'))",
+)
+
 # Add new versions here; never edit the name or SQL of an applied version.
+SOFT_DELETE_SCHEMA = (
+    "ALTER TABLE client_leads ADD COLUMN deleted_at TEXT",
+    "ALTER TABLE client_leads ADD COLUMN deleted_by INTEGER "
+    "REFERENCES users(id) ON DELETE RESTRICT",
+    "ALTER TABLE client_enquiries ADD COLUMN deleted_at TEXT",
+    "ALTER TABLE client_enquiries ADD COLUMN deleted_by INTEGER "
+    "REFERENCES users(id) ON DELETE RESTRICT",
+    "CREATE INDEX idx_leads_not_deleted ON client_leads(deleted_at, id)",
+    "CREATE INDEX idx_enquiries_not_deleted "
+    "ON client_enquiries(client_id, deleted_at, id)",
+)
+
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
@@ -269,4 +321,7 @@ MIGRATIONS = (
     (8, 'client_crm_details', CRM_DETAIL_SCHEMA),
     (9, 'client_discovery', CLIENT_DISCOVERY_SCHEMA),
     (10, 'client_enquiries', ENQUIRY_SCHEMA),
+    (11, 'enquiry_sku_lines', ENQUIRY_LINE_SCHEMA),
+    (12, 'enquiry_deal_currency', ENQUIRY_DEAL_SCHEMA),
+    (13, 'client_enquiry_soft_deletion', SOFT_DELETE_SCHEMA),
 )

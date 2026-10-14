@@ -494,7 +494,8 @@ Creating an enquiry does not establish independent access: revoking the parent
 client share removes access even to enquiries that recipient created. Neither
 enquiry creation nor EDIT sharing authorizes onward sharing. Inactive clients
 retain readable/editable enquiry history but cannot receive new enquiries until
-reactivated. Closed/cancelled enquiries remain stored; there is no delete API.
+reactivated. Closed/cancelled enquiries remain stored. Management-only soft
+deletion is described below.
 
 APIs: `GET /api/enquiries` supports q, client_id, creator, status, page/page_size
 (default 25, maximum 100), sort (date/created/reference/status), direction.
@@ -519,3 +520,122 @@ immutable relationships, scoped counts/search/pagination, TL isolation,
 VIEW/EDIT sharing and revocation, inactive clients, restrictive FKs and migration
 preservation, plus prior modules. Browser layout and interactive testing remain
 outstanding. Back up the database before upgrades using the guidance above.
+
+### Module 5.2: enquiry SKU lines
+
+Migration 11 adds `enquiry_sku_lines` and `enquiry_line_revisions`, linked to
+existing enquiry IDs with restrictive FKs. Client/enquiry ownership and all
+applied migrations remain unchanged. Each enquiry has its own independent lines.
+Line ID, enquiry ID, creator and creation timestamp are immutable. Create/edit/
+remove actions append full timestamped snapshots with actor IDs in the same
+transaction as the line change. Removal is soft (`is_active=0`), excludes the
+line from current totals, and retains its ID, parent and revision history.
+
+SKU and description are required. Quantity must be a positive whole number,
+up to 999999. Historical fractional quantities remain unchanged. Unit price
+is nonnegative, up to 999999999.99,
+with at most two decimals. Supported currencies are USD and INR, matching the
+existing quotation/PI formats. Plain decimal input is required; exponents,
+nonfinite values, booleans, invalid precision and client-supplied totals or
+relationships are rejected. Quantities/prices are stored as scaled integers;
+Python Decimal calculates each rounded line total using ROUND_HALF_UP. Currency
+subtotals sum the rounded line totals and are returned as decimal strings.
+Mixed currencies are never combined or automatically converted.
+
+APIs: `GET/POST /api/enquiries/<id>/lines`, and
+`GET/PUT/DELETE /api/enquiries/<id>/lines/<line_id>`. GET detail also returns
+revisions for retained removed lines. All operations derive access from the
+parent enquiry/client: VIEW reads only; EDIT and independent client edit rights
+manage lines. Parent and line IDs are checked together. Writes revalidate rights
+inside BEGIN IMMEDIATE; revoked client access blocks further reading/writing.
+Existing enquiries on inactive clients remain manageable under their client
+rights, consistent with Module 5.1. No line restoration API is added.
+
+`POST /api/enquiries/<id>/sku-lookup` accepts a single SKU and returns a draft
+for review, without saving or overwriting lines. It reuses `fetch_sku` and its
+15-minute Shopify cache, including sale-price selection. Existing lookup assumes
+Shopify pricing is USD; this module preserves that assumption and does not infer
+currency conversion. Requested quantity defaults to one, not available stock.
+Lookup requires enquiry edit rights and rechecks authorization after the network
+call. Missing SKU/price and provider failure produce controlled errors. Users
+can enter items/prices manually, including INR. Stock/condition information is
+shown as a lookup hint rather than a stock reservation or order commitment.
+
+The enquiry detail page provides the line table, SKU fetch, create/edit form,
+soft removal controls and per-currency subtotals. VIEW recipients have no write
+controls. Future orders should copy a selected revision's immutable values into
+independent order lines and optionally reference the original line/revision ID;
+they must validate the enquiry/client relationship. Never reuse mutable enquiry
+lines as order/PI financial records. Addresses and delivery snapshots remain
+separate as described in docs/order_address_design.md; docs/pi_order_fields.md
+covers later HSN/UOM/condition/tax/PI fields, which are not implemented here.
+
+Tests cover decimal rounding, mixed currency totals, validation, stable IDs,
+revision rollback/history, soft removal, parent isolation, VIEW/EDIT rights,
+revocation including during SKU lookup, mocked provider outcomes, migrations,
+and earlier RBAC/CRM modules. Browser layout and interactive testing remain
+outstanding. No orders, shipping details or PI generation are implemented.
+
+### Required SKU cart and enquiry deal currency
+
+Migration 12 adds nullable `client_enquiries.deal_currency` (USD/INR). Existing
+records are not assigned a guessed currency; mixed/older enquiries remain
+editable and show Legacy / not set until reviewed. Previous migrations remain
+unchanged. New enquiries now require an explicit deal currency and 1?50 complete
+initial SKU lines. POST includes `lines` alongside enquiry fields; each initial
+line must use the chosen currency. Header, line records and revisions commit
+atomically, so invalid rows cannot leave an empty enquiry behind.
+
+The create form includes multiline/comma-separated SKU entry, bulk Look Up SKUs,
+manual rows, editable SKU/description/quantity/unit price and row removal. Failed
+lookups must be completed manually or removed. The selected deal currency applies
+to the new draft cart. Changing a draft's currency clears its prices: users must
+fetch again or enter prices explicitly. Existing lines retain independent,
+editable currencies; changing deal metadata never silently converts saved prices.
+Edit enquiry opens both the header and its saved SKU section.
+
+`POST /api/enquiries/sku-lookup` accepts exactly one of client_id/enquiry_id,
+1?50 skus, and currency. It uses existing Shopify SKU/cache and USD/INR rate
+services. INR drafts convert the Shopify USD price with Decimal rounding, and
+show the rate used. If conversion is unavailable, the draft price stays empty;
+USD amounts are never labelled INR. Each lookup is reviewed before persistence,
+and authority is checked before and after provider calls. No stock is reserved.
+The reused rate service can return its cached fallback; the displayed rate is
+for enquiry estimates and should be reviewed before future order/PI pricing.
+
+Add SKU line uses the same bulk review UI; `POST /api/enquiries/<id>/lines/bulk`
+atomically saves complete reviewed rows. Individual saved-line editing and
+decimal totals retain VIEW/EDIT rules; deletion requires management rights. Each
+enquiry keeps its own independent line records, revisions, and currency metadata.
+Creation reference/date/subject and every saved SKU field remain editable by
+client-authorized users; immutable ownership and parent IDs are preserved.
+
+### Management-only deletion
+
+Delete actions are available on client lists/details, enquiry lists/details,
+and persisted SKU lines. Confirmation is required in the UI. Backend DELETE
+APIs independently authorize the current account and original client's scope:
+Admins and legacy managers can delete any accessible record; Sales TLs can
+delete their own clients and those of their assigned active executives.
+Sales Executives cannot delete persisted records, including their own records
+or clients shared with EDIT access. Sharing never grants deletion authority.
+
+`DELETE /api/leads/<id>` and `DELETE /api/enquiries/<id>` mark records deleted
+with the actor and timestamp. Migration 13 adds nullable deletion fields and
+indexes without modifying earlier migrations or existing rows. Deleted records
+are excluded from lists, filters, counts, sharing screens and normal APIs.
+Deleting a client also hides its enquiries and lines; deleting an enquiry
+also makes its lines inaccessible. These descendants are retained in the
+database rather than modified or removed. Ownership, addresses, sharing history,
+references and foreign keys remain intact. References remain reserved.
+
+`DELETE /api/enquiries/<id>/lines/<line_id>` reuses soft removal and revision
+history, now restricted to the same management roles and client scope. All
+deletion operations are transactional. Deactivated clients remain distinct
+from deleted clients; the activation endpoint cannot restore deleted records.
+Unsaved draft items can still be adjusted or removed before submission.
+
+Application startup applies migration 13 using the existing migration runner.
+Follow the backup instructions above before upgrading. No automatic purge or
+restore endpoint is included. Tests cover management permissions, cross-team
+isolation, sharing, descendant access, historical preservation and upgrades.
