@@ -7,7 +7,7 @@ import sqlite3
 from flask import Blueprint, jsonify, request, send_file
 
 from backend.client_leads.discovery import integer
-from backend.client_leads.routes import edit_scope, visibility
+from backend.client_leads.routes import delete_scope, edit_scope, visibility
 from backend.common.auth import authenticated_required, get_current_user
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
@@ -20,16 +20,19 @@ def enquiry_query(user):
     """Use the same client visibility for detail, list and counts."""
     scope, parameters = visibility(user)
     edit, edit_parameters = edit_scope(user)
+    deletion, delete_parameters = delete_scope(user)
     sql = (
         'SELECT e.*, l.name AS client_name, l.company AS client_company, '
         'l.is_active AS client_active, ec.username AS creator_name, '
-        'eu.username AS updated_by_name, (' + edit + ') AS can_edit '
+        'eu.username AS updated_by_name, (' + edit + ') AS can_edit, ('
+        + deletion + ') AS can_delete '
         'FROM client_enquiries e JOIN client_leads l ON l.id = e.client_id '
         'JOIN users u ON u.id = l.created_by '
         'JOIN users ec ON ec.id = e.created_by '
-        'JOIN users eu ON eu.id = e.updated_by WHERE (' + scope + ')'
+        'JOIN users eu ON eu.id = e.updated_by WHERE (' + scope + ') '
+        'AND e.deleted_at IS NULL'
     )
-    return sql, edit_parameters + parameters
+    return sql, edit_parameters + delete_parameters + parameters
 
 
 def read_enquiry(connection, user, enquiry_id):
@@ -252,6 +255,34 @@ def save_enquiry(enquiry_id=None):
         return jsonify(error=str(error)), 400
     except sqlite3.IntegrityError:
         return jsonify(error='Enquiry reference already exists.'), 409
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@bp.route('/api/enquiries/<int:enquiry_id>', methods=['DELETE'])
+@authenticated_required
+def delete_enquiry(enquiry_id):
+    """Soft-delete an authorized enquiry without removing its SKU history."""
+    connection = get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        user = get_current_user()
+        if not user:
+            return jsonify(error='Not logged in'), 401
+        enquiry = read_enquiry(connection, user, enquiry_id)
+        if not enquiry:
+            return jsonify(error='Enquiry not found.'), 404
+        if not enquiry['can_delete']:
+            return jsonify(error='Enquiry deletion is not permitted.'), 403
+        connection.execute(
+            'UPDATE client_enquiries SET deleted_by = ?, updated_by = ?, '
+            "deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), "
+            "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') "
+            'WHERE id = ?', (user['id'], user['id'], enquiry_id),
+        )
+        connection.commit()
+        return jsonify(message='Enquiry deleted; history retained.')
     finally:
         connection.rollback()
         connection.close()

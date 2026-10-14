@@ -21,7 +21,7 @@
     el('lineRows').replaceChildren(); el('lineTotals').replaceChildren();
     data.lines.forEach(line => {
       const row = document.createElement('tr');
-      [line.sku,line.description,line.quantity,line.unit_price,line.currency,line.line_total].forEach(value => { const td = document.createElement('td'); td.textContent = value; row.append(td); });
+      [line.sku,line.description,Number.isInteger(Number(line.quantity))?String(Number(line.quantity)):line.quantity,line.unit_price,line.currency,line.line_total].forEach(value => { const td = document.createElement('td'); td.textContent = value; row.append(td); });
       const actions = document.createElement('td');
       if (enquiry.can_edit) {
         const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'btn-sm'; edit.textContent = 'Edit';
@@ -29,16 +29,17 @@
           try {
             const current = (await call(linePath(line.id))).line;
             if (!current.is_active) throw new Error('This line has been removed.');
-            editingLine = current.id; el('lineSku').value = current.sku; el('lineDescription').value = current.description; el('lineQuantity').value = current.quantity; el('linePrice').value = current.unit_price; el('lineCurrency').value = current.currency; el('lookupInfo').textContent = ''; el('lineForm').hidden = false; el('lineSku').focus();
+            editingLine = current.id; el('lineSku').value = current.sku; el('lineDescription').value = current.description; el('lineQuantity').value = Number.isInteger(Number(current.quantity))?String(Number(current.quantity)):current.quantity; el('linePrice').value = current.unit_price; el('lineCurrency').value = current.currency; el('lookupInfo').textContent = ''; el('lineForm').hidden = false; el('lineSku').focus();
           } catch (error) { notice(error.message,true); }
         };
-        const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn-sm btn-del'; remove.textContent = 'Remove';
+        const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn-sm btn-del'; remove.textContent = 'Delete';
         remove.onclick = async () => {
+          if (!window.confirm(`Delete SKU ${line.sku}? Its history will be retained.`)) return;
           remove.disabled = true;
           try { await call(linePath(line.id), {method:'DELETE'}); reset(); await loadLines(); notice('Line removed. Its ID and revisions are retained.'); }
           catch (error) { notice(error.message,true); } finally { remove.disabled = false; }
         };
-        actions.append(edit,remove);
+        actions.append(edit);if(enquiry.can_delete)actions.append(remove);
       } else { actions.textContent = 'Read only'; }
       row.append(actions); el('lineRows').append(row);
     });

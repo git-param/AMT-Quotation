@@ -21,7 +21,7 @@ def visibility(user):
     """Return parameterized access predicates shared by list and detail."""
     permissions = get_permissions(user)
     if 'leads.view_all' in permissions:
-        return '1 = 1', []
+        return 'l.deleted_at IS NULL', []
     predicate = (
         'l.created_by = ? OR EXISTS (SELECT 1 FROM client_lead_shares s '
         'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1)'
@@ -33,7 +33,14 @@ def visibility(user):
             "AND u.role IN ('user', 'sales_executive'))"
         )
         parameters.append(user['id'])
-    return predicate, parameters
+    return '(' + predicate + ') AND l.deleted_at IS NULL', parameters
+
+
+def delete_scope(user):
+    """Restrict deletion to management roles and independent client scope."""
+    if user['role'] not in ('admin', 'manager', 'sales_tl'):
+        return '0 = 1', []
+    return management_edit_scope(user)
 
 
 def management_edit_scope(user):
@@ -70,19 +77,22 @@ def lead_query(user):
     sql = (
         'SELECT l.*, u.username AS creator_name, (' + editable +
         ') AS can_edit, (' + management_edit_scope(user)[0] +
-        ') AS can_manage_client, EXISTS (SELECT 1 FROM client_lead_shares s '
+        ') AS can_manage_client, (' + delete_scope(user)[0] +
+        ') AS can_delete, EXISTS (SELECT 1 FROM client_lead_shares s '
         'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1) '
         'AS is_shared, (SELECT s.access_level FROM client_lead_shares s '
         'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1) '
         'AS shared_access_level, src.name AS enquiry_source_name, '
         'src.is_active AS enquiry_source_active, '
-        '(SELECT COUNT(*) FROM client_enquiries e WHERE e.client_id = l.id) '
+        '(SELECT COUNT(*) FROM client_enquiries e WHERE e.client_id = l.id '
+        'AND e.deleted_at IS NULL) '
         'AS enquiry_count FROM client_leads l '
         'JOIN users u ON u.id = l.created_by '
         'LEFT JOIN enquiry_sources src ON src.id = l.enquiry_source_id '
         'WHERE (' + predicate + ')'
     )
     parameters = (edit_parameters + management_edit_scope(user)[1]
+                  + delete_scope(user)[1]
                   + [user['id'], user['id']] + parameters)
     return sql, parameters
 
@@ -259,6 +269,7 @@ def set_client_active(lead_id):
         with connection:
             cursor = connection.execute(
                 'UPDATE client_leads AS l SET is_active = ? WHERE l.id = ? '
+                'AND l.deleted_at IS NULL '
                 'AND EXISTS (SELECT 1 FROM users u WHERE u.id = l.created_by '
                 'AND (' + predicate + '))',
                 (int(request.path.endswith('/activate')),
@@ -270,6 +281,40 @@ def set_client_active(lead_id):
                 ), 403
         return jsonify(lead=read_leads(user, lead_id)[0])
     finally:
+        connection.close()
+
+
+@bp.route('/api/leads/<int:lead_id>', methods=['DELETE'])
+@authenticated_required
+def delete_lead(lead_id):
+    """Hide a client and its descendants, retaining every historical row."""
+    connection = get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        user = get_current_user()
+        if not user:
+            return jsonify(error='Not logged in'), 401
+        scope, parameters = visibility(user)
+        permitted, delete_parameters = delete_scope(user)
+        lead = connection.execute(
+            'SELECT l.id, (' + permitted + ') AS can_delete '
+            'FROM client_leads l JOIN users u ON u.id = l.created_by '
+            'WHERE (' + scope + ') AND l.id = ?',
+            [*delete_parameters, *parameters, lead_id],
+        ).fetchone()
+        if not lead:
+            return jsonify(error='Lead not found.'), 404
+        if not lead['can_delete']:
+            return jsonify(error='Client deletion is not permitted.'), 403
+        connection.execute(
+            'UPDATE client_leads SET is_active = 0, deleted_by = ?, '
+            "deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') "
+            'WHERE id = ?', (user['id'], lead_id),
+        )
+        connection.commit()
+        return jsonify(message='Client deleted; history retained.')
+    finally:
+        connection.rollback()
         connection.close()
 
 

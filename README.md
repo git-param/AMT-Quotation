@@ -494,7 +494,8 @@ Creating an enquiry does not establish independent access: revoking the parent
 client share removes access even to enquiries that recipient created. Neither
 enquiry creation nor EDIT sharing authorizes onward sharing. Inactive clients
 retain readable/editable enquiry history but cannot receive new enquiries until
-reactivated. Closed/cancelled enquiries remain stored; there is no delete API.
+reactivated. Closed/cancelled enquiries remain stored. Management-only soft
+deletion is described below.
 
 APIs: `GET /api/enquiries` supports q, client_id, creator, status, page/page_size
 (default 25, maximum 100), sort (date/created/reference/status), direction.
@@ -530,8 +531,9 @@ remove actions append full timestamped snapshots with actor IDs in the same
 transaction as the line change. Removal is soft (`is_active=0`), excludes the
 line from current totals, and retains its ID, parent and revision history.
 
-SKU and description are required. Quantity must be positive, up to 999999.999,
-with at most three decimals. Unit price is nonnegative, up to 999999999.99,
+SKU and description are required. Quantity must be a positive whole number,
+up to 999999. Historical fractional quantities remain unchanged. Unit price
+is nonnegative, up to 999999999.99,
 with at most two decimals. Supported currencies are USD and INR, matching the
 existing quotation/PI formats. Plain decimal input is required; exponents,
 nonfinite values, booleans, invalid precision and client-supplied totals or
@@ -602,8 +604,38 @@ The reused rate service can return its cached fallback; the displayed rate is
 for enquiry estimates and should be reviewed before future order/PI pricing.
 
 Add SKU line uses the same bulk review UI; `POST /api/enquiries/<id>/lines/bulk`
-atomically saves complete reviewed rows. Individual saved-line editing/removal
-and decimal totals remain available, with VIEW/EDIT permissions unchanged. Each
+atomically saves complete reviewed rows. Individual saved-line editing and
+decimal totals retain VIEW/EDIT rules; deletion requires management rights. Each
 enquiry keeps its own independent line records, revisions, and currency metadata.
 Creation reference/date/subject and every saved SKU field remain editable by
 client-authorized users; immutable ownership and parent IDs are preserved.
+
+### Management-only deletion
+
+Delete actions are available on client lists/details, enquiry lists/details,
+and persisted SKU lines. Confirmation is required in the UI. Backend DELETE
+APIs independently authorize the current account and original client's scope:
+Admins and legacy managers can delete any accessible record; Sales TLs can
+delete their own clients and those of their assigned active executives.
+Sales Executives cannot delete persisted records, including their own records
+or clients shared with EDIT access. Sharing never grants deletion authority.
+
+`DELETE /api/leads/<id>` and `DELETE /api/enquiries/<id>` mark records deleted
+with the actor and timestamp. Migration 13 adds nullable deletion fields and
+indexes without modifying earlier migrations or existing rows. Deleted records
+are excluded from lists, filters, counts, sharing screens and normal APIs.
+Deleting a client also hides its enquiries and lines; deleting an enquiry
+also makes its lines inaccessible. These descendants are retained in the
+database rather than modified or removed. Ownership, addresses, sharing history,
+references and foreign keys remain intact. References remain reserved.
+
+`DELETE /api/enquiries/<id>/lines/<line_id>` reuses soft removal and revision
+history, now restricted to the same management roles and client scope. All
+deletion operations are transactional. Deactivated clients remain distinct
+from deleted clients; the activation endpoint cannot restore deleted records.
+Unsaved draft items can still be adjusted or removed before submission.
+
+Application startup applies migration 13 using the existing migration runner.
+Follow the backup instructions above before upgrading. No automatic purge or
+restore endpoint is included. Tests cover management permissions, cross-team
+isolation, sharing, descendant access, historical preservation and upgrades.

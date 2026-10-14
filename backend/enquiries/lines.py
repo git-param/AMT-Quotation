@@ -47,6 +47,9 @@ def validated(data, existing=None):
         data.get('quantity', old.get('quantity')),
         3, Decimal('999999.999'), True
     )
+    if values['quantity_milli'] % 1000 and (
+            existing is None or 'quantity' in data):
+        raise ValueError('Quantity must be a positive whole number.')
     values['unit_price_minor'] = number(
         data.get('unit_price', old.get('unit_price')),
         2, Decimal('999999999.99')
@@ -63,7 +66,9 @@ def serialize(row):
     result = dict(row)
     quantity = Decimal(result.pop('quantity_milli')) / 1000
     price = Decimal(result.pop('unit_price_minor')) / 100
-    result['quantity'] = format(quantity, '.3f')
+    result['quantity'] = format(
+        quantity, '.0f' if quantity == quantity.to_integral_value() else '.3f'
+    )
     result['unit_price'] = format(price, '.2f')
     result['line_total'] = format((quantity * price).quantize(
         Decimal('0.01'), rounding=ROUND_HALF_UP), '.2f')
@@ -177,6 +182,9 @@ def save_line(enquiry_id, line_id=None):
             if not existing:
                 return jsonify(error='Active line not found.'), 404
         if request.method == 'DELETE':
+            enquiry = read_enquiry(connection, user, enquiry_id)
+            if not enquiry['can_delete']:
+                return jsonify(error='SKU deletion is not permitted.'), 403
             connection.execute(
                 'UPDATE enquiry_sku_lines SET is_active = 0, updated_by = ?, '
                 "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') "
@@ -266,7 +274,7 @@ def sku_lookup(enquiry_id):
             return jsonify(error='SKU price is not supported.'), 422
         draft = {
             'sku': product.get('sku', data['sku'].strip()),
-            'description': product.get('title', ''), 'quantity': '1.000',
+            'description': product.get('title', ''), 'quantity': '1',
             'unit_price': format(decimal_price.quantize(
                 Decimal('0.01'), rounding=ROUND_HALF_UP), '.2f'),
             'currency': 'USD',
@@ -368,17 +376,17 @@ def bulk_lookup():
         if error:
             return error
         rate = None
-        if currency == 'INR':
-            try:
-                rate = Decimal(str(lookup_rate()))
-                if not rate.is_finite() or rate <= 0:
-                    rate = None
-            except (InvalidOperation, TypeError):
+        try:
+            rate = Decimal(str(lookup_rate()))
+            if not rate.is_finite() or rate <= 0:
                 rate = None
+        except Exception:
+            # A display conversion must not prevent USD lookup or manual entry.
+            rate = None
         results = []
         for raw in skus:
             sku = raw.strip()
-            row = {'sku': sku, 'description': '', 'quantity': '1.000',
+            row = {'sku': sku, 'description': '', 'quantity': '1',
                    'unit_price': '', 'currency': currency, 'found': False}
             try:
                 product = lookup_product(sku)
@@ -390,6 +398,23 @@ def bulk_lookup():
                                stock=product.get('qty'),
                                condition=product.get('condition', ''),
                                url=product.get('url', ''))
+                    row['catalog_prices'] = {}
+                    for code, factor in (('USD', Decimal('1')), ('INR', rate)):
+                        amounts = {}
+                        for name in ('price', 'sale_price'):
+                            try:
+                                amount = Decimal(str(product.get(name)))
+                                if (factor is None or not amount.is_finite()
+                                        or amount < 0):
+                                    continue
+                                amounts[name] = format(
+                                    (amount * factor).quantize(
+                                        Decimal('0.01'), rounding=ROUND_HALF_UP
+                                    ), '.2f'
+                                )
+                            except (InvalidOperation, TypeError):
+                                continue
+                        row['catalog_prices'][code] = amounts
                     price = product.get('sale_price')
                     if price is None:
                         price = product.get('price')

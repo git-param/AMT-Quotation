@@ -45,12 +45,15 @@ async function load(){
     const actions=document.createElement('td');
     const view=document.createElement('button');view.className='btn-sm';view.textContent='Details';view.onclick=()=>details(e.id).catch(error=>message(error.message,true));actions.append(view);
     if(e.can_edit){const edit=document.createElement('button');edit.className='btn-sm';edit.textContent='Edit';edit.onclick=()=>editEnquiry(e.id).catch(error=>message(error.message,true));actions.append(edit);}
+    if(e.can_delete){const remove=document.createElement('button');remove.type='button';remove.className='btn-sm btn-del';remove.textContent='Delete';remove.onclick=()=>deleteEnquiry(e).catch(error=>message(error.message,true));actions.append(remove);}
     row.append(actions);byId('rows').append(row);
   });
   if(!data.enquiries.length){const row=document.createElement('tr');cell(row,'No enquiries match your filters.');row.firstChild.colSpan=7;byId('rows').append(row);}
 }
 async function details(id){
   const e=(await api(`/api/enquiries/${id}`)).enquiry;
+  byId('deleteEnquiry').hidden=!e.can_delete;
+  byId('deleteEnquiry').onclick=()=>deleteEnquiry(e).catch(error=>message(error.message,true));
   if(clientFilter && String(e.client_id)!==String(clientFilter))throw new Error('This enquiry does not belong to the selected client.');
   byId('detailTitle').textContent=e.reference;byId('detailBody').replaceChildren();
   [['Client',e.client_name],['Company',e.client_company],['Enquiry date',e.enquiry_date],['Subject',e.subject],['Description',e.description],['Deal currency',e.deal_currency||'Legacy / not set'],['Status',e.status.replaceAll('_',' ')],['Creator',e.creator_name],['Created',new Date(e.created_at).toLocaleString()],['Last updated',`${new Date(e.updated_at).toLocaleString()} / ${e.updated_by_name}`],['Access',e.can_edit?'Editable':'Read only']].forEach(([label,value])=>{
@@ -58,6 +61,12 @@ async function details(id){
     const title=document.createElement('h3');title.textContent=label;const text=document.createElement('p');text.textContent=value||'Not provided';block.append(title,text);byId('detailBody').append(block);
   });
   const link=document.createElement('a');link.href=`/leads?client_id=${e.client_id}`;link.textContent='View client details';byId('detailBody').append(link);byId('detail').hidden=false;await window.showEnquiryLines(e);byId('detail').scrollIntoView({behavior:'smooth'});
+}
+async function deleteEnquiry(enquiry) {
+  if (!window.confirm(`Delete enquiry ${enquiry.reference}? Its SKU lines and history will be retained.`)) return;
+  await api(`/api/enquiries/${enquiry.id}`, {method:'DELETE'});
+  byId('editor').hidden=true;byId('detail').hidden=true;
+  await load();message('Enquiry deleted. History retained.');
 }
 async function createForm(){
   editing=null;byId('form').reset();initialSkuEditor.reset();byId('creationSkus').hidden=false;await clients();byId('client').disabled=false;byId('chooseClient').hidden=false;

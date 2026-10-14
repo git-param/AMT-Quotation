@@ -55,7 +55,7 @@ class EnquiryTests(unittest.TestCase):
         ).json['total'], 2)
         self.assertEqual(self.client.delete(
             f'/api/enquiries/{uid}'
-        ).status_code, 405)
+        ).status_code, 403)
         for field in ('created_by', 'created_at', 'client_id', 'updated_by'):
             self.assertEqual(self.client.put(
                 f'/api/enquiries/{uid}', json={field: self.ids['exec2']}
@@ -231,7 +231,7 @@ class EnquiryTests(unittest.TestCase):
             ).fetchone()[0]
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [10, 11, 12])
+        self.assertEqual(migrate_database(path), [10, 11, 12, 13])
         connection = sqlite3.connect(path)
         try:
             self.assertEqual(connection.execute(

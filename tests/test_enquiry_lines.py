@@ -28,22 +28,24 @@ class LineTests(unittest.TestCase):
         self.path = f'/api/enquiries/{self.enquiry_id}/lines'
         # Creation now requires an initial line; isolate individual-line tests.
         initial = self.client.get(self.path).json['lines']
+        self.as_user('admin')
         for line in initial:
             self.client.delete(self.path + f"/{line['id']}")
+        self.as_user('exec1')
 
     def add(self, **overrides):
         data = {'sku': 'SKU-001', 'description': 'Marine spare',
-                'quantity': '1.005', 'unit_price': '1.00', 'currency': 'USD'}
+                'quantity': '1', 'unit_price': '1.00', 'currency': 'USD'}
         data.update(overrides)
         return self.client.post(self.path, json=data)
 
     def test_decimal_totals_mixed_currencies_and_edit_identity(self):
         line = self.add().json['line']
-        self.assertEqual(line['line_total'], '1.01')
-        self.add(quantity='0.1', unit_price='0.20')
+        self.assertEqual(line['line_total'], '1.00')
+        self.add(quantity='1', unit_price='0.20')
         self.add(quantity='2', unit_price='5', currency='INR')
         self.assertEqual(self.client.get(self.path).json['subtotals'],
-                         {'USD': '1.03', 'INR': '10.00'})
+                         {'USD': '1.20', 'INR': '10.00'})
         response = self.client.put(self.path + f"/{line['id']}", json={
             'description': 'Updated description', 'unit_price': '2.00',
         })
@@ -56,10 +58,11 @@ class LineTests(unittest.TestCase):
         ).json['revisions']
         self.assertEqual([r['action'] for r in history], ['create', 'edit'])
         self.assertEqual(history[0]['snapshot']['unit_price'], '1.00')
-        self.assertEqual(updated['line_total'], '2.01')
+        self.assertEqual(updated['line_total'], '2.00')
 
     def test_removal_retains_history_parent_and_original_records(self):
         line_id = self.add().json['line']['id']
+        self.as_user('admin')
         self.assertEqual(self.client.delete(
             self.path + f'/{line_id}'
         ).status_code, 200)
@@ -77,6 +80,37 @@ class LineTests(unittest.TestCase):
         self.assertEqual(
             self.client.get(f'/api/leads/{self.parent}').status_code, 200
         )
+
+    def test_whole_quantities_and_legacy_fraction_preservation(self):
+        for quantity in ('1.5', '0.5', '1.001'):
+            self.assertEqual(self.add(quantity=quantity).status_code, 400)
+        line = self.add(quantity='2.000').json['line']
+        self.assertEqual(line['quantity'], '2')
+        endpoint = self.path + f"/{line['id']}"
+        self.assertEqual(self.client.put(endpoint, json={
+            'quantity': '2.5',
+        }).status_code, 400)
+        self.assertEqual(
+            self.client.get(endpoint).json['line']['quantity'], '2'
+        )
+        # Simulate a record saved before whole-number entry was required.
+        connection = database.get_db()
+        try:
+            with connection:
+                connection.execute(
+                    'UPDATE enquiry_sku_lines SET quantity_milli = 1005 '
+                    'WHERE id = ?', (line['id'],),
+                )
+        finally:
+            connection.close()
+        historical = self.client.get(endpoint).json['line']
+        self.assertEqual(historical['quantity'], '1.005')
+        self.assertEqual(historical['line_total'], '1.01')
+        updated = self.client.put(endpoint, json={
+            'unit_price': '2.00',
+        }).json['line']
+        self.assertEqual(updated['quantity'], '1.005')
+        self.assertEqual(updated['line_total'], '2.01')
 
     def test_numeric_validation_and_untrusted_metadata_totals(self):
         for fields in ({'quantity': '0'}, {'quantity': '-1'},
@@ -219,7 +253,7 @@ class LineTests(unittest.TestCase):
             ).fetchone()[0]
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [11, 12])
+        self.assertEqual(migrate_database(path), [11, 12, 13])
         connection = sqlite3.connect(path)
         try:
             self.assertEqual(connection.execute(
@@ -278,6 +312,10 @@ class LineTests(unittest.TestCase):
                 response.json['drafts'][0]['unit_price'], '900.00'
             )
             self.assertEqual(len(response.json['drafts']), 2)
+            self.assertEqual(response.json['drafts'][0]['catalog_prices'], {
+                'USD': {'price': '20.00', 'sale_price': '10.00'},
+                'INR': {'price': '1800.00', 'sale_price': '900.00'},
+            })
         self.as_user('exec2')
         with patch('backend.enquiries.lines.lookup_product') as lookup:
             self.assertEqual(self.client.post(
@@ -317,6 +355,23 @@ class LineTests(unittest.TestCase):
                 'Rate unavailable', response.json['drafts'][0]['error']
             )
 
+    def test_catalog_display_rate_failure_keeps_usd_deal_price(self):
+        with patch('backend.enquiries.lines.lookup_product', return_value={
+                'found': True, 'title': 'Part', 'price': 20,
+                'sale_price': 10}), \
+                patch('backend.enquiries.lines.lookup_rate',
+                      side_effect=RuntimeError('Rate unavailable')):
+            response = self.client.post('/api/enquiries/sku-lookup', json={
+                'client_id': self.parent, 'skus': ['NEW'], 'currency': 'USD',
+            })
+        self.assertEqual(response.status_code, 200)
+        row = response.json['drafts'][0]
+        self.assertEqual(row['unit_price'], '10.00')
+        self.assertEqual(row['catalog_prices']['USD'], {
+            'price': '20.00', 'sale_price': '10.00',
+        })
+        self.assertEqual(row['catalog_prices']['INR'], {})
+
     def test_version_eleven_preserves_unassigned_legacy_currency(self):
         path = Path(database.DB_PATH).parent / 'legacy_currency.db'
         migrate_database(path, MIGRATIONS[:11])
@@ -339,7 +394,7 @@ class LineTests(unittest.TestCase):
                 )
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [12])
+        self.assertEqual(migrate_database(path), [12, 13])
         connection = sqlite3.connect(path)
         try:
             self.assertIsNone(connection.execute(

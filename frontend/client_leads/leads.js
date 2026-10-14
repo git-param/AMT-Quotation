@@ -7,6 +7,34 @@ let separateShipping = null;
 const scalarFields = ['name', 'company', 'email', 'phone', 'notes', 'business_details', 'status'];
 const addressFields = ['line1', 'line2', 'city', 'state', 'postal_code', 'country'];
 const byId = id => document.getElementById(id);
+function clientActionButton(action, name, style = '') {
+  const icons = {
+    details: ['View details', 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z'],
+    edit: ['Edit', 'm16 3 5 5-12 12-6 1 1-6L16 3Z M13 6l5 5'],
+    deactivate: ['Deactivate', 'M12 3v9 M6 5a9 9 0 1 0 12 0'],
+    activate: ['Reactivate', 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z m-14 0 3 3 7-7'],
+    delete: ['Delete', 'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7'],
+  };
+  const [label, path] = icons[action];
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `btn-sm client-action-icon ${style}`;
+  button.title = label;
+  button.setAttribute('aria-label', `${label}: ${name}`);
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.8');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const shape = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  shape.setAttribute('d', path);
+  svg.append(shape);button.append(svg);
+  return button;
+}
 function message(text, error = false) { byId('message').textContent = text; byId('message').className = error ? 'error' : ''; }
 async function api(path, options = {}) {
   const response = await fetch(path, options);
@@ -48,12 +76,10 @@ async function load() {
     badge.textContent = lead.is_shared ? `Shared / ${lead.shared_access_level}${lead.shared_access_level === 'VIEW' && lead.can_edit ? ' (independent edit)' : ''}` : (lead.can_edit ? 'Editable' : 'Read only');
     access.append(badge); row.append(access);
     const actions = document.createElement('td'); actions.className = 'client-actions';
-    const detailsButton = document.createElement('button'); detailsButton.className = 'btn-sm'; detailsButton.textContent = 'Details';
+    const detailsButton = clientActionButton('details', lead.name);
     detailsButton.onclick = () => openDetails(lead.id).catch(error => message(error.message, true)); actions.append(detailsButton);
     if (lead.can_edit) {
-      const button = document.createElement('button');
-      button.className = 'btn-sm'; button.textContent = lead.can_edit ? 'Edit' : 'Details';
-      button.setAttribute('aria-label', `Edit ${lead.name}`);
+      const button = clientActionButton('edit', lead.name);
       button.onclick = async () => {
         try {
           const current = (await api(`/api/leads/${lead.id}`)).lead;
@@ -80,14 +106,18 @@ async function load() {
       actions.append(button);
     }
     if (lead.can_manage_client) {
-      const toggle = document.createElement('button'); toggle.className = 'btn-sm ' + (lead.is_active ? 'btn-del' : 'btn-activate');
-      toggle.textContent = lead.is_active ? 'Deactivate' : 'Reactivate';
+      const toggle = clientActionButton(lead.is_active ? 'deactivate' : 'activate', lead.name, lead.is_active ? 'btn-del' : 'btn-activate');
       toggle.onclick = async () => {
         toggle.disabled = true;
         try { await api(`/api/leads/${lead.id}/${lead.is_active ? 'deactivate' : 'activate'}`, {method: 'POST'}); await load(); message('Client availability updated. Shares and history retained.'); }
         catch (error) { message(error.message, true); }
         finally { toggle.disabled = false; }
       }; actions.append(toggle);
+    }
+    if (lead.can_delete) {
+      const remove = clientActionButton('delete', lead.name, 'btn-del');
+      remove.onclick=()=>deleteClient(lead).catch(error=>message(error.message,true));
+      actions.append(remove);
     }
     row.append(actions);
     byId('leads').append(row);
@@ -97,6 +127,12 @@ async function load() {
     cell.colSpan = 11; cell.className = 'source-empty'; cell.textContent = 'No leads yet. Click Add Lead to create your first client.';
     row.append(cell); byId('leads').append(row);
   }
+}
+async function deleteClient(client) {
+  if (!window.confirm(`Delete client ${client.name}? Its enquiries and SKU lines will be hidden; all history will be retained.`)) return;
+  await api(`/api/leads/${client.id}`, {method:'DELETE'});
+  resetForm();closeForm();byId('clientDetail').hidden=true;
+  await loadOptions();await load();message('Client deleted. History retained.');
 }
 byId('refresh').onclick = () => load().catch(error => message(error.message, true));
 byId('leadForm').onsubmit = async event => {
@@ -212,6 +248,7 @@ async function openDetails(id) {
   section('Status and availability',`${client.status} / ${client.is_active ? 'Active' : 'Inactive'}`);
   section('Ownership and creation',`${client.creator_name} (owner and creator) / ${new Date(client.created_at).toLocaleString()}`);
   section('Access',client.is_shared ? `Shared ${client.shared_access_level} / ${client.can_edit ? 'Editable' : 'Read only'}` : client.can_edit ? 'Editable' : 'Read only');
+  if(client.can_delete){const remove=document.createElement('button');remove.type='button';remove.className='btn-sm btn-del';remove.textContent='Delete client';remove.onclick=()=>deleteClient(client).catch(error=>message(error.message,true));byId('detailBody').append(remove);}
   section('Enquiry source',client.enquiry_source_name ? `${client.enquiry_source_name}${client.enquiry_source_active ? '' : ' (inactive)'}` : 'Not specified');
   byId('addressHistory').replaceChildren();
   data.address_history.forEach(snapshot => {

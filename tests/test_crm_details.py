@@ -139,7 +139,7 @@ class CRMTests(unittest.TestCase):
             json={'user_id': self.ids['exec2']},
         ).status_code, 200)
         self.assertEqual(
-            self.client.delete(f'/api/leads/{uid}').status_code, 405
+            self.client.delete(f'/api/leads/{uid}').status_code, 200
         )
 
     def test_view_share_remains_read_only_for_crm_fields_and_lifecycle(self):
@@ -190,7 +190,7 @@ class CRMTests(unittest.TestCase):
             ).fetchall()
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [8, 9, 10, 11, 12])
+        self.assertEqual(migrate_database(path), [8, 9, 10, 11, 12, 13])
         connection = sqlite3.connect(path)
         try:
             row = connection.execute('SELECT * FROM client_leads').fetchone()

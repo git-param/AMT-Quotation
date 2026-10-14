@@ -298,6 +298,18 @@ ENQUIRY_DEAL_SCHEMA = (
 )
 
 # Add new versions here; never edit the name or SQL of an applied version.
+SOFT_DELETE_SCHEMA = (
+    "ALTER TABLE client_leads ADD COLUMN deleted_at TEXT",
+    "ALTER TABLE client_leads ADD COLUMN deleted_by INTEGER "
+    "REFERENCES users(id) ON DELETE RESTRICT",
+    "ALTER TABLE client_enquiries ADD COLUMN deleted_at TEXT",
+    "ALTER TABLE client_enquiries ADD COLUMN deleted_by INTEGER "
+    "REFERENCES users(id) ON DELETE RESTRICT",
+    "CREATE INDEX idx_leads_not_deleted ON client_leads(deleted_at, id)",
+    "CREATE INDEX idx_enquiries_not_deleted "
+    "ON client_enquiries(client_id, deleted_at, id)",
+)
+
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
@@ -311,4 +323,5 @@ MIGRATIONS = (
     (10, 'client_enquiries', ENQUIRY_SCHEMA),
     (11, 'enquiry_sku_lines', ENQUIRY_LINE_SCHEMA),
     (12, 'enquiry_deal_currency', ENQUIRY_DEAL_SCHEMA),
+    (13, 'client_enquiry_soft_deletion', SOFT_DELETE_SCHEMA),
 )
