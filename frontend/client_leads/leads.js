@@ -105,7 +105,7 @@ byId('leadForm').onsubmit = async event => {
   finally { byId('save').disabled = false; }
 };
 (async () => {
-  try { await loadOptions(); await load(); byId('content').hidden = false; }
+  try { await loadOptions(); await load(); byId('content').hidden = false; const id = new URLSearchParams(location.search).get('client_id'); if (id) await openDetails(id); }
   catch (error) { message(error.message, true); }
 })();
 
@@ -213,6 +213,12 @@ async function openDetails(id) {
   data.address_history.forEach(snapshot => {
     const line = document.createElement('p'); line.textContent = `${new Date(snapshot.recorded_at).toLocaleString()} / ${snapshot.actor_name || 'Migration baseline'}\nBilling: ${formatAddress(snapshot.billing_address) || '-'}\nDefault shipping: ${formatAddress(snapshot.default_shipping_address) || '-'}`; byId('addressHistory').append(line);
   });
+  const enquiries = await api('/api/enquiries?' + new URLSearchParams({client_id:id,page_size:10}));
+  const enquirySection = document.createElement('section'); const heading = document.createElement('h3'); heading.textContent = `Enquiries (${enquiries.total})`; enquirySection.append(heading);
+  enquiries.enquiries.forEach(e => { const line = document.createElement('p'); line.textContent = `${e.reference} / ${e.subject} / ${e.status}`; enquirySection.append(line); });
+  const all = document.createElement('a'); all.href = `/enquiries?client_id=${id}`; all.textContent = 'View all enquiries'; enquirySection.append(all);
+  if (client.can_edit && client.is_active) { const add = document.createElement('a'); add.className = 'btn-sm btn-add'; add.href = `/enquiries?client_id=${id}&new=1`; add.textContent = 'Add Enquiry'; enquirySection.append(' ',add); }
+  byId('detailBody').append(enquirySection);
   byId('clientDetail').hidden = false; byId('clientDetail').scrollIntoView({behavior:'smooth',block:'start'});
 }
 byId('closeDetail').onclick = () => { byId('clientDetail').hidden = true; };

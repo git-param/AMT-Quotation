@@ -215,7 +215,7 @@ class DiscoveryTests(unittest.TestCase):
                 )
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [9])
+        self.assertEqual(migrate_database(path), [9, 10])
         connection = sqlite3.connect(path)
         try:
             self.assertEqual(connection.execute(
