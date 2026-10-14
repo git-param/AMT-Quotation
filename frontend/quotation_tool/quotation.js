@@ -21,6 +21,7 @@ window.addEventListener('load', () => {
   }).then(u => {
     document.getElementById('hdrUser').textContent = '👤 ' + u.username;
     document.getElementById('sourcesLink').style.display = (u.permissions || []).includes('sources.manage') ? 'inline-block' : 'none';
+    document.getElementById('accessLink').style.display = (u.permissions || []).includes('leads.share_manage') ? 'inline-block' : 'none';
     if ((u.permissions || []).includes('management.view')) document.getElementById('mgrLink').style.display = 'inline';
   }).catch(() => { window.location.href = '/login'; });
 });

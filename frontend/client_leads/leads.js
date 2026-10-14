@@ -11,6 +11,7 @@ async function api(path, options = {}) {
 async function load() {
   const data = await api('/api/leads');
   byId('hdrUser').textContent = data.username;
+  byId('accessLink').style.display = data.can_manage_sharing ? 'inline-block' : 'none';
   byId('summary').textContent = `${data.leads.length} leads`;
   byId('leads').replaceChildren();
   data.leads.forEach(lead => {
@@ -19,6 +20,10 @@ async function load() {
     [lead.name, lead.company, lead.email, lead.phone, lead.creator_name, date.toLocaleString(), lead.notes].forEach(value => {
       const cell = document.createElement('td'); cell.textContent = value || '?'; row.append(cell);
     });
+    const access = document.createElement('td');
+    const badge = document.createElement('span'); badge.className = 'badge ' + (lead.is_shared ? 'badge-ok' : 'badge-warn');
+    badge.textContent = lead.is_shared ? (lead.can_edit ? 'Shared / editable' : 'Shared / read only') : (lead.can_edit ? 'Editable' : 'Read only');
+    access.append(badge); row.append(access);
     const actions = document.createElement('td');
     if (lead.can_edit) {
       const button = document.createElement('button');
@@ -44,7 +49,7 @@ async function load() {
   });
   if (!data.leads.length) {
     const row = document.createElement('tr'); const cell = document.createElement('td');
-    cell.colSpan = 8; cell.className = 'source-empty'; cell.textContent = 'No leads yet. Create your first lead above.';
+    cell.colSpan = 9; cell.className = 'source-empty'; cell.textContent = 'No leads yet. Create your first lead above.';
     row.append(cell); byId('leads').append(row);
   }
 }

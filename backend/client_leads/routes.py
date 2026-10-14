@@ -18,7 +18,7 @@ def visibility(user):
         return '1 = 1', []
     predicate = (
         'l.created_by = ? OR EXISTS (SELECT 1 FROM client_lead_shares s '
-        'WHERE s.lead_id = l.id AND s.user_id = ?)'
+        'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1)'
     )
     parameters = [user['id'], user['id']]
     if 'leads.view_team' in permissions:
@@ -52,13 +52,15 @@ def read_leads(user, lead_id=None):
     editable, edit_parameters = edit_scope(user)
     sql = (
         'SELECT l.*, u.username AS creator_name, (' + editable +
-        ') AS can_edit FROM client_leads l '
+        ') AS can_edit, EXISTS (SELECT 1 FROM client_lead_shares s '
+        'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1) '
+        'AS is_shared FROM client_leads l '
         'JOIN users u ON u.id = l.created_by WHERE (' + predicate + ')'
     )
     if lead_id is not None:
         sql += ' AND l.id = ?'
         parameters.append(lead_id)
-    parameters = edit_parameters + parameters
+    parameters = edit_parameters + [user['id']] + parameters
     sql += ' ORDER BY l.id DESC'
     connection = get_db()
     try:
@@ -79,7 +81,11 @@ def lead_page():
 def list_leads():
     """Return authorized leads without accepting ownership query overrides."""
     user = get_current_user()
-    return jsonify(leads=read_leads(user), username=user['username'])
+    return jsonify(
+        leads=read_leads(user), username=user['username'],
+        can_manage_sharing=(user['role'] in ('admin', 'manager', 'sales_tl')
+                            and 'leads.share_manage' in get_permissions(user)),
+    )
 
 
 @bp.route('/api/leads/<int:lead_id>')

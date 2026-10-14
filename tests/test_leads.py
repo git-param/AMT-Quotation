@@ -104,7 +104,8 @@ class LeadTests(unittest.TestCase):
         try:
             with connection:
                 connection.execute(
-                    'INSERT INTO client_lead_shares VALUES (?, ?)',
+                    'INSERT INTO client_lead_shares (lead_id, user_id) '
+                    'VALUES (?, ?)',
                     (lead_id, self.ids['exec1']),
                 )
         finally:
@@ -257,7 +258,8 @@ class LeadTests(unittest.TestCase):
         try:
             with connection:
                 connection.execute(
-                    'INSERT INTO client_lead_shares VALUES (?, ?)',
+                    'INSERT INTO client_lead_shares (lead_id, user_id) '
+                    'VALUES (?, ?)',
                     (uid, self.ids['exec2']),
                 )
         finally:

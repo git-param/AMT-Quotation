@@ -286,3 +286,59 @@ Update authorization is enforced again inside the SQL UPDATE predicate.
 Ownership and creation timestamps are preserved, and attempts to supply them
 are rejected. No permanent deletion or archive endpoints are introduced.
 No schema changes or new migrations are required for editing.
+
+### Module 4.2: client access and sharing
+
+**Client Access / Sharing** is a separate section linked from Client Leads,
+the dashboard, and the quotation header for authorized managers. Here a client
+means the existing client lead, referenced by its stable `client_leads.id`.
+No second client table or ownership hierarchy is introduced.
+
+Admins and legacy managers can manage shares for any client. Sales TLs can
+manage their own leads and those of their assigned active executives using the
+existing supervision/edit scope. Read-only shares and `leads.view_all` read
+grants alone do not authorize sharing. The `leads.share_manage` permission is
+required in addition to the manager role and per-client SQL scope. Executives
+cannot reshare or escalate access, even if a lead is shared with them.
+
+Recipients must be active Sales Executives (including legacy `user` accounts).
+TLs can choose executives outside their team, but only share clients they may
+manage. Source-client ownership never changes. Owner grants are rejected as
+redundant. Revocation is supported for existing recipients even if they have
+since been deactivated or changed roles.
+
+Migration 6 (`client_sharing`) adds active state and grant/revoke metadata to
+existing `client_lead_shares` rows, plus indexed `client_share_events` history.
+The existing composite primary key prevents duplicate lead/recipient rows.
+Existing shares stay active; their original actor/timestamp fields remain NULL
+because that information was not recorded. No historical attribution is
+invented. Regrants reuse the same row; every successful grant/revoke cycle has
+its own timestamped event and actor ID/name snapshot. Foreign keys restrict
+deletion of linked leads, recipients, and actors. No share or history deletion
+API is provided.
+
+Share state and event insertion are committed together under `BEGIN IMMEDIATE`.
+Concurrent duplicate grants produce one successful grant and one 409, with
+one event. A failed event write rolls back the access change. Revocation flips
+active state without deleting records. Subsequent list/detail requests stop
+returning the client through that share immediately; ownership, supervision,
+and independent RBAC grants remain effective. An already loaded browser must
+refresh to reflect the new permissions; previously viewed content cannot be
+withdrawn. Shared-access badges distinguish read-only and independently
+editable leads in the Client Leads list.
+
+APIs: `GET /api/client-access` lists manageable clients and eligible recipients;
+`GET /api/client-access/<lead_id>` lists scoped share state and history;
+`POST /api/client-access/<lead_id>/grant` and `/revoke` accept only a JSON
+`user_id`. Unauthorized clients return 404, and unauthorized roles/anonymous
+sessions are rejected by backend permission checks. Duplicate grants or revokes
+without an active share return 409. This module includes no enquiries, orders,
+PI features, permanent deletion, or general permission-management editor.
+
+Before upgrading, use the database backup/rollback guidance above. If rolling
+back to pre-sharing code, note that it ignores `is_active` and could restore
+revoked share access: retain the new visibility checks or use a forward fix.
+Tests cover grant/revoke/regrant, legacy-share preservation, actor/timestamp
+history, concurrent duplicates, atomic failure rollback, unauthorized sharing,
+read-only enforcement, cross-TL isolation, and preserved independent access.
+Browser layout and interactive testing remain a separate validation step.
