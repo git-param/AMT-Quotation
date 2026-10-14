@@ -143,6 +143,38 @@ class EnquiryTests(unittest.TestCase):
             f'/api/enquiries/{uid}'
         ).json['enquiry']['reference'], 'ENQ-001')
 
+    def test_client_counts_and_view_all_are_limited_to_selected_client(self):
+        first = self.create('exec1')
+        second = self.client.post('/api/leads', json={
+            'name': 'Second client',
+        }).json['lead']['id']
+        first_ids = {
+            self.enquiry(first, reference).json['enquiry']['id']
+            for reference in ('FIRST-1', 'FIRST-2')
+        }
+        self.enquiry(second, 'SECOND-1')
+        clients = self.client.get('/api/leads').json['leads']
+        counts = {client['id']: client['enquiry_count'] for client in clients}
+        self.assertEqual(counts, {first: 2, second: 1})
+        selected = self.client.get('/api/enquiries', query_string={
+            'client_id': first, 'page_size': 1,
+        }).json
+        self.assertEqual(selected['total'], 2)
+        self.assertEqual(selected['enquiries'][0]['client_id'], first)
+        self.assertIn(selected['enquiries'][0]['id'], first_ids)
+        self.as_user('admin')
+        self.client.post(f'/api/client-access/{first}/grant', json={
+            'user_id': self.ids['exec2'], 'access_level': 'VIEW',
+        })
+        self.as_user('exec2')
+        visible = self.client.get('/api/leads').json['leads']
+        self.assertEqual(len(visible), 1)
+        self.assertEqual(visible[0]['enquiry_count'], 2)
+        hidden = self.client.get('/api/enquiries', query_string={
+            'client_id': second,
+        }).json
+        self.assertEqual(hidden['total'], 0)
+
     def test_scoped_search_filters_pagination_and_inactive_history(self):
         client_id = self.create('exec1')
         for number in range(3):
