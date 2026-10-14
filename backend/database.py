@@ -7,43 +7,16 @@ _db_lock = threading.Lock()
 
 def get_db():
     con = sqlite3.connect(DB_PATH, check_same_thread=False)
+    con.execute('PRAGMA foreign_keys = ON')
     con.row_factory = sqlite3.Row
     return con
 
 
 def init_db():
-    con = get_db()
-    con.executescript('''
-        CREATE TABLE IF NOT EXISTS users (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            username     TEXT    UNIQUE NOT NULL,
-            password_hash TEXT   NOT NULL,
-            role         TEXT    DEFAULT 'user',
-            created_at   TEXT    DEFAULT (datetime('now','localtime'))
-        );
-        CREATE TABLE IF NOT EXISTS search_logs (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_name   TEXT    DEFAULT 'Unknown',
-            user_ip     TEXT,
-            skus        TEXT,
-            found_count INTEGER DEFAULT 0,
-            not_found   INTEGER DEFAULT 0,
-            ts          TEXT    DEFAULT (datetime('now','localtime'))
-        );
-        CREATE TABLE IF NOT EXISTS copy_logs (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_name   TEXT    DEFAULT 'Unknown',
-            user_ip     TEXT,
-            copy_type   TEXT,
-            sku_count   INTEGER DEFAULT 0,
-            ts          TEXT    DEFAULT (datetime('now','localtime'))
-        );
-        CREATE INDEX IF NOT EXISTS idx_search_ts   ON search_logs(ts);
-        CREATE INDEX IF NOT EXISTS idx_search_user ON search_logs(user_name);
-        CREATE INDEX IF NOT EXISTS idx_copy_ts     ON copy_logs(ts);
-    ''')
-    con.commit()
-    con.close()
+    """Apply pending schema migrations without altering historical records."""
+    from backend.migrations import migrate_database
+
+    migrate_database(DB_PATH)
 
 
 def _seed_users():
