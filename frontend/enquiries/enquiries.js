@@ -4,7 +4,16 @@ const clientFilter = query.get('client_id');
 let scopedClient = null;
 let editing = null; let page = 1; let pages = 0; let clientPage = 1; let clientPages = 0;
 const fields = ['reference','enquiry_date','subject','description','status'];
-const initialSkuEditor=window.createSkuDraftEditor(byId('creationSkus'),()=>({client_id:Number(byId('client').value)}),()=>byId('dealCurrency').value);
+function creationScope() {
+  const client = byId('client');
+  const clientId = Number(client.value);
+  if (!Number.isSafeInteger(clientId) || clientId <= 0 || client.selectedOptions[0]?.disabled) {
+    client.focus();
+    throw new Error('Select an editable client above before looking up SKUs.');
+  }
+  return {client_id: clientId};
+}
+const initialSkuEditor=window.createSkuDraftEditor(byId('creationSkus'),creationScope,()=>byId('dealCurrency').value);
 byId('dealCurrency').onchange=()=>initialSkuEditor.currencyChanged();
 function message(text,error=false) { byId('message').textContent=text; byId('message').className=error?'error':''; }
 async function api(path,options={}) {
