@@ -21,6 +21,7 @@ async function details() {
   byId('shares').replaceChildren(); byId('events').replaceChildren();
   if (!byId('client').value) { empty('shares', 6, 'No manageable clients yet. Create a lead first.'); return; }
   const current = byId('client').value;
+  byId('grant').disabled = !clients.find(c => String(c.id) === current)?.is_active;
   const data = await api(`/api/client-access/${current}`);
   if (byId('client').value !== current) return;
   byId('shares').replaceChildren(); byId('events').replaceChildren();
@@ -31,7 +32,7 @@ async function details() {
     badge.className = `badge ${share.is_active ? 'badge-ok' : 'badge-warn'}`;
     badge.textContent = share.is_active ? (share.account_active ? 'Granted' : 'Granted / account inactive') : 'Revoked'; state.append(badge);
     const levelCell = cell(row, '');
-    if (share.is_active && share.account_active) {
+    if (share.is_active && share.account_active && clients.find(c => String(c.id) === current)?.is_active) {
       const selector = document.createElement('select');
       selector.className = 'role-select';
       selector.setAttribute('aria-label', `Access level for ${share.username}`);
@@ -75,10 +76,10 @@ async function load() {
   const selected = byId('client').value;
   const data = await api('/api/client-access'); clients = data.leads;
   byId('hdrUser').textContent = data.username;
-  byId('client').replaceChildren(...clients.map(lead => new Option(`${lead.name} / ${lead.creator_name}`, lead.id)));
+  byId('client').replaceChildren(...clients.map(lead => new Option(`${lead.name} / ${lead.creator_name}${lead.is_active ? '' : ' / Inactive'}`, lead.id)));
   if (clients.some(lead => String(lead.id) === selected)) byId('client').value = selected;
   byId('executive').replaceChildren(new Option('Choose an executive', ''), ...data.executives.map(user => new Option(user.username, user.id)));
-  byId('grant').disabled = !clients.length || !data.executives.length;
+  byId('grant').disabled = !clients.length || !data.executives.length || !clients.find(c => String(c.id) === byId('client').value)?.is_active;
   await details();
 }
 byId('client').onchange = () => details().catch(error => message(error.message, true));
@@ -89,6 +90,6 @@ byId('grantForm').onsubmit = async event => {
     await api(`/api/client-access/${byId('client').value}/grant`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: Number(byId('executive').value), access_level: byId('accessLevel').value})});
     await details(); message(`${byId('accessLevel').value} access granted. Ownership is unchanged.`);
   } catch (error) { message(error.message, true); }
-  finally { byId('grant').disabled = !clients.length; }
+  finally { byId('grant').disabled = !clients.find(c => String(c.id) === byId('client').value)?.is_active; }
 };
 (async () => { try { await load(); byId('content').hidden = false; } catch (error) { message(error.message, true); } })();

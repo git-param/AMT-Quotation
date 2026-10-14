@@ -276,7 +276,7 @@ Browser layout and interactive testing must be completed separately.
 ### Client lead editing
 
 `PUT /api/leads/<id>` updates name, company, email, phone, and notes using a
-complete detail payload (omitted optional details become empty). Users can edit
+detail payload (omitted fields are preserved). Users can edit
 own leads; Sales TLs can also edit their currently assigned active executives'
 leads; Admins and legacy managers can edit all leads. Explicit sharing and
 view-only role grants do not authorize edits. List/detail responses include
@@ -378,3 +378,99 @@ revocation, recipient edit access, prevention of onward sharing even after role
 changes, ownership preservation, and version-6-to-7 data preservation. Browser
 layout and interactive verification remain outstanding. Older code cannot honor
 EDIT grants, so prefer a forward fix and retain schema/history on code rollback.
+
+### Module 4.3: client details and CRM fields
+
+Migration 8 (`client_crm_details`) extends `client_leads` without copying,
+renaming or deleting existing rows. The same IDs, owners, creation timestamps,
+share grants and share events remain authoritative. New fields default to empty
+structured data, status `lead`, and active availability. Previous migrations
+are unchanged.
+
+The create/edit/details form supports company, business details, multiple named
+contact persons, primary and additional email/phone contacts, structured billing
+and shipping addresses, notes, and `lead`/`prospect`/`customer` status. Availability
+(Active/Inactive) is separate from CRM status. Name remains required; optional
+contacts may be empty. Supplied emails are validated and lowercased; phones
+normalize separators and require 7?15 digits with optional +. Contact persons
+require a name; supplied addresses require line1 and country. Lists are limited
+to 20 entries. Unknown/ownership/timestamp/lifecycle fields are rejected.
+
+PUT preserves omitted fields, including structured CRM fields, and supports
+explicit empty values to clear optional details. Authorized VIEW recipients can
+inspect all client details through a read-only Details form; EDIT recipients
+can update details but cannot transfer ownership or reshare.
+
+Duplicate checks reject matching normalized name+company, or an overlapping
+email/phone across any contact channel, within the original creator's clients.
+Inactive clients are included. These checks run under BEGIN IMMEDIATE so
+concurrent duplicate creates cannot both succeed. Separate owners' private
+clients are not merged or exposed, and existing duplicate records are never
+rewritten by migration. Duplicate errors reveal no matching client IDs/details.
+An authorized edit is checked against the original owner's records.
+
+Owners, authorized supervising TLs, Admins and legacy managers can deactivate
+or reactivate via `POST /api/leads/<id>/deactivate` and `/activate`. Shared EDIT
+permission permits detail editing only, not lifecycle management. Deactivation
+retains details, relationships, share levels and event history. Authorized users
+can still inspect/edit retained details. New grants or level changes require
+reactivation; existing shares can still be revoked. No permanent deletion API
+exists. Client Access labels inactive clients and disables grant/level controls.
+
+Tests cover CRM round trips, partial edits, malformed/invalid values, duplicates,
+concurrent creation, VIEW/EDIT restrictions, lifecycle authority, historical
+preservation and prior RBAC modules. Browser layout/interaction testing remains
+outstanding. Read-only analysis of the supplied USD/INR PI templates and the
+future client-order field checklist is saved in [docs/pi_order_fields.md](docs/pi_order_fields.md).
+No enquiries, orders or PI generation are implemented by this module.
+
+### Module 4.4: client discovery and integration
+
+The Client Leads section now uses server-side discovery. `GET /api/leads`
+accepts `q` (company, name, contact person, primary/additional email/phone),
+`status` (all/lead/prospect/customer), `active` (all/active/inactive),
+`ownership` (all/own/others), `creator` (user ID), `access`
+(all/shared/VIEW/EDIT), and `source` (source ID). All filters are ANDed with the
+existing visibility SQL; creator filters never grant access. Counts, rows and
+page metadata use one read transaction and identical scope. Wildcard characters
+in search are literal. Phone queries support formatting separators.
+
+`page` defaults to 1; `page_size` defaults to 25 and is capped at 100.
+`sort` allows created/name/company/status and `direction` allows asc/desc;
+client ID breaks ties deterministically. Empty/out-of-range pages return no
+records with scoped totals. Unknown legacy query parameters remain ignored,
+never authorization overrides. Ownership and creator are the same existing
+`created_by` relationship, not duplicate fields. Pagination uses LIMIT/OFFSET;
+substring/JSON contact searches still scan authorized candidates at large scale.
+
+`GET /api/leads/options` exposes creator options from visible clients and active
+configured source choices, without granting source-management access. Inactive
+sources appear in filters only when linked to a visible client. The existing
+Enquiry Sources table and contact validators remain authoritative. Migration 9
+adds one nullable `enquiry_source_id` FK and discovery indexes. New/changed source
+links require an active configured Email/WhatsApp source. Existing inactive
+links can be retained during unrelated edits; sources and clients are not deleted.
+Legacy clients start with no source rather than an inferred assignment.
+
+Details are available for every authorized row, separately from Edit, with
+company/business information, structured contacts, saved addresses, notes,
+status/availability, creator/owner, shared VIEW/EDIT indicators, enquiry source,
+and saved address history. VIEW remains read-only; EDIT permits detail updates
+without ownership or onward-sharing rights. Deactivated clients remain visible
+by default and can be filtered; existing lifecycle and sharing restrictions are
+unchanged. Inactive sources retain their labels on linked client details.
+
+Client billing/default shipping addresses stay separate from future order
+shipping/consignee information. Migration 9 adds `client_address_history` with
+an initial baseline for existing records. Address updates append snapshots in
+the same transaction; previous snapshots are retained. The same-as-billing
+checkbox affects only reusable client defaults, not every future order. Read
+[the future order address contract](docs/order_address_design.md) together with
+[the PI checklist](docs/pi_order_fields.md). No order creation or order/PI/SKU
+schema is introduced.
+
+Tests cover scoped search/counts/pagination/sorting, manipulated filters,
+creator options, sharing/revocation, inactive clients and sources, source
+validation, address snapshot retention and migrations, alongside all earlier
+RBAC/CRM tests. Python/JavaScript checks are run locally; browser layout and
+interactive verification remain outstanding.

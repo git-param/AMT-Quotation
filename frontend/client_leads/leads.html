@@ -1,8 +1,232 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Client Leads | AMT</title>
-<link rel="stylesheet" href="/static/manager_dashboard/manager.css"><link rel="stylesheet" href="/static/enquiry_sources/sources.css"><link rel="stylesheet" href="/static/client_leads/leads.css"></head>
-<body><header class="hdr"><div><div class="hdr-logo">Client Leads</div><div class="hdr-sub">Your client contacts</div></div><nav><span id="hdrUser"></span><a class="back-link" id="accessLink" href="/client-access" style="display:none">Client Access / Sharing</a> <a class="back-link" href="/">Quotation Tool</a><a class="back-link" href="/logout">Sign Out</a></nav></header>
-<main class="wrap"><p id="message" role="status" aria-live="polite"></p><div id="content" hidden><div class="page-intro"><div><span class="eyebrow">CLIENT LEADS</span><h1>Start your next conversation</h1><p>Create a lead and keep the contact details in one place.</p></div></div>
-<section class="panel source-editor"><div class="editor-heading"><div><h2 id="formTitle">Add a client lead</h2><p>New leads are assigned to you automatically.</p></div></div><form id="leadForm"><div class="lead-fields">
-<div class="form-field"><label for="name">Client name</label><input id="name" name="name" maxlength="150" required></div><div class="form-field"><label for="company">Company</label><input id="company" name="company" maxlength="150"></div><div class="form-field"><label for="email">Email</label><input id="email" name="email" type="email" maxlength="254"></div><div class="form-field"><label for="phone">Phone</label><input id="phone" name="phone" type="tel" maxlength="40"></div><div class="form-field lead-notes"><label for="notes">Notes</label><textarea id="notes" name="notes" maxlength="2000" rows="3"></textarea></div></div><button class="btn-sm btn-add" id="save" type="submit">Create lead</button> <button class="btn-sm" id="cancelEdit" type="button" hidden>Cancel edit</button></form></section>
-<section class="panel"><div class="source-toolbar"><div><h2>Your accessible leads</h2><p id="summary"></p></div><button class="btn-sm" id="refresh">Refresh</button></div><div class="source-table"><table class="tbl"><thead><tr><th>Client</th><th>Company</th><th>Email</th><th>Phone</th><th>Created by</th><th>Created</th><th>Notes</th><th>Access</th><th>Actions</th></tr></thead><tbody id="leads"></tbody></table></div></section></div></main><script src="/static/client_leads/leads.js"></script></body></html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Client Leads | AMT</title>
+    <link rel="stylesheet" href="/static/manager_dashboard/manager.css" />
+    <link rel="stylesheet" href="/static/enquiry_sources/sources.css" />
+    <link rel="stylesheet" href="/static/client_leads/leads.css" />
+  </head>
+  <body>
+    <header class="hdr">
+      <div>
+        <div class="hdr-logo">Client Leads</div>
+        <div class="hdr-sub">Your client contacts</div>
+      </div>
+      <nav>
+        <span id="hdrUser"></span
+        ><a
+          class="back-link"
+          id="accessLink"
+          href="/client-access"
+          style="display: none"
+          >Client Access / Sharing</a
+        >
+        <a class="back-link" href="/">Quotation Tool</a
+        ><a class="back-link" href="/logout">Sign Out</a>
+      </nav>
+    </header>
+    <main class="wrap">
+      <p id="message" role="status" aria-live="polite"></p>
+      <div id="content" hidden>
+        <div class="page-intro">
+          <div>
+            <span class="eyebrow">CLIENT LEADS</span>
+            <h1>Start your next conversation</h1>
+            <p>Create a lead and keep the contact details in one place.</p>
+          </div>
+          <button class="btn-sm btn-add" id="addLead" type="button" aria-controls="leadEditor" aria-expanded="false">+ Add Lead</button>
+        </div>
+        <section class="panel source-editor" id="leadEditor" hidden>
+          <div class="editor-heading">
+            <div>
+              <h2 id="formTitle">Add a client lead</h2>
+              <p>New leads are assigned to you automatically.</p>
+            </div>
+          </div>
+          <form id="leadForm">
+            <div class="lead-fields">
+              <div class="form-field">
+                <label for="name">Client name</label
+                ><input id="name" name="name" maxlength="150" required />
+              </div>
+              <div class="form-field">
+                <label for="company">Company</label
+                ><input id="company" name="company" maxlength="150" />
+              </div>
+              <div class="form-field">
+                <label for="email">Email</label
+                ><input id="email" name="email" type="email" maxlength="254" />
+              </div>
+              <div class="form-field">
+                <label for="phone">Phone</label
+                ><input id="phone" name="phone" type="tel" maxlength="40" />
+              </div>
+              <div class="form-field lead-notes">
+                <label for="notes">Notes</label
+                ><textarea
+                  id="notes"
+                  name="notes"
+                  maxlength="2000"
+                  rows="3"
+                ></textarea>
+              </div>
+              <div class="form-field">
+                <label for="status">Client status</label
+                ><select id="status" name="status">
+                  <option value="lead">Lead</option>
+                  <option value="prospect">Prospect</option>
+                  <option value="customer">Customer</option>
+                </select>
+              </div>
+              <div class="form-field lead-notes">
+                <label for="business_details">Business details</label
+                ><textarea
+                  id="business_details"
+                  name="business_details"
+                  maxlength="2000"
+                  rows="3"
+                ></textarea>
+              </div>
+              <div class="form-field">
+                <label for="emails"
+                  >Additional email addresses (one per line)</label
+                ><textarea id="emails" rows="3"></textarea>
+              </div>
+              <div class="form-field">
+                <label for="phones"
+                  >Additional phone numbers (one per line)</label
+                ><textarea id="phones" rows="3"></textarea>
+              </div>
+              <div class="form-field"><label for="enquiry_source_id">Enquiry source</label><select id="enquiry_source_id"><option value="">Not specified</option></select></div>
+              <fieldset class="lead-notes">
+                <legend>Contact persons</legend>
+                <div id="contacts"></div>
+                <button class="btn-sm" id="addContact" type="button">
+                  Add contact person
+                </button>
+              </fieldset>
+              <fieldset>
+                <legend>Billing address</legend>
+                <div class="address-fields">
+                  <div class="form-field">
+                    <label for="billing_line1">Address line 1</label
+                    ><input id="billing_line1" maxlength="200" />
+                  </div>
+                  <div class="form-field">
+                    <label for="billing_line2">Address line 2</label
+                    ><input id="billing_line2" maxlength="200" />
+                  </div>
+                  <div class="form-field">
+                    <label for="billing_city">City</label
+                    ><input id="billing_city" maxlength="200" />
+                  </div>
+                  <div class="form-field">
+                    <label for="billing_state">State / region</label
+                    ><input id="billing_state" maxlength="200" />
+                  </div>
+                  <div class="form-field">
+                    <label for="billing_postal_code">Postal code</label
+                    ><input id="billing_postal_code" maxlength="200" />
+                  </div>
+                  <div class="form-field">
+                    <label for="billing_country">Country</label
+                    ><input id="billing_country" maxlength="200" />
+                  </div>
+                </div>
+                <small
+                  >When provided, address line 1 and country are
+                  required.</small
+                >
+              </fieldset>
+              <fieldset>
+                <legend>Default shipping address</legend>
+                <label class="same-address"><input id="sameAsBilling" type="checkbox"> Default shipping address same as billing</label>
+                <div class="address-fields">
+                  <div class="form-field">
+                    <label for="shipping_line1">Address line 1</label
+                    ><input id="shipping_line1" maxlength="200" />
+                  </div>
+                  <div class="form-field">
+                    <label for="shipping_line2">Address line 2</label
+                    ><input id="shipping_line2" maxlength="200" />
+                  </div>
+                  <div class="form-field">
+                    <label for="shipping_city">City</label
+                    ><input id="shipping_city" maxlength="200" />
+                  </div>
+                  <div class="form-field">
+                    <label for="shipping_state">State / region</label
+                    ><input id="shipping_state" maxlength="200" />
+                  </div>
+                  <div class="form-field">
+                    <label for="shipping_postal_code">Postal code</label
+                    ><input id="shipping_postal_code" maxlength="200" />
+                  </div>
+                  <div class="form-field">
+                    <label for="shipping_country">Country</label
+                    ><input id="shipping_country" maxlength="200" />
+                  </div>
+                </div>
+                <small
+                  >When provided, address line 1 and country are
+                  required.</small
+                >
+              </fieldset>
+            </div>
+            <button class="btn-sm btn-add" id="save" type="submit">
+              Create lead
+            </button>
+            <button class="btn-sm" id="cancelEdit" type="button" hidden>
+              Cancel
+            </button>
+          </form>
+        </section>
+        <section id="clientDetail" class="panel" hidden aria-labelledby="detailTitle"><div class="source-toolbar"><h2 id="detailTitle">Client details</h2><button class="btn-sm" id="closeDetail" type="button">Close</button></div><div id="detailBody" class="detail-grid"></div><details><summary>Saved address history</summary><div id="addressHistory"></div></details><p class="history-note">These are reusable client addresses. A future order can use a saved address or a different consignee/shipping address without changing these defaults.</p></section>
+        <section class="panel">
+          <div class="source-toolbar">
+            <div>
+              <h2>Your accessible leads</h2>
+              <p id="summary"></p>
+            </div>
+            <button class="btn-sm" id="refresh">Refresh</button>
+          </div>
+          <form id="discoveryForm" class="discovery-controls">
+            <div class="form-field"><label for="search">Search clients</label><input id="search" placeholder="Company, contact, email or phone" maxlength="200"></div>
+            <div class="form-field"><label for="filterStatus">Status</label><select id="filterStatus"><option value="all">All statuses</option><option value="lead">Lead</option><option value="prospect">Prospect</option><option value="customer">Customer</option></select></div>
+            <div class="form-field"><label for="filterActive">Availability</label><select id="filterActive"><option value="all">All clients</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+            <div class="form-field"><label for="filterOwnership">Ownership</label><select id="filterOwnership"><option value="all">All accessible</option><option value="own">My clients</option><option value="others">Other owners</option></select></div>
+            <div class="form-field"><label for="filterCreator">Creator / owner</label><select id="filterCreator"><option value="">All accessible creators</option></select></div>
+            <div class="form-field"><label for="filterAccess">Shared access</label><select id="filterAccess"><option value="all">All access</option><option value="shared">Shared with me</option><option value="VIEW">VIEW shares</option><option value="EDIT">EDIT shares</option></select></div>
+            <div class="form-field"><label for="filterSource">Enquiry source</label><select id="filterSource"><option value="">All sources</option></select></div>
+            <div class="form-field"><label for="sort">Sort</label><select id="sort"><option value="created">Created</option><option value="company">Company</option><option value="name">Client name</option><option value="status">Status</option></select></div>
+            <div class="form-field"><label for="direction">Direction</label><select id="direction"><option value="desc">Descending</option><option value="asc">Ascending</option></select></div>
+            <button class="btn-sm btn-add" type="submit">Search / Apply</button><button class="btn-sm" id="clearFilters" type="button">Clear</button>
+          </form>
+          <div class="source-table">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Company</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Created by</th>
+                  <th>Created</th>
+                  <th>Notes</th>
+                  <th>Status</th>
+                  <th>Access</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="leads"></tbody>
+            </table>
+          </div>
+          <div class="pagination"><button class="btn-sm" id="previousPage" type="button">Previous</button><span id="pageInfo" aria-live="polite"></span><button class="btn-sm" id="nextPage" type="button">Next</button><label>Rows <select id="pageSize"><option>25</option><option>50</option><option>100</option></select></label></div>
+        </section>
+      </div>
+    </main>
+    <script src="/static/client_leads/leads.js"></script>
+  </body>
+</html>

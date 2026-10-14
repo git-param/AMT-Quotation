@@ -119,6 +119,10 @@ def change_share(lead_id):
         leads = managed_leads(connection, user, lead_id)
         if not leads:
             return jsonify(error='Client not found.'), 404
+        if (grant or modify) and not leads[0]['is_active']:
+            return jsonify(
+                error='Reactivate the client before granting access.'
+            ), 400
         target = connection.execute(
             'SELECT role, is_active FROM users WHERE id = ?', (recipient,)
         ).fetchone()
