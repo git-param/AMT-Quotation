@@ -1,0 +1,31 @@
+/* Orders reuse the CRM panels, fields, responsive tables and SKU draft editor. */
+.wrap { max-width:1480px; }
+.panel { margin-bottom:24px; }
+#editor,#detail { scroll-margin-top:20px; }
+.order-parties { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.order-addresses { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:18px; }
+fieldset { min-width:0; border:1px solid #E2E8F0; border-radius:10px; padding:16px; }
+legend { font-size:13px; font-weight:600; padding:0 6px; color:#1E3A5F; }
+.order-parties .fields { grid-template-columns:1fr; }
+.fields .form-field { min-width:0; }
+.form-field textarea { width:100%; }
+.order-items { margin:22px 0; border:1px solid #E2E8F0; padding:20px; border-radius:10px; }
+.order-items h3 { color:#1E3A5F; font-size:14px; }
+.order-items>.source-table { margin:14px 0; }
+#sourceLines input { accent-color:#2563EB; width:16px; height:16px; }
+#detailBody.order-detail-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.order-detail-grid section { padding:18px; border:1px solid #E8EDF3; border-radius:10px; }
+.order-detail-grid h3 { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#64748B; margin-bottom:10px; }
+.order-detail-grid p,#deliveryHistory p { font-size:13px; line-height:1.7; white-space:pre-wrap; overflow-wrap:anywhere; }
+#recordLinks a { padding:8px 12px; background:#EFF6FF; border:1px solid #DBEAFE; border-radius:7px; color:#1D4ED8; font-size:12px; text-decoration:none; }
+#lineRows .btn-sm,#orders .btn-sm { margin:3px; }
+.btn-sm.order-action-icon { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; padding:0; border-radius:8px; vertical-align:middle; }
+.order-action-icon svg { width:18px; height:18px; pointer-events:none; }
+.order-action-icon:focus-visible { outline:3px solid #93C5FD; outline-offset:2px; }
+#detail details { border:1px solid #E8EDF3; padding:16px; border-radius:8px; margin-top:12px; }
+#detail summary { color:#1D4ED8; cursor:pointer; font-size:13px; }
+#deliveryHistory p,#revisions p { padding:12px 0; border-bottom:1px solid #E8EDF3; font-size:12px; }
+#manualToggle { margin-top:14px; }
+#savedAddress { width:100%; }
+@media(max-width:1000px) { .order-parties,#detailBody.order-detail-grid { grid-template-columns:1fr 1fr; } }
+@media(max-width:650px) { .order-parties,.order-addresses,#detailBody.order-detail-grid { grid-template-columns:1fr; } .order-items { padding:14px; } }

@@ -89,12 +89,12 @@ class MigrationTests(unittest.TestCase):
     def test_fresh_schema_and_idempotency(self):
         self.assertEqual(
             migrate_database(self.path),
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
         )
         self.assertEqual(migrate_database(self.path), [])
         self.assertEqual(
             migration_status(self.path),
-            {'applied': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+            {'applied': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
              'pending': []}
         )
         with test_connection(self.path) as connection:
@@ -124,7 +124,8 @@ class MigrationTests(unittest.TestCase):
         with test_connection(self.path) as connection:
             before = legacy_snapshot(connection)
         self.assertEqual(
-            migrate_database(self.path), [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+            migrate_database(self.path),
+            [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
         )
         with test_connection(self.path) as connection:
             self.assertTrue(before == legacy_snapshot(connection))
@@ -138,7 +139,7 @@ class MigrationTests(unittest.TestCase):
         with test_connection(self.path) as connection:
             before = legacy_snapshot(connection)
         self.assertEqual(
-            migrate_database(self.path), [5, 6, 7, 8, 9, 10, 11, 12, 13]
+            migrate_database(self.path), [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
         )
         with test_connection(self.path) as connection:
             self.assertTrue(before == legacy_snapshot(connection))
@@ -175,7 +176,7 @@ class MigrationTests(unittest.TestCase):
         )
 
     def test_failed_initial_batch_rolls_back_schema_and_tracking(self):
-        broken = MIGRATIONS + ((14, 'broken', (
+        broken = MIGRATIONS + ((15, 'broken', (
             'CREATE TABLE transient_test (id INTEGER)',
             'INSERT INTO nonexistent_table VALUES (1)',
         )),)
@@ -190,13 +191,13 @@ class MigrationTests(unittest.TestCase):
         migrate_database(self.path, MIGRATIONS[:1])
         with test_connection(self.path) as connection:
             before = legacy_snapshot(connection)
-        broken = MIGRATIONS + ((14, 'broken', ('INVALID SQL',)),)
+        broken = MIGRATIONS + ((15, 'broken', ('INVALID SQL',)),)
         with self.assertRaises(sqlite3.OperationalError):
             migrate_database(self.path, broken)
         self.assertEqual(
             migration_status(self.path),
             {'applied': [1],
-             'pending': [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]}
+             'pending': [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]}
         )
         with test_connection(self.path) as connection:
             self.assertTrue(before == legacy_snapshot(connection))
@@ -230,7 +231,8 @@ class MigrationTests(unittest.TestCase):
                 migrate_database, (self.path, self.path)
             ))
         self.assertEqual(
-            sorted(results), [[], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]]
+            sorted(results),
+            [[], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]
         )
 
     def test_new_foreign_keys_constraints_and_indexes(self):
@@ -290,7 +292,7 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(
             migration_status(self.path),
             {'applied': [],
-             'pending': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]}
+             'pending': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]}
         )
         self.assertTrue(before == self.path.read_bytes())
 
@@ -311,7 +313,7 @@ class MigrationTests(unittest.TestCase):
                 connection.close()
         self.assertEqual(
             migration_status(self.path),
-            {'applied': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+            {'applied': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
              'pending': []}
         )
 

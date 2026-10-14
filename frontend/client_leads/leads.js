@@ -280,6 +280,7 @@ async function openDetails(id) {
   });
   if (!enquiries.total) { const empty = document.createElement('p'); empty.textContent = 'No enquiries for this client yet.'; enquirySection.append(empty); }
   byId('detailBody').append(enquirySection);
+  await window.renderRelatedOrders(byId('detailBody'),{client_id:id},client.can_edit&&client.is_active);
   byId('clientDetail').hidden = false; byId('clientDetail').scrollIntoView({behavior:'smooth',block:'start'});
 }
 byId('closeDetail').onclick = () => { byId('clientDetail').hidden = true; };

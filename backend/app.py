@@ -24,8 +24,9 @@ def create_app():
     from backend.client_access.routes import bp as access_bp
     from backend.enquiries.routes import bp as enquiries_bp
     from backend.enquiries.lines import bp as lines_bp
+    from backend.orders.routes import bp as orders_bp
     for blueprint in (
             login_bp, manager_bp, quotation_bp, search_bp, sources_bp,
-            leads_bp, access_bp, enquiries_bp, lines_bp):
+            leads_bp, access_bp, enquiries_bp, lines_bp, orders_bp):
         app.register_blueprint(blueprint)
     return app

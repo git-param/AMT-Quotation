@@ -229,7 +229,7 @@ class DeletionTests(unittest.TestCase):
             ).fetchall()
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [13])
+        self.assertEqual(migrate_database(path), [13, 14])
         self.assertEqual(migrate_database(path), [])
         connection = sqlite3.connect(path)
         try:
