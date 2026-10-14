@@ -1,3 +1,17 @@
 .lead-fields{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}.lead-notes{grid-column:1/-1}.lead-notes textarea{border:1px solid #CBD5E1;border-radius:8px;padding:12px;font:inherit;resize:vertical}.source-table td{max-width:260px;overflow-wrap:anywhere;white-space:pre-wrap}.source-table th{white-space:nowrap}@media(max-width:650px){.lead-fields{grid-template-columns:1fr}.lead-fields .form-field{min-width:0}}
 
 .lead-fields fieldset{border:1px solid #E2E8F0;border-radius:10px;padding:16px;min-width:0}.lead-fields legend{font-size:13px;font-weight:600;color:#334155;padding:0 6px}.lead-fields textarea{border:1px solid #CBD5E1;border-radius:8px;padding:10px;font:inherit;resize:vertical}.address-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.lead-fields fieldset small{display:block;color:#64748B;font-size:11px;margin-top:10px}.contact-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;margin-bottom:12px}.contact-row input{min-width:0;width:100%;border:1px solid #CBD5E1;border-radius:8px;padding:10px}.client-actions{display:flex;gap:8px;flex-wrap:wrap}.lead-fields :disabled{background:#F8FAFC;color:#475569;opacity:1}@media(max-width:650px){.address-fields,.contact-row{grid-template-columns:1fr}}
+
+/* Keep the list readable; expand the editor only when needed. */
+.wrap{max-width:1480px}.page-intro #addLead{min-height:42px;padding:0 20px;white-space:nowrap}
+#leadEditor{scroll-margin-top:20px}#leadEditor[hidden]{display:none!important}
+.same-address{display:flex;align-items:center;gap:9px;font-size:12px;color:#334155;margin:0 0 16px;cursor:pointer}
+.same-address input{width:16px;height:16px;accent-color:#2563EB;flex-shrink:0}
+.source-table table{min-width:1140px}.source-table td{white-space:normal;overflow-wrap:normal;vertical-align:middle}
+.source-table td:first-child{min-width:130px}.source-table td:nth-child(3){min-width:185px;max-width:230px;overflow-wrap:break-word}
+.source-table td:nth-child(4),.source-table td:nth-child(6){white-space:nowrap;min-width:110px;font-variant-numeric:tabular-nums}
+.source-table td:nth-child(7){max-width:160px}.source-table td:nth-child(8){min-width:110px}
+.source-table .badge{white-space:nowrap}.source-table td.client-actions{display:table-cell;min-width:150px;white-space:nowrap}
+.client-actions .btn-sm{margin:3px 4px 3px 0}.client-actions .btn-sm:first-child{background:#EFF6FF;color:#1D4ED8}
+#leadForm>#save,#leadForm>#cancelEdit{margin-top:8px;min-height:40px}
+@media(max-width:650px){.page-intro{flex-direction:column;align-items:stretch}.page-intro #addLead{align-self:flex-start}.same-address{line-height:1.5}}

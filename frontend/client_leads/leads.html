@@ -36,8 +36,9 @@
             <h1>Start your next conversation</h1>
             <p>Create a lead and keep the contact details in one place.</p>
           </div>
+          <button class="btn-sm btn-add" id="addLead" type="button" aria-controls="leadEditor" aria-expanded="false">+ Add Lead</button>
         </div>
-        <section class="panel source-editor">
+        <section class="panel source-editor" id="leadEditor" hidden>
           <div class="editor-heading">
             <div>
               <h2 id="formTitle">Add a client lead</h2>
@@ -140,6 +141,7 @@
               </fieldset>
               <fieldset>
                 <legend>Shipping address</legend>
+                <label class="same-address"><input id="sameAsBilling" type="checkbox"> Shipping address same as billing</label>
                 <div class="address-fields">
                   <div class="form-field">
                     <label for="shipping_line1">Address line 1</label
@@ -176,7 +178,7 @@
               Create lead
             </button>
             <button class="btn-sm" id="cancelEdit" type="button" hidden>
-              Cancel edit
+              Cancel
             </button>
           </form>
         </section>
