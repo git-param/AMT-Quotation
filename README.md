@@ -227,7 +227,7 @@ headers. Any active authenticated account can create a lead, including an
 account without quotation permissions. Name is required; company, email, phone,
 and notes are optional. The server assigns `created_by` and a UTC creation
 timestamp; input containing ownership, timestamp, or unknown fields is rejected.
-There are no lead-edit, ownership-transfer, or delete endpoints in this phase.
+Ownership-transfer and delete endpoints remain unavailable.
 
 Migration 5 (`private_client_leads`) adds `client_leads`, indexed by creator,
 and `client_lead_shares` with foreign keys. Creator deletion is restricted so
@@ -272,3 +272,17 @@ removing ownership or share tables. The standard test suite covers creation by
 all roles, supervisor configuration, private/shared access, cross-TL isolation,
 ownership manipulation, disabled/deleted accounts, and prior RBAC behavior.
 Browser layout and interactive testing must be completed separately.
+
+### Client lead editing
+
+`PUT /api/leads/<id>` updates name, company, email, phone, and notes using a
+complete detail payload (omitted optional details become empty). Users can edit
+own leads; Sales TLs can also edit their currently assigned active executives'
+leads; Admins and legacy managers can edit all leads. Explicit sharing and
+view-only role grants do not authorize edits. List/detail responses include
+server-derived `can_edit` for UI actions. The prefilled edit form includes Cancel.
+
+Update authorization is enforced again inside the SQL UPDATE predicate.
+Ownership and creation timestamps are preserved, and attempts to supply them
+are rejected. No permanent deletion or archive endpoints are introduced.
+No schema changes or new migrations are required for editing.

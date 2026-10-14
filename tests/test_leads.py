@@ -130,7 +130,7 @@ class LeadTests(unittest.TestCase):
         ).status_code, 404)
         self.assertEqual(self.client.put(
             f'/api/leads/{own}', json={'created_by': self.ids['admin']}
-        ).status_code, 405)
+        ).status_code, 400)
 
     def test_supervisor_configuration_is_admin_only_and_validated(self):
         for name in ('exec1', 'tl1'):
@@ -226,6 +226,74 @@ class LeadTests(unittest.TestCase):
         finally:
             connection.close()
         self.assertIn(lead_id, self.visible('exec1'))
+
+    def test_allowed_edits_preserve_ownership_and_creation(self):
+        uid = self.create('exec1')
+        original = self.client.get(f'/api/leads/{uid}').json['lead']
+        self.assign('exec1', 'tl1')
+        for name in ('exec1', 'tl1', 'admin', 'manager'):
+            self.as_user(name)
+            response = self.client.put(f'/api/leads/{uid}', json={
+                'name': 'Updated client', 'company': name,
+                'email': 'client@example.com', 'phone': '+12345678901',
+                'notes': 'Updated notes',
+            })
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json['lead']['created_by'],
+                             original['created_by'])
+            self.assertEqual(response.json['lead']['created_at'],
+                             original['created_at'])
+            self.assertEqual(response.json['lead']['company'], name)
+
+    def test_unauthorized_and_shared_edits_are_denied(self):
+        uid = self.create('exec1')
+        self.assign('exec1', 'tl1')
+        for name in ('exec2', 'tl2'):
+            self.as_user(name)
+            self.assertEqual(self.client.put(
+                f'/api/leads/{uid}', json={'name': 'Forbidden'}
+            ).status_code, 404)
+        connection = database.get_db()
+        try:
+            with connection:
+                connection.execute(
+                    'INSERT INTO client_lead_shares VALUES (?, ?)',
+                    (uid, self.ids['exec2']),
+                )
+        finally:
+            connection.close()
+        self.as_user('exec2')
+        self.assertFalse(self.client.get(
+            f'/api/leads/{uid}'
+        ).json['lead']['can_edit'])
+        self.assertEqual(self.client.put(
+            f'/api/leads/{uid}', json={'name': 'Forbidden'}
+        ).status_code, 403)
+        self.as_user('admin')
+        self.assertEqual(self.client.get(
+            f'/api/leads/{uid}'
+        ).json['lead']['name'], 'exec1')
+
+    def test_edit_reassignment_metadata_and_no_delete(self):
+        uid = self.create('exec1')
+        self.assign('exec1', 'tl1')
+        self.assign('exec1', 'tl2')
+        self.as_user('tl1')
+        self.assertEqual(self.client.put(
+            f'/api/leads/{uid}', json={'name': 'Forbidden'}
+        ).status_code, 404)
+        self.as_user('exec1')
+        for field in ('created_by', 'created_at', 'id'):
+            self.assertEqual(self.client.put(f'/api/leads/{uid}', json={
+                'name': 'Spoofed', field: self.ids['admin'],
+            }).status_code, 400)
+        self.assertEqual(self.client.delete(
+            f'/api/leads/{uid}'
+        ).status_code, 405)
+        self.as_user(None)
+        self.assertEqual(self.client.put(
+            f'/api/leads/{uid}', json={'name': 'Forbidden'}
+        ).status_code, 401)
 
 
 if __name__ == '__main__':
