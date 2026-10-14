@@ -76,7 +76,13 @@ function render() {
   });
   if (!visible.length) {
     const row = document.createElement('tr'); const cell = document.createElement('td');
-    cell.colSpan = 5; cell.className = 'empty'; cell.textContent = 'No sources to show. Add your first source above.';
+    cell.colSpan = 5; cell.className = 'source-empty';
+    const icon = document.createElement('span'); icon.className = 'empty-icon'; icon.textContent = '@'; icon.setAttribute('aria-hidden', 'true');
+    const title = document.createElement('strong'); title.className = 'empty-title';
+    title.textContent = sources.length ? 'No matching sources' : 'Add your first enquiry source';
+    const description = document.createElement('p'); description.className = 'empty-description';
+    description.textContent = sources.length ? 'Choose another status filter to see your sources.' : 'Start with an email inbox or WhatsApp number using the form above.';
+    cell.append(icon, title, description);
     row.append(cell); byId('sources').append(row);
   }
 }
