@@ -25,7 +25,8 @@
   </div>
 </div>
 
-<div class="wrap">
+<p id="accessStatus" role="alert"></p>
+<div class="wrap" id="dashboardContent" hidden>
 
   <!-- Summary cards -->
   <div class="cards">
@@ -76,7 +77,7 @@
   </div>
 
   <!-- User Management -->
-  <div class="user-grid" style="margin-bottom:18px">
+  <div class="user-grid" id="userManagement" style="margin-bottom:18px;display:none">
     <!-- Add user -->
     <div class="panel">
       <div class="panel-title">Add New User</div>
@@ -89,11 +90,12 @@
           <label>Password</label>
           <input type="password" id="newPassword" placeholder="min 4 chars" maxlength="80">
         </div>
-        <div class="form-field" style="max-width:110px">
+        <div class="form-field" style="min-width:160px">
           <label>Role</label>
           <select id="newRole">
-            <option value="user">User</option>
-            <option value="manager">Manager</option>
+            <option value="sales_executive">Sales Executive</option>
+            <option value="sales_tl">Sales TL</option>
+            <option value="admin">Admin</option>
           </select>
         </div>
         <button class="btn-sm btn-add" onclick="addUser()">Add</button>
@@ -120,7 +122,7 @@
   </div>
 
   <!-- User list -->
-  <div class="panel" style="margin-bottom:18px">
+  <div class="panel" id="userListPanel" style="margin-bottom:18px;display:none">
     <div class="panel-title">All Users</div>
     <div style="overflow-x:auto">
       <table class="tbl">

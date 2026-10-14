@@ -80,8 +80,33 @@ CRM_FOUNDATION = (
     """CREATE INDEX idx_audit_logs_time ON audit_logs(created_at)""",
 )
 
+# Existing role values remain unchanged; legacy roles get equivalent grants.
+RBAC_SCHEMA = (
+    "ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1 "
+    "CHECK (is_active IN (0, 1))",
+    "CREATE INDEX idx_users_active_role ON users(is_active, role)",
+    "INSERT INTO roles (code, description) VALUES "
+    "('sales_executive', 'Sales Executive'), "
+    "('sales_tl', 'Sales TL'), ('admin', 'Admin')",
+    "INSERT INTO permissions (code, description) VALUES "
+    "('quotation.use', 'Use quotation lookup and exports'), "
+    "('account.self', 'View profile and change own password'), "
+    "('management.view', 'View quotation activity dashboard'), "
+    "('users.manage', 'Create users, assign roles and deactivate accounts')",
+    "INSERT INTO role_permissions (role_code, permission_code) "
+    "SELECT roles.code, permissions.code FROM roles CROSS JOIN permissions "
+    "WHERE roles.code IN ('user', 'manager', 'sales_executive', "
+    "'sales_tl', 'admin') AND permissions.code IN "
+    "('quotation.use', 'account.self')",
+    "INSERT INTO role_permissions (role_code, permission_code) VALUES "
+    "('manager', 'management.view'), ('manager', 'users.manage'), "
+    "('sales_tl', 'management.view'), ('admin', 'management.view'), "
+    "('admin', 'users.manage')",
+)
+
 # Add new versions here; never edit the name or SQL of an applied version.
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
+    (3, 'rbac', RBAC_SCHEMA),
 )

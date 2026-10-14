@@ -146,6 +146,7 @@ function drawPieChart(canvasId, labels, values, colors) {
 async function loadStats() {
   try {
     const resp = await fetch('/api/manager/stats');
+    if (!resp.ok) { showAccessError(resp.status); return; }
     const d    = await resp.json();
     renderStats(d);
     document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
@@ -233,39 +234,82 @@ function esc(s) {
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
-fetch('/api/me').then(r => r.json()).then(u => {
-  document.getElementById('hdrUser').textContent = '👤 ' + u.username;
-  if (u.role !== 'manager') window.location.href = '/';
-}).catch(() => { window.location.href = '/login'; });
+let _currentUserId = null;
+function showAccessError(status) {
+  document.getElementById('accessStatus').textContent = status === 401
+    ? 'Session ended. Please sign in again.' : 'Access denied for your role.';
+  document.getElementById('dashboardContent').hidden = true;
+}
+fetch('/api/me').then(async response => {
+  if (!response.ok) { showAccessError(response.status); return; }
+  const user = await response.json();
+  document.getElementById('hdrUser').textContent = user.username;
+  if (!user.permissions.includes('management.view')) { showAccessError(403); return; }
+  _currentUserId = user.id;
+  const manage = user.permissions.includes('users.manage');
+  document.getElementById('dashboardContent').hidden = false;
+  document.getElementById('userManagement').style.display = manage ? 'grid' : 'none';
+  document.getElementById('userListPanel').style.display = manage ? 'block' : 'none';
+  loadStats();
+  if (manage) loadUsers();
+  setInterval(loadStats, 60000);
+}).catch(() => { document.getElementById('accessStatus').textContent = 'Unable to load permissions. Reload to retry.'; });
 
 // Auto-refresh every 60s
-loadStats();
-loadUsers();
-setInterval(loadStats, 60000);
+
 window.addEventListener('resize', () => { loadStats(); });
 
 // ── User management ───────────────────────────────────────────────────────────
 async function loadUsers() {
   const resp = await fetch('/api/manager/users').catch(() => null);
-  if (!resp || !resp.ok) return;
+  if (!resp) return;
+  if (!resp.ok) { showAccessError(resp.status); return; }
   const data = await resp.json();
   const users = data.users || [];
 
   // Populate users table
   const tbody = document.getElementById('usersList');
-  tbody.innerHTML = users.length ? users.map(u => `
-    <tr>
-      <td><strong>${esc(u.username)}</strong></td>
-      <td><span class="role-badge ${u.role === 'manager' ? 'role-manager' : 'role-user'}">${u.role}</span></td>
-      <td style="color:#6B7280;font-size:12px">${esc((u.created_at||'').slice(0,16))}</td>
-      <td>
-        ${u.username === 'manager' ? '<span style="font-size:11px;color:#9CA3AF">Protected</span>' : `<button class="btn-sm btn-del" onclick="deleteUser(${u.id},'${esc(u.username)}')">Delete</button>`}
-      </td>
-    </tr>`).join('') : '<tr><td colspan="4" class="empty">No users yet</td></tr>';
-
+  tbody.replaceChildren();
+  users.forEach(user => {
+    const row = document.createElement('tr');
+    const name = document.createElement('td');
+    name.textContent = user.username;
+    name.className = 'account-name';
+    const role = document.createElement('td');
+    const select = document.createElement('select');
+    select.className = 'role-select';
+    select.setAttribute('aria-label', `Role for ${user.username}`);
+    const roles = {sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
+    const currentRole = {user: 'sales_executive', manager: 'admin'}[user.role] || user.role;
+    Object.entries(roles).forEach(([code, label]) => select.add(new Option(label, code, false, code === currentRole)));
+    select.disabled = user.id === _currentUserId;
+    select.onchange = () => updateUser(user.id, 'role', {role: select.value});
+    role.append(select);
+    const created = document.createElement('td');
+    const date = new Date((user.created_at || '').replace(' ', 'T'));
+    created.textContent = Number.isNaN(date.getTime()) ? '?' : date.toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'});
+    created.title = user.created_at || '';
+    created.className = 'account-created';
+    const actions = document.createElement('td');
+    const button = document.createElement('button');
+    button.textContent = user.is_active ? 'Deactivate' : 'Activate';
+    button.className = `btn-sm ${user.is_active ? 'btn-del' : 'btn-activate'}`;
+    button.disabled = user.id === _currentUserId;
+    button.setAttribute('aria-label', `${user.is_active ? 'Deactivate' : 'Activate'} ${user.username}`);
+    button.onclick = () => updateUser(user.id, user.is_active ? 'deactivate' : 'activate');
+    const status = document.createElement('span');
+    status.className = `account-status ${user.is_active ? 'is-active' : 'is-inactive'}`;
+    status.textContent = user.is_active ? 'Active' : 'Inactive';
+    const controls = document.createElement('div');
+    controls.className = 'account-actions';
+    controls.append(status, button);
+    actions.append(controls);
+    row.append(name, role, created, actions);
+    tbody.append(row);
+  });
   // Populate reset-password dropdown
   const sel = document.getElementById('resetUserId');
-  sel.innerHTML = users.map(u => `<option value="${u.id}">${esc(u.username)} (${u.role})</option>`).join('');
+  sel.replaceChildren(...users.map(u => new Option(u.username, u.id)));
 }
 
 async function addUser() {
@@ -281,6 +325,7 @@ async function addUser() {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ username, password, role })
   });
+  if ([401, 403].includes(resp.status)) { showAccessError(resp.status); return; }
   const data = await resp.json();
   if (resp.ok) {
     showMsg(msg, `User "${username}" added successfully`, true);
@@ -292,17 +337,17 @@ async function addUser() {
   }
 }
 
-async function deleteUser(uid, username) {
-  if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
-  const msg  = document.getElementById('deleteMsg');
-  const resp = await fetch(`/api/manager/users/${uid}/delete`, { method: 'POST' });
-  const data = await resp.json();
-  if (resp.ok) {
-    showMsg(msg, `User "${username}" deleted`, true);
+async function updateUser(uid, action, body = {}) {
+  const msg = document.getElementById('deleteMsg');
+  try {
+    const response = await fetch(`/api/manager/users/${uid}/${action}`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+    });
+    if ([401, 403].includes(response.status)) { showAccessError(response.status); return; }
+    const data = await response.json();
+    showMsg(msg, response.ok ? 'Account updated.' : data.error, response.ok);
     loadUsers();
-  } else {
-    showMsg(msg, data.error || 'Failed to delete', false);
-  }
+  } catch (error) { showMsg(msg, 'Unable to update account.', false); }
 }
 
 async function resetPassword() {
@@ -317,6 +362,7 @@ async function resetPassword() {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ password })
   });
+  if ([401, 403].includes(resp.status)) { showAccessError(resp.status); return; }
   const data = await resp.json();
   if (resp.ok) {
     showMsg(msg, 'Password reset successfully', true);
