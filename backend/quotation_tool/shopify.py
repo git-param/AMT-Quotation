@@ -4,7 +4,9 @@ import threading
 import time
 
 import os
+from dotenv import load_dotenv
 
+load_dotenv()
 SHOP = os.getenv("SHOPIFY_SHOP", "")
 CLIENT_ID = os.getenv("SHOPIFY_CLIENT_ID", "")
 CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
