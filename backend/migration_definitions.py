@@ -187,6 +187,27 @@ SHARE_LEVEL_SCHEMA = (
     "CHECK (previous_access_level IN ('VIEW', 'EDIT'))",
 )
 
+CRM_DETAIL_SCHEMA = (
+    "ALTER TABLE client_leads ADD COLUMN business_details TEXT NOT NULL "
+    "DEFAULT '' CHECK (length(business_details) <= 2000)",
+    "ALTER TABLE client_leads ADD COLUMN contact_persons_json TEXT NOT NULL "
+    "DEFAULT '[]'",
+    "ALTER TABLE client_leads ADD COLUMN emails_json TEXT NOT NULL "
+    "DEFAULT '[]'",
+    "ALTER TABLE client_leads ADD COLUMN phones_json TEXT NOT NULL "
+    "DEFAULT '[]'",
+    "ALTER TABLE client_leads ADD COLUMN billing_address_json TEXT NOT NULL "
+    "DEFAULT '{}'",
+    "ALTER TABLE client_leads ADD COLUMN shipping_address_json TEXT NOT NULL "
+    "DEFAULT '{}'",
+    "ALTER TABLE client_leads ADD COLUMN status TEXT NOT NULL DEFAULT 'lead' "
+    "CHECK (status IN ('lead', 'prospect', 'customer'))",
+    "ALTER TABLE client_leads ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1 "
+    "CHECK (is_active IN (0, 1))",
+    "CREATE INDEX idx_clients_owner_status "
+    "ON client_leads(created_by, is_active, status)",
+)
+
 # Add new versions here; never edit the name or SQL of an applied version.
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
@@ -196,4 +217,5 @@ MIGRATIONS = (
     (5, 'private_client_leads', LEAD_SCHEMA),
     (6, 'client_sharing', SHARING_SCHEMA),
     (7, 'client_share_levels', SHARE_LEVEL_SCHEMA),
+    (8, 'client_crm_details', CRM_DETAIL_SCHEMA),
 )

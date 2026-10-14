@@ -276,7 +276,7 @@ Browser layout and interactive testing must be completed separately.
 ### Client lead editing
 
 `PUT /api/leads/<id>` updates name, company, email, phone, and notes using a
-complete detail payload (omitted optional details become empty). Users can edit
+detail payload (omitted fields are preserved). Users can edit
 own leads; Sales TLs can also edit their currently assigned active executives'
 leads; Admins and legacy managers can edit all leads. Explicit sharing and
 view-only role grants do not authorize edits. List/detail responses include
@@ -378,3 +378,48 @@ revocation, recipient edit access, prevention of onward sharing even after role
 changes, ownership preservation, and version-6-to-7 data preservation. Browser
 layout and interactive verification remain outstanding. Older code cannot honor
 EDIT grants, so prefer a forward fix and retain schema/history on code rollback.
+
+### Module 4.3: client details and CRM fields
+
+Migration 8 (`client_crm_details`) extends `client_leads` without copying,
+renaming or deleting existing rows. The same IDs, owners, creation timestamps,
+share grants and share events remain authoritative. New fields default to empty
+structured data, status `lead`, and active availability. Previous migrations
+are unchanged.
+
+The create/edit/details form supports company, business details, multiple named
+contact persons, primary and additional email/phone contacts, structured billing
+and shipping addresses, notes, and `lead`/`prospect`/`customer` status. Availability
+(Active/Inactive) is separate from CRM status. Name remains required; optional
+contacts may be empty. Supplied emails are validated and lowercased; phones
+normalize separators and require 7?15 digits with optional +. Contact persons
+require a name; supplied addresses require line1 and country. Lists are limited
+to 20 entries. Unknown/ownership/timestamp/lifecycle fields are rejected.
+
+PUT preserves omitted fields, including structured CRM fields, and supports
+explicit empty values to clear optional details. Authorized VIEW recipients can
+inspect all client details through a read-only Details form; EDIT recipients
+can update details but cannot transfer ownership or reshare.
+
+Duplicate checks reject matching normalized name+company, or an overlapping
+email/phone across any contact channel, within the original creator's clients.
+Inactive clients are included. These checks run under BEGIN IMMEDIATE so
+concurrent duplicate creates cannot both succeed. Separate owners' private
+clients are not merged or exposed, and existing duplicate records are never
+rewritten by migration. Duplicate errors reveal no matching client IDs/details.
+An authorized edit is checked against the original owner's records.
+
+Owners, authorized supervising TLs, Admins and legacy managers can deactivate
+or reactivate via `POST /api/leads/<id>/deactivate` and `/activate`. Shared EDIT
+permission permits detail editing only, not lifecycle management. Deactivation
+retains details, relationships, share levels and event history. Authorized users
+can still inspect/edit retained details. New grants or level changes require
+reactivation; existing shares can still be revoked. No permanent deletion API
+exists. Client Access labels inactive clients and disables grant/level controls.
+
+Tests cover CRM round trips, partial edits, malformed/invalid values, duplicates,
+concurrent creation, VIEW/EDIT restrictions, lifecycle authority, historical
+preservation and prior RBAC modules. Browser layout/interaction testing remains
+outstanding. Read-only analysis of the supplied USD/INR PI templates and the
+future client-order field checklist is saved in [docs/pi_order_fields.md](docs/pi_order_fields.md).
+No enquiries, orders or PI generation are implemented by this module.
