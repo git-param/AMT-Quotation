@@ -41,9 +41,10 @@ class RBACTests(unittest.TestCase):
         )
         from backend.enquiry_sources.routes import bp as sources_bp
         from backend.client_leads.routes import bp as leads_bp
+        from backend.client_access.routes import bp as access_bp
         for blueprint in (
                 login_bp, manager_bp, quotation_bp, search_bp, sources_bp,
-                leads_bp):
+                leads_bp, access_bp):
             self.app.register_blueprint(blueprint)
         self.client = self.app.test_client()
         self.ids = {}

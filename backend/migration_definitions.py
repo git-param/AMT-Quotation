@@ -150,6 +150,64 @@ LEAD_SCHEMA = (
     "('sales_tl', 'leads.view_team')",
 )
 
+SHARING_SCHEMA = (
+    "ALTER TABLE client_lead_shares ADD COLUMN is_active INTEGER NOT NULL "
+    "DEFAULT 1 CHECK (is_active IN (0, 1))",
+    "ALTER TABLE client_lead_shares ADD COLUMN granted_by INTEGER "
+    "REFERENCES users(id) ON DELETE RESTRICT",
+    "ALTER TABLE client_lead_shares ADD COLUMN granted_at TEXT",
+    "ALTER TABLE client_lead_shares ADD COLUMN revoked_by INTEGER "
+    "REFERENCES users(id) ON DELETE RESTRICT",
+    "ALTER TABLE client_lead_shares ADD COLUMN revoked_at TEXT",
+    "CREATE INDEX idx_lead_shares_active_user "
+    "ON client_lead_shares(user_id, is_active, lead_id)",
+    "CREATE TABLE client_share_events ("
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "lead_id INTEGER NOT NULL REFERENCES client_leads(id) ON DELETE RESTRICT, "
+    "user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "action TEXT NOT NULL CHECK (action IN ('grant', 'revoke')), "
+    "actor_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "actor_name TEXT NOT NULL, occurred_at TEXT NOT NULL DEFAULT "
+    "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))",
+    "CREATE INDEX idx_share_events_lead_id "
+    "ON client_share_events(lead_id, id)",
+    "INSERT INTO permissions (code, description) VALUES "
+    "('leads.share_manage', 'Manage client lead sharing')",
+    "INSERT INTO role_permissions (role_code, permission_code) VALUES "
+    "('admin', 'leads.share_manage'), ('manager', 'leads.share_manage'), "
+    "('sales_tl', 'leads.share_manage')",
+)
+
+SHARE_LEVEL_SCHEMA = (
+    "ALTER TABLE client_lead_shares ADD COLUMN access_level TEXT NOT NULL "
+    "DEFAULT 'VIEW' CHECK (access_level IN ('VIEW', 'EDIT'))",
+    "ALTER TABLE client_share_events ADD COLUMN access_level TEXT NOT NULL "
+    "DEFAULT 'VIEW' CHECK (access_level IN ('VIEW', 'EDIT'))",
+    "ALTER TABLE client_share_events ADD COLUMN previous_access_level TEXT "
+    "CHECK (previous_access_level IN ('VIEW', 'EDIT'))",
+)
+
+CRM_DETAIL_SCHEMA = (
+    "ALTER TABLE client_leads ADD COLUMN business_details TEXT NOT NULL "
+    "DEFAULT '' CHECK (length(business_details) <= 2000)",
+    "ALTER TABLE client_leads ADD COLUMN contact_persons_json TEXT NOT NULL "
+    "DEFAULT '[]'",
+    "ALTER TABLE client_leads ADD COLUMN emails_json TEXT NOT NULL "
+    "DEFAULT '[]'",
+    "ALTER TABLE client_leads ADD COLUMN phones_json TEXT NOT NULL "
+    "DEFAULT '[]'",
+    "ALTER TABLE client_leads ADD COLUMN billing_address_json TEXT NOT NULL "
+    "DEFAULT '{}'",
+    "ALTER TABLE client_leads ADD COLUMN shipping_address_json TEXT NOT NULL "
+    "DEFAULT '{}'",
+    "ALTER TABLE client_leads ADD COLUMN status TEXT NOT NULL DEFAULT 'lead' "
+    "CHECK (status IN ('lead', 'prospect', 'customer'))",
+    "ALTER TABLE client_leads ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1 "
+    "CHECK (is_active IN (0, 1))",
+    "CREATE INDEX idx_clients_owner_status "
+    "ON client_leads(created_by, is_active, status)",
+)
+
 # Add new versions here; never edit the name or SQL of an applied version.
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
@@ -157,4 +215,7 @@ MIGRATIONS = (
     (3, 'rbac', RBAC_SCHEMA),
     (4, 'enquiry_sources', SOURCE_SCHEMA),
     (5, 'private_client_leads', LEAD_SCHEMA),
+    (6, 'client_sharing', SHARING_SCHEMA),
+    (7, 'client_share_levels', SHARE_LEVEL_SCHEMA),
+    (8, 'client_crm_details', CRM_DETAIL_SCHEMA),
 )

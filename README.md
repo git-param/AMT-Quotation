@@ -276,7 +276,7 @@ Browser layout and interactive testing must be completed separately.
 ### Client lead editing
 
 `PUT /api/leads/<id>` updates name, company, email, phone, and notes using a
-complete detail payload (omitted optional details become empty). Users can edit
+detail payload (omitted fields are preserved). Users can edit
 own leads; Sales TLs can also edit their currently assigned active executives'
 leads; Admins and legacy managers can edit all leads. Explicit sharing and
 view-only role grants do not authorize edits. List/detail responses include
@@ -286,3 +286,140 @@ Update authorization is enforced again inside the SQL UPDATE predicate.
 Ownership and creation timestamps are preserved, and attempts to supply them
 are rejected. No permanent deletion or archive endpoints are introduced.
 No schema changes or new migrations are required for editing.
+
+### Module 4.2: client access and sharing
+
+**Client Access / Sharing** is a separate section linked from Client Leads,
+the dashboard, and the quotation header for authorized managers. Here a client
+means the existing client lead, referenced by its stable `client_leads.id`.
+No second client table or ownership hierarchy is introduced.
+
+Admins and legacy managers can manage shares for any client. Sales TLs can
+manage their own leads and those of their assigned active executives using the
+existing ownership/supervision scope. Neither VIEW nor EDIT shares, nor
+`leads.view_all` read grants alone, authorize sharing. The `leads.share_manage` permission is
+required in addition to the manager role and per-client SQL scope. Executives
+cannot reshare or escalate access, even if a lead is shared with them.
+
+Recipients must be active Sales Executives (including legacy `user` accounts).
+TLs can choose executives outside their team, but only share clients they may
+manage. Source-client ownership never changes. Owner grants are rejected as
+redundant. Revocation is supported for existing recipients even if they have
+since been deactivated or changed roles.
+
+Migration 6 (`client_sharing`) adds active state and grant/revoke metadata to
+existing `client_lead_shares` rows, plus indexed `client_share_events` history.
+The existing composite primary key prevents duplicate lead/recipient rows.
+Existing shares stay active; their original actor/timestamp fields remain NULL
+because that information was not recorded. No historical attribution is
+invented. Regrants reuse the same row; every successful grant/revoke cycle has
+its own timestamped event and actor ID/name snapshot. Foreign keys restrict
+deletion of linked leads, recipients, and actors. No share or history deletion
+API is provided.
+
+Share state and event insertion are committed together under `BEGIN IMMEDIATE`.
+Concurrent duplicate grants produce one successful grant and one 409, with
+one event. A failed event write rolls back the access change. Revocation flips
+active state without deleting records. Subsequent list/detail requests stop
+returning the client through that share immediately; ownership, supervision,
+and independent RBAC grants remain effective. An already loaded browser must
+refresh to reflect the new permissions; previously viewed content cannot be
+withdrawn. Shared-access badges show VIEW or EDIT in the Client Leads list,
+and identify independently editable VIEW recipients.
+
+APIs: `GET /api/client-access` lists manageable clients and eligible recipients;
+`GET /api/client-access/<lead_id>` lists scoped share state and history;
+`POST /api/client-access/<lead_id>/grant` accepts `user_id` and `access_level`;
+`/revoke` accepts only `user_id`. Unauthorized clients return 404, and unauthorized roles/anonymous
+sessions are rejected by backend permission checks. Duplicate grants or revokes
+without an active share return 409. This module includes no enquiries, orders,
+PI features, permanent deletion, or general permission-management editor.
+
+Before upgrading, use the database backup/rollback guidance above. If rolling
+back to pre-sharing code, note that it ignores `is_active` and could restore
+revoked share access: retain the new visibility checks or use a forward fix.
+Tests cover grant/revoke/regrant, legacy-share preservation, actor/timestamp
+history, concurrent duplicates, atomic failure rollback, unauthorized sharing,
+read-only enforcement, cross-TL isolation, and preserved independent access.
+Browser layout and interactive testing remain a separate validation step.
+
+### VIEW and EDIT client sharing
+
+Migration 7 (`client_share_levels`) adds a constrained `access_level` column
+(VIEW/EDIT) to the existing shares and event history, plus nullable
+`previous_access_level` on events. No tables are duplicated or rebuilt. Versions
+1?6 are unchanged. Existing shares and historical events retain their records
+and default to VIEW, preserving their original read-only behavior.
+
+Admins and authorized TLs can grant either level to active executives, including
+executives outside their team. VIEW allows reading only; EDIT additionally
+allows updating client details through the existing scoped update API.
+Independent ownership, supervision, and role grants still apply. Neither level
+transfers ownership or permits onward sharing. Management queries use the
+independent ownership/supervision scope, never shared edit permission.
+
+Use `POST /api/client-access/<lead_id>/level` with `user_id` and `access_level`
+to change an active grant. Grant requests also accept an explicit access level;
+omitting it defaults to VIEW for compatibility with existing API callers.
+Invalid levels are rejected. Same-level changes and duplicate active grants
+return 409. Inactive shares must be regranted. Every level change is recorded
+as a grant event with previous/new levels, actor and timestamp; revocations
+record the level being removed. Original grant events remain in history.
+
+The access screen provides a level selector for new grants and for each active
+recipient. The lead list shows the shared level and exposes Edit only when the
+server authorizes it. Downgrading EDIT to VIEW immediately removes shared edit
+permission; revocation removes both shared reading and editing on the next
+request. Independent access remains effective. Creator and creation timestamps
+are never updated by sharing or lead editing.
+
+Tests cover cross-team TL grants, VIEW/EDIT validation, upgrades/downgrades,
+revocation, recipient edit access, prevention of onward sharing even after role
+changes, ownership preservation, and version-6-to-7 data preservation. Browser
+layout and interactive verification remain outstanding. Older code cannot honor
+EDIT grants, so prefer a forward fix and retain schema/history on code rollback.
+
+### Module 4.3: client details and CRM fields
+
+Migration 8 (`client_crm_details`) extends `client_leads` without copying,
+renaming or deleting existing rows. The same IDs, owners, creation timestamps,
+share grants and share events remain authoritative. New fields default to empty
+structured data, status `lead`, and active availability. Previous migrations
+are unchanged.
+
+The create/edit/details form supports company, business details, multiple named
+contact persons, primary and additional email/phone contacts, structured billing
+and shipping addresses, notes, and `lead`/`prospect`/`customer` status. Availability
+(Active/Inactive) is separate from CRM status. Name remains required; optional
+contacts may be empty. Supplied emails are validated and lowercased; phones
+normalize separators and require 7?15 digits with optional +. Contact persons
+require a name; supplied addresses require line1 and country. Lists are limited
+to 20 entries. Unknown/ownership/timestamp/lifecycle fields are rejected.
+
+PUT preserves omitted fields, including structured CRM fields, and supports
+explicit empty values to clear optional details. Authorized VIEW recipients can
+inspect all client details through a read-only Details form; EDIT recipients
+can update details but cannot transfer ownership or reshare.
+
+Duplicate checks reject matching normalized name+company, or an overlapping
+email/phone across any contact channel, within the original creator's clients.
+Inactive clients are included. These checks run under BEGIN IMMEDIATE so
+concurrent duplicate creates cannot both succeed. Separate owners' private
+clients are not merged or exposed, and existing duplicate records are never
+rewritten by migration. Duplicate errors reveal no matching client IDs/details.
+An authorized edit is checked against the original owner's records.
+
+Owners, authorized supervising TLs, Admins and legacy managers can deactivate
+or reactivate via `POST /api/leads/<id>/deactivate` and `/activate`. Shared EDIT
+permission permits detail editing only, not lifecycle management. Deactivation
+retains details, relationships, share levels and event history. Authorized users
+can still inspect/edit retained details. New grants or level changes require
+reactivation; existing shares can still be revoked. No permanent deletion API
+exists. Client Access labels inactive clients and disables grant/level controls.
+
+Tests cover CRM round trips, partial edits, malformed/invalid values, duplicates,
+concurrent creation, VIEW/EDIT restrictions, lifecycle authority, historical
+preservation and prior RBAC modules. Browser layout/interaction testing remains
+outstanding. Read-only analysis of the supplied USD/INR PI templates and the
+future client-order field checklist is saved in [docs/pi_order_fields.md](docs/pi_order_fields.md).
+No enquiries, orders or PI generation are implemented by this module.

@@ -5,6 +5,9 @@ from flask import Blueprint, jsonify, request, send_file
 from backend.common.auth import (
     authenticated_required, get_current_user, get_permissions,
 )
+from backend.client_leads.details import (
+    decode, duplicate_exists, validated_details,
+)
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
 
@@ -18,7 +21,7 @@ def visibility(user):
         return '1 = 1', []
     predicate = (
         'l.created_by = ? OR EXISTS (SELECT 1 FROM client_lead_shares s '
-        'WHERE s.lead_id = l.id AND s.user_id = ?)'
+        'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1)'
     )
     parameters = [user['id'], user['id']]
     if 'leads.view_team' in permissions:
@@ -30,8 +33,8 @@ def visibility(user):
     return predicate, parameters
 
 
-def edit_scope(user):
-    """Shares grant read access only; ownership and supervision grant edits."""
+def management_edit_scope(user):
+    """Authorize management by ownership and supervision, not shared access."""
     if user['role'] in ('admin', 'manager'):
         return '1 = 1', []
     predicate = 'l.created_by = ?'
@@ -46,23 +49,40 @@ def edit_scope(user):
     return predicate, parameters
 
 
+def edit_scope(user):
+    """Allow independent editing or an active EDIT share, never resharing."""
+    predicate, parameters = management_edit_scope(user)
+    predicate += (
+        ' OR EXISTS (SELECT 1 FROM client_lead_shares s '
+        'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1 '
+        "AND s.access_level = 'EDIT')"
+    )
+    return predicate, parameters + [user['id']]
+
+
 def read_leads(user, lead_id=None):
     """Apply authorization inside SQL before any records are returned."""
     predicate, parameters = visibility(user)
     editable, edit_parameters = edit_scope(user)
     sql = (
         'SELECT l.*, u.username AS creator_name, (' + editable +
-        ') AS can_edit FROM client_leads l '
+        ') AS can_edit, (' + management_edit_scope(user)[0] +
+        ') AS can_manage_client, EXISTS (SELECT 1 FROM client_lead_shares s '
+        'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1) '
+        'AS is_shared, (SELECT s.access_level FROM client_lead_shares s '
+        'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1) '
+        'AS shared_access_level FROM client_leads l '
         'JOIN users u ON u.id = l.created_by WHERE (' + predicate + ')'
     )
     if lead_id is not None:
         sql += ' AND l.id = ?'
         parameters.append(lead_id)
-    parameters = edit_parameters + parameters
+    parameters = (edit_parameters + management_edit_scope(user)[1]
+                  + [user['id'], user['id']] + parameters)
     sql += ' ORDER BY l.id DESC'
     connection = get_db()
     try:
-        return [dict(row) for row in connection.execute(sql, parameters)]
+        return [decode(row) for row in connection.execute(sql, parameters)]
     finally:
         connection.close()
 
@@ -79,7 +99,11 @@ def lead_page():
 def list_leads():
     """Return authorized leads without accepting ownership query overrides."""
     user = get_current_user()
-    return jsonify(leads=read_leads(user), username=user['username'])
+    return jsonify(
+        leads=read_leads(user), username=user['username'],
+        can_manage_sharing=(user['role'] in ('admin', 'manager', 'sales_tl')
+                            and 'leads.share_manage' in get_permissions(user)),
+    )
 
 
 @bp.route('/api/leads/<int:lead_id>')
@@ -97,72 +121,101 @@ def lead_detail(lead_id):
 def create_lead():
     """Assign ownership and timestamp on the server, never from input."""
     try:
-        values = validated_details()
+        values = validated_details(request.get_json(silent=True))
     except ValueError as error:
         return jsonify(error=str(error)), 400
     user = get_current_user()
     connection = get_db()
     try:
-        with connection:
-            cursor = connection.execute(
-                'INSERT INTO client_leads '
-                '(name, company, email, phone, notes, created_by) '
-                'VALUES (?, ?, ?, ?, ?, ?)',
-                (*values.values(), user['id']),
-            )
+        connection.execute('BEGIN IMMEDIATE')
+        if duplicate_exists(connection, values, user['id']):
+            return jsonify(
+                error='A matching client exists in this ownership.'
+            ), 409
+        columns = ', '.join(values)
+        placeholders = ', '.join('?' for _ in values)
+        cursor = connection.execute(
+            'INSERT INTO client_leads (' + columns + ', created_by) '
+            'VALUES (' + placeholders + ', ?)',
+            (*values.values(), user['id']),
+        )
+        connection.commit()
         return jsonify(lead=read_leads(user, cursor.lastrowid)[0]), 201
     finally:
+        connection.rollback()
         connection.close()
-
-
-def validated_details():
-    """Allow only client details; reject ownership and creation metadata."""
-    data = request.get_json(silent=True)
-    limits = {'name': 150, 'company': 150, 'email': 254,
-              'phone': 40, 'notes': 2000}
-    if not isinstance(data, dict) or set(data) - set(limits):
-        raise ValueError(
-            'Invalid fields; ownership is server assigned.'
-        )
-    values = {}
-    for field, limit in limits.items():
-        value = data.get(field, '')
-        if not isinstance(value, str) or len(value.strip()) > limit:
-            raise ValueError('Invalid value for ' + field)
-        values[field] = value.strip()
-    if not values['name']:
-        raise ValueError('A client name is required.')
-    return values
 
 
 @bp.route('/api/leads/<int:lead_id>', methods=['PUT'])
 @authenticated_required
 def update_lead(lead_id):
     """Scope updates to editable leads while preserving ownership."""
-    user = get_current_user()
-    visible = read_leads(user, lead_id)
-    if not visible:
-        return jsonify(error='Lead not found.'), 404
-    if not visible[0]['can_edit']:
-        return jsonify(error='This lead is read-only.'), 403
+    connection = get_db()
     try:
-        values = validated_details()
-    except ValueError as error:
-        return jsonify(error=str(error)), 400
-    predicate, parameters = edit_scope(user)
+        connection.execute('BEGIN IMMEDIATE')
+        user = get_current_user()
+        if not user:
+            return jsonify(error='Not logged in'), 401
+        visible = read_leads(user, lead_id)
+        if not visible:
+            return jsonify(error='Lead not found.'), 404
+        if not visible[0]['can_edit']:
+            return jsonify(error='This lead is read-only.'), 403
+        try:
+            values = validated_details(
+                request.get_json(silent=True), visible[0]
+            )
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
+        if duplicate_exists(
+                connection, values, visible[0]['created_by'], lead_id):
+            return jsonify(
+                error='A matching client exists in this ownership.'
+            ), 409
+        predicate, parameters = edit_scope(user)
+        assignments = ', '.join(field + ' = ?' for field in values)
+        cursor = connection.execute(
+            'UPDATE client_leads AS l SET ' + assignments + ' WHERE l.id = ? '
+            'AND EXISTS (SELECT 1 FROM users u WHERE u.id = l.created_by '
+            'AND (' + predicate + '))',
+            (*values.values(), lead_id, *parameters),
+        )
+        if not cursor.rowcount:
+            return jsonify(error='Edit access is no longer available.'), 403
+        connection.commit()
+        return jsonify(lead=read_leads(user, lead_id)[0])
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@bp.route('/api/leads/<int:lead_id>/deactivate', methods=['POST'])
+@bp.route('/api/leads/<int:lead_id>/activate', methods=['POST'])
+@authenticated_required
+def set_client_active(lead_id):
+    """Keep related records; lifecycle changes require management rights."""
+    user = get_current_user()
+    leads = read_leads(user, lead_id)
+    if not leads:
+        return jsonify(error='Lead not found.'), 404
+    if not leads[0]['can_manage_client']:
+        return jsonify(
+            error='Client lifecycle management is not permitted.'
+        ), 403
+    predicate, parameters = management_edit_scope(user)
     connection = get_db()
     try:
         with connection:
             cursor = connection.execute(
-                'UPDATE client_leads AS l SET name = ?, company = ?, '
-                'email = ?, phone = ?, notes = ? WHERE l.id = ? '
+                'UPDATE client_leads AS l SET is_active = ? WHERE l.id = ? '
                 'AND EXISTS (SELECT 1 FROM users u WHERE u.id = l.created_by '
                 'AND (' + predicate + '))',
-                (*values.values(), lead_id, *parameters),
+                (int(request.path.endswith('/activate')),
+                 lead_id, *parameters),
             )
             if not cursor.rowcount:
                 return jsonify(
-                    error='Edit access is no longer available.'
+                    error='Management access is no longer valid.'
                 ), 403
         return jsonify(lead=read_leads(user, lead_id)[0])
     finally:
