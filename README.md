@@ -219,3 +219,70 @@ orders, or PI functionality.
 Run the full unittest command above to cover source CRUD, duplicate/invalid
 contacts, permission denials, deactivation/reactivation, disabled accounts,
 and preservation of source rows through the version-3-to-4 migration.
+
+### Module 4.1: private client leads
+
+**Client Leads** is available from the quotation, dashboard, and sources
+headers. Any active authenticated account can create a lead, including an
+account without quotation permissions. Name is required; company, email, phone,
+and notes are optional. The server assigns `created_by` and a UTC creation
+timestamp; input containing ownership, timestamp, or unknown fields is rejected.
+Ownership-transfer and delete endpoints remain unavailable.
+
+Migration 5 (`private_client_leads`) adds `client_leads`, indexed by creator,
+and `client_lead_shares` with foreign keys. Creator deletion is restricted so
+historical lead ownership remains intact. Shares support explicit existing
+access grants, but this module provides no sharing API or UI. Sharing and
+permissions management are deferred to Module 4.2.
+
+AMT had no supervisor hierarchy. With approval, migration 5 adds the sole
+nullable self-referencing `users.supervisor_user_id` FK and an index. All
+assignments start NULL; no supervisors are inferred. Admins and legacy managers
+configure this relationship in the existing user-management table, or through
+`POST /api/manager/users/<id>/supervisor` with `supervisor_user_id` (integer or
+null). An active executive (`sales_executive` or legacy `user`) can be assigned
+only to an active Sales TL. Self-supervision is rejected by both API and schema;
+clearing an assignment is supported. No parallel team table is introduced.
+
+List and detail APIs enforce access within parameterized SQL:
+
+- Every active user can read their own leads and explicitly shared leads.
+- Sales TLs also read leads from active executives currently assigned to them.
+  Without assignments they cannot read executives' private leads; other TLs'
+  private leads are not automatically visible.
+- Admin and legacy manager grants (`leads.view_all`) allow all leads.
+  Additional configured role grants use the existing `role_permissions` table.
+- Creator username and stable creator ID are returned with authorized records.
+- Unauthorized detail requests return the same 404 as missing IDs. Query-string
+  ownership overrides cannot broaden scope; cached session role claims are ignored.
+
+Supervisor changes affect visibility immediately. Deactivation retains the
+relationship but prevents login and removes team-derived access to inactive
+executives' leads; Admins still see historical leads. Demoted supervisors lose
+team access through RBAC, and executive role changes stop team-derived access.
+Deleting an unreferenced supervisor clears the link with `ON DELETE SET NULL`;
+users who created leads must be deactivated rather than deleted. Reactivation
+restores access according to the retained relationship.
+
+Endpoints: `GET /leads`, `GET/POST /api/leads`, and
+`GET /api/leads/<id>`. No enquiries, orders, PI generation, sharing screens,
+or permission-management screens are implemented. Rollback to pre-module code
+should retain the additive schema and records; prefer a forward migration over
+removing ownership or share tables. The standard test suite covers creation by
+all roles, supervisor configuration, private/shared access, cross-TL isolation,
+ownership manipulation, disabled/deleted accounts, and prior RBAC behavior.
+Browser layout and interactive testing must be completed separately.
+
+### Client lead editing
+
+`PUT /api/leads/<id>` updates name, company, email, phone, and notes using a
+complete detail payload (omitted optional details become empty). Users can edit
+own leads; Sales TLs can also edit their currently assigned active executives'
+leads; Admins and legacy managers can edit all leads. Explicit sharing and
+view-only role grants do not authorize edits. List/detail responses include
+server-derived `can_edit` for UI actions. The prefilled edit form includes Cancel.
+
+Update authorization is enforced again inside the SQL UPDATE predicate.
+Ownership and creation timestamps are preserved, and attempts to supply them
+are rejected. No permanent deletion or archive endpoints are introduced.
+No schema changes or new migrations are required for editing.

@@ -107,7 +107,8 @@ def api_manager_users():
     connection = get_db()
     try:
         rows = connection.execute(
-            'SELECT id, username, role, is_active, created_at '
+            'SELECT id, username, role, is_active, created_at, '
+            'supervisor_user_id '
             'FROM users ORDER BY id'
         ).fetchall()
         return jsonify(users=[dict(row) for row in rows], roles=ROLE_LABELS)
@@ -223,4 +224,46 @@ def api_manager_reset_password(uid):
             return jsonify(error='User not found'), 404
         return jsonify(ok=True)
     finally:
+        connection.close()
+
+
+@bp.route('/api/manager/users/<int:uid>/supervisor', methods=['POST'])
+@permission_required('users.manage')
+def assign_supervisor(uid):
+    """Configure the sole supervisor relationship for an active executive."""
+    data = _request_data()
+    if 'supervisor_user_id' not in data:
+        return jsonify(error='Supervisor field is required.'), 400
+    supervisor = data['supervisor_user_id']
+    if supervisor is not None and type(supervisor) is not int:
+        return jsonify(error='Invalid supervisor ID.'), 400
+    if supervisor == uid:
+        return jsonify(error='Self-supervision is not allowed.'), 400
+    connection = get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        target = connection.execute(
+            'SELECT role, is_active FROM users WHERE id = ?', (uid,)
+        ).fetchone()
+        if not target:
+            return jsonify(error='User not found.'), 404
+        if supervisor is not None:
+            if not target['is_active'] or target['role'] not in (
+                    'user', 'sales_executive'):
+                return jsonify(error='Select an active executive.'), 400
+            leader = connection.execute(
+                'SELECT role, is_active FROM users WHERE id = ?',
+                (supervisor,),
+            ).fetchone()
+            if not leader or not leader['is_active'] or leader['role'] != (
+                    'sales_tl'):
+                return jsonify(error='Select an active Sales TL.'), 400
+        connection.execute(
+            'UPDATE users SET supervisor_user_id = ? WHERE id = ?',
+            (supervisor, uid),
+        )
+        connection.commit()
+        return jsonify(ok=True)
+    finally:
+        connection.rollback()
         connection.close()
