@@ -305,7 +305,21 @@ async function loadUsers() {
     controls.className = 'account-actions';
     controls.append(status, button);
     actions.append(controls);
-    row.append(name, role, created, actions);
+    const supervisorCell = document.createElement('td');
+    const supervisor = document.createElement('select');
+    supervisor.className = 'role-select';
+    supervisor.setAttribute('aria-label', `Supervisor for ${user.username}`);
+    supervisor.add(new Option('Unassigned', '', false, !user.supervisor_user_id));
+    users.filter(u => u.role === 'sales_tl' && u.is_active).forEach(tl => {
+      supervisor.add(new Option(tl.username, tl.id, false, tl.id === user.supervisor_user_id));
+    });
+    if (user.supervisor_user_id && ![...supervisor.options].some(o => Number(o.value) === user.supervisor_user_id)) {
+      supervisor.add(new Option('Unavailable supervisor', user.supervisor_user_id, false, true));
+    }
+    supervisor.disabled = !user.is_active || !['user', 'sales_executive'].includes(user.role);
+    supervisor.onchange = () => updateUser(user.id, 'supervisor', {supervisor_user_id: supervisor.value ? Number(supervisor.value) : null});
+    supervisorCell.append(supervisor);
+    row.append(name, role, supervisorCell, created, actions);
     tbody.append(row);
   });
   // Populate reset-password dropdown

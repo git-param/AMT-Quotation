@@ -120,10 +120,41 @@ SOURCE_SCHEMA = (
     "('manager', 'sources.manage')",
 )
 
+LEAD_SCHEMA = (
+    "ALTER TABLE users ADD COLUMN supervisor_user_id INTEGER "
+    "REFERENCES users(id) ON DELETE SET NULL "
+    "CHECK (supervisor_user_id IS NULL OR supervisor_user_id != id)",
+    "CREATE INDEX idx_users_supervisor ON users(supervisor_user_id)",
+    "CREATE TABLE client_leads ("
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 150), "
+    "company TEXT NOT NULL DEFAULT '' CHECK (length(company) <= 150), "
+    "email TEXT NOT NULL DEFAULT '' CHECK (length(email) <= 254), "
+    "phone TEXT NOT NULL DEFAULT '' CHECK (length(phone) <= 40), "
+    "notes TEXT NOT NULL DEFAULT '' CHECK (length(notes) <= 2000), "
+    "created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "created_at TEXT NOT NULL DEFAULT "
+    "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))",
+    "CREATE INDEX idx_client_leads_creator_id ON client_leads(created_by, id)",
+    "CREATE TABLE client_lead_shares ("
+    "lead_id INTEGER NOT NULL REFERENCES client_leads(id) ON DELETE RESTRICT, "
+    "user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "PRIMARY KEY (lead_id, user_id))",
+    "CREATE INDEX idx_client_lead_shares_user "
+    "ON client_lead_shares(user_id, lead_id)",
+    "INSERT INTO permissions (code, description) VALUES "
+    "('leads.view_all', 'View all client leads'), "
+    "('leads.view_team', 'View supervised executive leads')",
+    "INSERT INTO role_permissions (role_code, permission_code) VALUES "
+    "('admin', 'leads.view_all'), ('manager', 'leads.view_all'), "
+    "('sales_tl', 'leads.view_team')",
+)
+
 # Add new versions here; never edit the name or SQL of an applied version.
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
     (3, 'rbac', RBAC_SCHEMA),
     (4, 'enquiry_sources', SOURCE_SCHEMA),
+    (5, 'private_client_leads', LEAD_SCHEMA),
 )

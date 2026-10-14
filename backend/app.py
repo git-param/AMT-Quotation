@@ -20,7 +20,9 @@ def create_app():
     from backend.quotation_tool.routes import bp as quotation_bp
     from backend.quotation_tool.search_routes import bp as search_bp
     from backend.enquiry_sources.routes import bp as sources_bp
+    from backend.client_leads.routes import bp as leads_bp
     for blueprint in (
-            login_bp, manager_bp, quotation_bp, search_bp, sources_bp):
+            login_bp, manager_bp, quotation_bp, search_bp, sources_bp,
+            leads_bp):
         app.register_blueprint(blueprint)
     return app

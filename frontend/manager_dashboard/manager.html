@@ -20,7 +20,7 @@
     <button class="refresh-btn" onclick="loadStats()">↺ Refresh</button>
     <span class="last-updated" id="lastUpdated"></span>
     <span id="hdrUser" style="font-size:12px;color:#93C5FD"></span>
-    <a href="/sources" id="sourcesLink" class="back-link" style="display:none">Enquiry Sources</a>
+    <a class="back-link" href="/leads">Client Leads</a> <a href="/sources" id="sourcesLink" class="back-link" style="display:none">Enquiry Sources</a>
     <a href="/" class="back-link">← Quotation Tool</a>
     <a href="/logout" class="back-link" style="border-color:#F87171;color:#F87171">Sign Out</a>
   </div>
@@ -128,9 +128,9 @@
     <div style="overflow-x:auto">
       <table class="tbl">
         <thead><tr>
-          <th>Username</th><th>Role</th><th>Created</th><th>Actions</th>
+          <th>Username</th><th>Role</th><th>Supervisor</th><th>Created</th><th>Actions</th>
         </tr></thead>
-        <tbody id="usersList"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+        <tbody id="usersList"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
       </table>
     </div>
     <div class="msg" id="deleteMsg"></div>

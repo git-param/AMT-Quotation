@@ -54,7 +54,8 @@ def permission_required(permission):
                 if request.path.startswith('/api/'):
                     return jsonify(error='Not logged in'), 401
                 return redirect('/login')
-            if permission not in get_permissions(user):
+            if (permission is not None
+                    and permission not in get_permissions(user)):
                 if request.path.startswith('/api/'):
                     return jsonify(error='Access denied'), 403
                 return (
@@ -72,3 +73,6 @@ def permission_required(permission):
 # Compatibility names retained for existing imports and quotation endpoints.
 login_required = permission_required('quotation.use')
 manager_required = permission_required('management.view')
+
+# Account validation without a role restriction for lead creation.
+authenticated_required = permission_required(None)
