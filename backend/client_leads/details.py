@@ -59,7 +59,8 @@ def address(value):
 def validated_details(data, existing=None):
     """Preserve omitted fields and forbid ownership/lifecycle overrides."""
     if (not isinstance(data, dict)
-            or set(data) - set(SCALARS) - set(JSON_FIELDS)):
+            or set(data) - (set(SCALARS) | set(JSON_FIELDS)
+                            | {'enquiry_source_id'})):
         raise ValueError('Invalid fields; ownership is server assigned.')
     existing = existing or {}
     result = {}
@@ -94,7 +95,43 @@ def validated_details(data, existing=None):
     for field in ('billing_address', 'shipping_address'):
         result[field + '_json'] = json.dumps(address(data.get(
             field, existing.get(field, {}))))
+    source = data.get('enquiry_source_id', existing.get('enquiry_source_id'))
+    if source is not None and (type(source) is not int
+                               or not 1 <= source <= 9223372036854775807):
+        raise ValueError('Invalid enquiry source ID.')
+    result['enquiry_source_id'] = source
     return result
+
+
+def validate_source(connection, source_id, existing_id=None):
+    """Preserve old inactive sources; new choices must be active and valid."""
+    if source_id is None or source_id == existing_id:
+        return
+    source = connection.execute(
+        'SELECT is_active, source_type, contact_value FROM enquiry_sources '
+        'WHERE id = ?', (source_id,),
+    ).fetchone()
+    if (not source or not source['is_active'] or not source['contact_value']
+            or source['source_type'] not in ('email', 'whatsapp')):
+        raise ValueError('Choose an active configured enquiry source.')
+    if source['source_type'] == 'email':
+        email(source['contact_value'])
+    else:
+        value = phone(source['contact_value'])
+        if not re.fullmatch(r'\+[1-9][0-9]{6,14}', value):
+            raise ValueError('Invalid WhatsApp enquiry source.')
+
+
+def record_addresses(connection, client_id, values, actor):
+    """Append an address snapshot; never overwrite earlier address versions."""
+    connection.execute(
+        'INSERT INTO client_address_history '
+        '(client_id, billing_address_json, shipping_address_json, '
+        'recorded_by) '
+        'VALUES (?, ?, ?, ?)',
+        (client_id, values['billing_address_json'],
+         values['shipping_address_json'], actor),
+    )
 
 
 def decode(row):

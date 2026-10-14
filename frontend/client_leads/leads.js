@@ -1,3 +1,6 @@
+let currentPage = 1;
+let totalPages = 0;
+let loadVersion = 0;
 let editingId = null;
 let readOnly = false;
 let separateShipping = null;
@@ -13,10 +16,20 @@ async function api(path, options = {}) {
   return data;
 }
 async function load() {
-  const data = await api('/api/leads');
+  const version = ++loadVersion;
+  const params = new URLSearchParams({page: currentPage, page_size: byId('pageSize').value});
+  const fields = {q:'search', status:'filterStatus', active:'filterActive', ownership:'filterOwnership', creator:'filterCreator', access:'filterAccess', source:'filterSource', sort:'sort', direction:'direction'};
+  Object.entries(fields).forEach(([key,id]) => params.set(key, byId(id).value));
+  const data = await api('/api/leads?' + params);
+  if (version !== loadVersion) return;
+  totalPages = data.pages;
+  if (currentPage > Math.max(1, totalPages)) { currentPage = Math.max(1,totalPages); return load(); }
+  byId('pageInfo').textContent = `Page ${data.page} of ${Math.max(1,data.pages)}`;
+  byId('previousPage').disabled = currentPage <= 1;
+  byId('nextPage').disabled = currentPage >= totalPages;
   byId('hdrUser').textContent = data.username;
   byId('accessLink').style.display = data.can_manage_sharing ? 'inline-block' : 'none';
-  byId('summary').textContent = `${data.leads.length} leads`;
+  byId('summary').textContent = `${data.total} matching clients`;
   byId('leads').replaceChildren();
   data.leads.forEach(lead => {
     const row = document.createElement('tr');
@@ -31,7 +44,9 @@ async function load() {
     badge.textContent = lead.is_shared ? `Shared / ${lead.shared_access_level}${lead.shared_access_level === 'VIEW' && lead.can_edit ? ' (independent edit)' : ''}` : (lead.can_edit ? 'Editable' : 'Read only');
     access.append(badge); row.append(access);
     const actions = document.createElement('td'); actions.className = 'client-actions';
-    {
+    const detailsButton = document.createElement('button'); detailsButton.className = 'btn-sm'; detailsButton.textContent = 'Details';
+    detailsButton.onclick = () => openDetails(lead.id).catch(error => message(error.message, true)); actions.append(detailsButton);
+    if (lead.can_edit) {
       const button = document.createElement('button');
       button.className = 'btn-sm'; button.textContent = lead.can_edit ? 'Edit' : 'Details';
       button.setAttribute('aria-label', `Edit ${lead.name}`);
@@ -41,6 +56,7 @@ async function load() {
           resetForm(); readOnly = !current.can_edit;
           editingId = current.id;
           scalarFields.forEach(field => { byId(field).value = current[field]; });
+          setSource(current);
           byId('emails').value = current.emails.join('\n');
           byId('phones').value = current.phones.join('\n');
           current.contact_persons.forEach(addContact);
@@ -84,12 +100,12 @@ byId('leadForm').onsubmit = async event => {
   try {
     const wasEditing = editingId !== null;
     await api(wasEditing ? `/api/leads/${editingId}` : '/api/leads', {method: wasEditing ? 'PUT' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(formDetails())});
-    resetForm(); closeForm(); await load(); message(wasEditing ? 'Client lead updated.' : 'Client lead created.');
+    resetForm(); closeForm(); byId('clientDetail').hidden = true; await loadOptions(); await load(); message(wasEditing ? 'Client lead updated.' : 'Client lead created.');
   } catch (error) { message(error.message, true); }
   finally { byId('save').disabled = false; }
 };
 (async () => {
-  try { await load(); byId('content').hidden = false; }
+  try { await loadOptions(); await load(); byId('content').hidden = false; }
   catch (error) { message(error.message, true); }
 })();
 
@@ -124,6 +140,7 @@ function formDetails() {
   ['emails', 'phones'].forEach(field => { details[field] = byId(field).value.split(/\n/).map(value => value.trim()).filter(Boolean); });
   details.contact_persons = [...byId('contacts').children].map(row => Object.fromEntries([...row.querySelectorAll('input')].map(input => [input.dataset.field, input.value])));
   ['billing', 'shipping'].forEach(kind => { details[`${kind}_address`] = Object.fromEntries(addressFields.map(field => [field, byId(`${kind}_${field}`).value.trim()]).filter(([,value]) => value)); });
+  details.enquiry_source_id = byId('enquiry_source_id').value ? Number(byId('enquiry_source_id').value) : null;
   return details;
 }
 
@@ -156,3 +173,51 @@ byId('sameAsBilling').onchange = () => {
   syncShipping();
 };
 addressFields.forEach(field => { byId(`billing_${field}`).addEventListener('input', syncShipping); });
+
+async function loadOptions() {
+  const data = await api('/api/leads/options');
+  const creator = byId('filterCreator').value;
+  byId('filterCreator').replaceChildren(new Option('All accessible creators',''), ...data.creators.map(u => new Option(u.username,u.id)));
+  if ([...byId('filterCreator').options].some(o => o.value === creator)) byId('filterCreator').value = creator;
+  const oldSource = byId('filterSource').value;
+  byId('filterSource').replaceChildren(new Option('All sources',''), ...data.filter_sources.map(s => new Option(`${s.name}${s.is_active === 0 ? ' (inactive)' : ''}`,s.id)));
+  if ([...byId('filterSource').options].some(o => o.value === oldSource)) byId('filterSource').value = oldSource;
+  byId('enquiry_source_id').replaceChildren(new Option('Not specified',''), ...data.sources.map(s => new Option(s.name,s.id)));
+}
+function setSource(client) {
+  const select = byId('enquiry_source_id');
+  if (client.enquiry_source_id && ![...select.options].some(o => Number(o.value) === client.enquiry_source_id)) {
+    select.add(new Option(`${client.enquiry_source_name} (inactive)`,client.enquiry_source_id));
+  }
+  select.value = client.enquiry_source_id || '';
+}
+async function openDetails(id) {
+  const data = await api(`/api/leads/${id}`); const client = data.lead;
+  byId('detailTitle').textContent = client.name;
+  byId('detailBody').replaceChildren();
+  const section = (label, value) => {
+    const block = document.createElement('section'); const heading = document.createElement('h3'); heading.textContent = label;
+    const text = document.createElement('p'); text.textContent = value || 'Not provided'; block.append(heading,text); byId('detailBody').append(block);
+  };
+  const formatAddress = address => ['line1','line2','city','state','postal_code','country'].map(k => address[k]).filter(Boolean).join(', ');
+  section('Company information', [client.company,client.business_details].filter(Boolean).join('\n'));
+  section('Contacts', [client.email,client.phone,...client.emails,...client.phones,...client.contact_persons.map(c => [c.name,c.email,c.phone].filter(Boolean).join(' / '))].filter(Boolean).join('\n'));
+  section('Reusable billing address',formatAddress(client.billing_address));
+  section('Default shipping address',formatAddress(client.shipping_address));
+  section('Notes',client.notes);
+  section('Status and availability',`${client.status} / ${client.is_active ? 'Active' : 'Inactive'}`);
+  section('Ownership and creation',`${client.creator_name} (owner and creator) / ${new Date(client.created_at).toLocaleString()}`);
+  section('Access',client.is_shared ? `Shared ${client.shared_access_level} / ${client.can_edit ? 'Editable' : 'Read only'}` : client.can_edit ? 'Editable' : 'Read only');
+  section('Enquiry source',client.enquiry_source_name ? `${client.enquiry_source_name}${client.enquiry_source_active ? '' : ' (inactive)'}` : 'Not specified');
+  byId('addressHistory').replaceChildren();
+  data.address_history.forEach(snapshot => {
+    const line = document.createElement('p'); line.textContent = `${new Date(snapshot.recorded_at).toLocaleString()} / ${snapshot.actor_name || 'Migration baseline'}\nBilling: ${formatAddress(snapshot.billing_address) || '-'}\nDefault shipping: ${formatAddress(snapshot.default_shipping_address) || '-'}`; byId('addressHistory').append(line);
+  });
+  byId('clientDetail').hidden = false; byId('clientDetail').scrollIntoView({behavior:'smooth',block:'start'});
+}
+byId('closeDetail').onclick = () => { byId('clientDetail').hidden = true; };
+byId('discoveryForm').onsubmit = event => { event.preventDefault(); currentPage = 1; load().catch(error => message(error.message,true)); };
+byId('clearFilters').onclick = () => { byId('discoveryForm').reset(); currentPage = 1; load().catch(error => message(error.message,true)); };
+byId('previousPage').onclick = () => { if (currentPage > 1) { currentPage--; load().catch(error => message(error.message,true)); } };
+byId('nextPage').onclick = () => { if (currentPage < totalPages) { currentPage++; load().catch(error => message(error.message,true)); } };
+byId('pageSize').onchange = () => { currentPage = 1; load().catch(error => message(error.message,true)); };

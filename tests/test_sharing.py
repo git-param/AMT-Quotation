@@ -247,7 +247,7 @@ class SharingTests(unittest.TestCase):
                 )
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [6, 7, 8])
+        self.assertEqual(migrate_database(path), [6, 7, 8, 9])
         connection = sqlite3.connect(path)
         try:
             self.assertEqual(connection.execute(
@@ -402,7 +402,7 @@ class SharingTests(unittest.TestCase):
                 )
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [7, 8])
+        self.assertEqual(migrate_database(path), [7, 8, 9])
         connection = sqlite3.connect(path)
         try:
             self.assertEqual(connection.execute(

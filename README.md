@@ -423,3 +423,54 @@ preservation and prior RBAC modules. Browser layout/interaction testing remains
 outstanding. Read-only analysis of the supplied USD/INR PI templates and the
 future client-order field checklist is saved in [docs/pi_order_fields.md](docs/pi_order_fields.md).
 No enquiries, orders or PI generation are implemented by this module.
+
+### Module 4.4: client discovery and integration
+
+The Client Leads section now uses server-side discovery. `GET /api/leads`
+accepts `q` (company, name, contact person, primary/additional email/phone),
+`status` (all/lead/prospect/customer), `active` (all/active/inactive),
+`ownership` (all/own/others), `creator` (user ID), `access`
+(all/shared/VIEW/EDIT), and `source` (source ID). All filters are ANDed with the
+existing visibility SQL; creator filters never grant access. Counts, rows and
+page metadata use one read transaction and identical scope. Wildcard characters
+in search are literal. Phone queries support formatting separators.
+
+`page` defaults to 1; `page_size` defaults to 25 and is capped at 100.
+`sort` allows created/name/company/status and `direction` allows asc/desc;
+client ID breaks ties deterministically. Empty/out-of-range pages return no
+records with scoped totals. Unknown legacy query parameters remain ignored,
+never authorization overrides. Ownership and creator are the same existing
+`created_by` relationship, not duplicate fields. Pagination uses LIMIT/OFFSET;
+substring/JSON contact searches still scan authorized candidates at large scale.
+
+`GET /api/leads/options` exposes creator options from visible clients and active
+configured source choices, without granting source-management access. Inactive
+sources appear in filters only when linked to a visible client. The existing
+Enquiry Sources table and contact validators remain authoritative. Migration 9
+adds one nullable `enquiry_source_id` FK and discovery indexes. New/changed source
+links require an active configured Email/WhatsApp source. Existing inactive
+links can be retained during unrelated edits; sources and clients are not deleted.
+Legacy clients start with no source rather than an inferred assignment.
+
+Details are available for every authorized row, separately from Edit, with
+company/business information, structured contacts, saved addresses, notes,
+status/availability, creator/owner, shared VIEW/EDIT indicators, enquiry source,
+and saved address history. VIEW remains read-only; EDIT permits detail updates
+without ownership or onward-sharing rights. Deactivated clients remain visible
+by default and can be filtered; existing lifecycle and sharing restrictions are
+unchanged. Inactive sources retain their labels on linked client details.
+
+Client billing/default shipping addresses stay separate from future order
+shipping/consignee information. Migration 9 adds `client_address_history` with
+an initial baseline for existing records. Address updates append snapshots in
+the same transaction; previous snapshots are retained. The same-as-billing
+checkbox affects only reusable client defaults, not every future order. Read
+[the future order address contract](docs/order_address_design.md) together with
+[the PI checklist](docs/pi_order_fields.md). No order creation or order/PI/SKU
+schema is introduced.
+
+Tests cover scoped search/counts/pagination/sorting, manipulated filters,
+creator options, sharing/revocation, inactive clients and sources, source
+validation, address snapshot retention and migrations, alongside all earlier
+RBAC/CRM tests. Python/JavaScript checks are run locally; browser layout and
+interactive verification remain outstanding.
