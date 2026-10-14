@@ -15,9 +15,12 @@ window.addEventListener('load', () => {
   });
   loadRate();
   // Load current user info
-  fetch('/api/me').then(r => r.json()).then(u => {
+  fetch('/api/me').then(r => {
+    if (!r.ok) throw new Error('Access denied');
+    return r.json();
+  }).then(u => {
     document.getElementById('hdrUser').textContent = '👤 ' + u.username;
-    if (u.role === 'manager') document.getElementById('mgrLink').style.display = 'inline';
+    if ((u.permissions || []).includes('management.view')) document.getElementById('mgrLink').style.display = 'inline';
   }).catch(() => { window.location.href = '/login'; });
 });
 
@@ -63,6 +66,10 @@ async function lookupSKUs() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ skus })
     });
+    if (!resp.ok) {
+      setStatus(resp.status === 401 ? 'Session ended. Please sign in again.' : 'Access denied.', 'status-err');
+      return;
+    }
     const data = await resp.json();
     _rows = data.results || [];
     renderResults();

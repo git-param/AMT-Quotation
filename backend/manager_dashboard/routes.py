@@ -1,21 +1,30 @@
-from flask import Blueprint, request, jsonify, send_file, session, redirect, make_response
+"""Permission-controlled activity statistics and account administration."""
+
 import sqlite3
+
+from flask import Blueprint, jsonify, request, send_file, session
 from werkzeug.security import generate_password_hash
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
-from backend.common.auth import manager_required
+from backend.common.auth import (
+    ROLE_LABELS, manager_required, permission_required,
+)
 
 bp = Blueprint('manager_dashboard', __name__)
 
 @bp.route('/manager')
 @manager_required
 def manager():
-    return send_file(str(FRONTEND_DIR / 'manager_dashboard' / 'manager.html'))
+    """Serve the management dashboard for authorized roles."""
+    return send_file(
+        str(FRONTEND_DIR / 'manager_dashboard' / 'manager.html')
+    )
 
 
 @bp.route('/api/manager/stats')
 @manager_required
 def api_manager_stats():
+    """Return existing application-wide quotation activity statistics."""
     con = get_db()
 
     today_row = con.execute('''
@@ -26,7 +35,8 @@ def api_manager_stats():
     ''').fetchone()
 
     copies_today = con.execute(
-        "SELECT COUNT(*) cnt FROM copy_logs WHERE date(ts)=date('now','localtime')"
+        "SELECT COUNT(*) cnt FROM copy_logs "
+        "WHERE date(ts)=date('now','localtime')"
     ).fetchone()
 
     by_day = con.execute('''
@@ -57,7 +67,9 @@ def api_manager_stats():
         FROM search_logs ORDER BY id DESC LIMIT 60
     ''').fetchall()
 
-    all_skus_rows = con.execute('SELECT skus FROM search_logs WHERE skus != ""').fetchall()
+    all_skus_rows = con.execute(
+        'SELECT skus FROM search_logs WHERE skus != ""'
+    ).fetchall()
     sku_freq = {}
     for row in all_skus_rows:
         for s in (row['skus'] or '').split(','):
@@ -82,67 +94,133 @@ def api_manager_stats():
     })
 
 
+def _request_data():
+    """Treat malformed non-object JSON as an empty request."""
+    data = request.get_json(silent=True)
+    return data if isinstance(data, dict) else {}
+
+
 @bp.route('/api/manager/users')
-@manager_required
+@permission_required('users.manage')
 def api_manager_users():
-    con = get_db()
-    rows = con.execute('SELECT id, username, role, created_at FROM users ORDER BY id').fetchall()
-    con.close()
-    return jsonify({'users': [dict(r) for r in rows]})
+    """Return account metadata and assignable roles, never password hashes."""
+    connection = get_db()
+    try:
+        rows = connection.execute(
+            'SELECT id, username, role, is_active, created_at '
+            'FROM users ORDER BY id'
+        ).fetchall()
+        return jsonify(users=[dict(row) for row in rows], roles=ROLE_LABELS)
+    finally:
+        connection.close()
 
 
 @bp.route('/api/manager/users/add', methods=['POST'])
-@manager_required
+@permission_required('users.manage')
 def api_manager_add_user():
-    data     = request.json or {}
-    username = (data.get('username') or '').strip()
-    password = (data.get('password') or '').strip()
-    role     = data.get('role', 'user')
-    if not username or not password:
-        return jsonify({'error': 'Username and password required'}), 400
-    if role not in ('user', 'manager'):
-        return jsonify({'error': 'Invalid role'}), 400
+    """Create an account using a current or legacy role."""
+    data = _request_data()
+    username = str(data.get('username') or '').strip()
+    password = str(data.get('password') or '')
+    role = data.get('role', 'sales_executive')
+    if not username or len(password) < 4:
+        return jsonify(error='Username and password (4+ chars) required'), 400
+    if not isinstance(role, str) or role not in ROLE_LABELS:
+        return jsonify(error='Invalid role'), 400
+    connection = get_db()
     try:
-        con = get_db()
-        con.execute('INSERT INTO users (username, password_hash, role) VALUES (?,?,?)',
-                    (username, generate_password_hash(password), role))
-        con.commit()
-        con.close()
-        return jsonify({'ok': True})
+        with connection:
+            connection.execute(
+                'INSERT INTO users (username, password_hash, role) '
+                'VALUES (?, ?, ?)',
+                (username, generate_password_hash(password), role),
+            )
+        return jsonify(ok=True)
     except sqlite3.IntegrityError:
-        return jsonify({'error': 'Username already exists'}), 409
+        return jsonify(error='Username already exists'), 409
+    finally:
+        connection.close()
 
 
+def _update_account(uid, role=None, active=None):
+    """Serialize updates and prevent accidental administrator lockout."""
+    connection = get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        target = connection.execute(
+            'SELECT role, is_active FROM users WHERE id = ?', (uid,)
+        ).fetchone()
+        if not target:
+            return jsonify(error='User not found'), 404
+        if uid == session['user_id']:
+            return jsonify(error='Cannot change your own role or status'), 400
+        loses_admin = (
+            target['is_active'] and target['role'] in ('manager', 'admin')
+            and (active == 0 or role not in (None, 'manager', 'admin'))
+        )
+        if loses_admin:
+            count = connection.execute(
+                "SELECT COUNT(*) FROM users WHERE is_active = 1 "
+                "AND role IN ('manager', 'admin')"
+            ).fetchone()[0]
+            if count <= 1:
+                return jsonify(
+                    error='Cannot remove the last active admin'
+                ), 409
+        if role is not None:
+            connection.execute('UPDATE users SET role = ? WHERE id = ?',
+                               (role, uid))
+        if active is not None:
+            connection.execute('UPDATE users SET is_active = ? WHERE id = ?',
+                               (active, uid))
+        connection.commit()
+        return jsonify(ok=True)
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@bp.route('/api/manager/users/<int:uid>/role', methods=['POST'])
+@permission_required('users.manage')
+def api_manager_assign_role(uid):
+    """Assign a role; existing sessions observe the change immediately."""
+    role = (_request_data()).get('role')
+    if not isinstance(role, str) or role not in ROLE_LABELS:
+        return jsonify(error='Invalid role'), 400
+    return _update_account(uid, role=role)
+
+
+@bp.route('/api/manager/users/<int:uid>/deactivate', methods=['POST'])
 @bp.route('/api/manager/users/<int:uid>/delete', methods=['POST'])
-@manager_required
+@permission_required('users.manage')
 def api_manager_delete_user(uid):
-    if uid == session.get('user_id'):
-        return jsonify({'error': 'Cannot delete yourself'}), 400
-    con = get_db()
-    target = con.execute('SELECT username, role FROM users WHERE id=?', (uid,)).fetchone()
-    if not target:
-        con.close()
-        return jsonify({'error': 'User not found'}), 404
-    if target['username'] == 'manager':
-        con.close()
-        return jsonify({'error': 'The main manager account cannot be deleted'}), 403
-    con.execute('DELETE FROM users WHERE id=?', (uid,))
-    con.commit()
-    con.close()
-    return jsonify({'ok': True})
+    """Retain the legacy delete URL as a non-destructive deactivation alias."""
+    return _update_account(uid, active=0)
+
+
+@bp.route('/api/manager/users/<int:uid>/activate', methods=['POST'])
+@permission_required('users.manage')
+def api_manager_activate_user(uid):
+    """Restore access without changing the existing password hash."""
+    return _update_account(uid, active=1)
 
 
 @bp.route('/api/manager/users/<int:uid>/reset-password', methods=['POST'])
-@manager_required
+@permission_required('users.manage')
 def api_manager_reset_password(uid):
-    data     = request.json or {}
-    password = (data.get('password') or '').strip()
-    if not password or len(password) < 4:
-        return jsonify({'error': 'Password must be at least 4 characters'}), 400
-    con = get_db()
-    con.execute('UPDATE users SET password_hash=? WHERE id=?', (generate_password_hash(password), uid))
-    con.commit()
-    con.close()
-    return jsonify({'ok': True})
-
-
+    """Reset another account's password without replacing session signing."""
+    password = str((_request_data()).get('password') or '')
+    if len(password) < 4:
+        return jsonify(error='Password must be at least 4 characters'), 400
+    connection = get_db()
+    try:
+        with connection:
+            result = connection.execute(
+                'UPDATE users SET password_hash = ? WHERE id = ?',
+                (generate_password_hash(password), uid),
+            )
+        if not result.rowcount:
+            return jsonify(error='User not found'), 404
+        return jsonify(ok=True)
+    finally:
+        connection.close()

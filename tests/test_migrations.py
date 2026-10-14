@@ -37,11 +37,20 @@ def legacy_snapshot(connection):
     snapshot = {}
     for table in tables:
         snapshot[table] = connection.execute(
-            'SELECT * FROM ' + table + ' ORDER BY id'
+            'SELECT ' + ', '.join(row[1] for row in connection.execute(
+                'PRAGMA table_info(' + table + ')'
+            ) if row[1] != 'is_active') + ' FROM ' + table + ' ORDER BY id'
         ).fetchall()
+        snapshot[table + '_columns'] = [
+            row for row in connection.execute(
+                'PRAGMA table_info(' + table + ')'
+            ) if row[1] != 'is_active'
+        ]
         snapshot[table + '_schema'] = connection.execute(
             'SELECT type, name, sql FROM sqlite_master '
-            'WHERE tbl_name = ? ORDER BY type, name', (table,)
+            "WHERE tbl_name = ? AND name != 'idx_users_active_role' "
+            "AND NOT (type = 'table' AND name = 'users') "
+            'ORDER BY type, name', (table,)
         ).fetchall()
     snapshot['sequences'] = connection.execute(
         "SELECT name, seq FROM sqlite_sequence "
@@ -76,10 +85,10 @@ class MigrationTests(unittest.TestCase):
             )
 
     def test_fresh_schema_and_idempotency(self):
-        self.assertEqual(migrate_database(self.path), [1, 2])
+        self.assertEqual(migrate_database(self.path), [1, 2, 3])
         self.assertEqual(migrate_database(self.path), [])
         self.assertEqual(
-            migration_status(self.path), {'applied': [1, 2], 'pending': []}
+            migration_status(self.path), {'applied': [1, 2, 3], 'pending': []}
         )
         with test_connection(self.path) as connection:
             self.assertEqual(
@@ -102,6 +111,18 @@ class MigrationTests(unittest.TestCase):
         with test_connection(self.path) as connection:
             self.assertTrue(before == legacy_snapshot(connection))
 
+    def test_version_two_upgrade_preserves_credentials_and_roles(self):
+        self.create_legacy_database()
+        migrate_database(self.path, MIGRATIONS[:2])
+        with test_connection(self.path) as connection:
+            before = legacy_snapshot(connection)
+        self.assertEqual(migrate_database(self.path), [3])
+        with test_connection(self.path) as connection:
+            self.assertTrue(before == legacy_snapshot(connection))
+            self.assertEqual(connection.execute(
+                'SELECT is_active FROM users'
+            ).fetchone()[0], 1)
+
     def test_actual_database_copy_preserves_every_legacy_record(self):
         """SQLite backup handles a live source and never prints its rows."""
         source_path = Path(DB_PATH)
@@ -117,7 +138,8 @@ class MigrationTests(unittest.TestCase):
             source.close()
         with test_connection(self.path) as connection:
             before = legacy_snapshot(connection)
-        self.assertEqual(migrate_database(self.path), [1, 2])
+        pending = migration_status(self.path)['pending']
+        self.assertEqual(migrate_database(self.path), pending)
         with test_connection(self.path) as connection:
             self.assertTrue(before == legacy_snapshot(connection))
             self.assertEqual(
@@ -129,7 +151,7 @@ class MigrationTests(unittest.TestCase):
         )
 
     def test_failed_initial_batch_rolls_back_schema_and_tracking(self):
-        broken = MIGRATIONS + ((3, 'broken', (
+        broken = MIGRATIONS + ((4, 'broken', (
             'CREATE TABLE transient_test (id INTEGER)',
             'INSERT INTO nonexistent_table VALUES (1)',
         )),)
@@ -144,11 +166,11 @@ class MigrationTests(unittest.TestCase):
         migrate_database(self.path, MIGRATIONS[:1])
         with test_connection(self.path) as connection:
             before = legacy_snapshot(connection)
-        broken = MIGRATIONS + ((3, 'broken', ('INVALID SQL',)),)
+        broken = MIGRATIONS + ((4, 'broken', ('INVALID SQL',)),)
         with self.assertRaises(sqlite3.OperationalError):
             migrate_database(self.path, broken)
         self.assertEqual(
-            migration_status(self.path), {'applied': [1], 'pending': [2]}
+            migration_status(self.path), {'applied': [1], 'pending': [2, 3]}
         )
         with test_connection(self.path) as connection:
             self.assertTrue(before == legacy_snapshot(connection))
@@ -158,7 +180,7 @@ class MigrationTests(unittest.TestCase):
 
     def test_altered_migration_is_rejected(self):
         migrate_database(self.path)
-        altered = ((1, 'changed_name', LEGACY_SCHEMA), MIGRATIONS[1])
+        altered = ((1, 'changed_name', LEGACY_SCHEMA),) + MIGRATIONS[1:]
         with self.assertRaises(MigrationError):
             migrate_database(self.path, altered)
 
@@ -181,7 +203,7 @@ class MigrationTests(unittest.TestCase):
             results = list(executor.map(
                 migrate_database, (self.path, self.path)
             ))
-        self.assertEqual(sorted(results), [[], [1, 2]])
+        self.assertEqual(sorted(results), [[], [1, 2, 3]])
 
     def test_new_foreign_keys_constraints_and_indexes(self):
         migrate_database(self.path)
@@ -238,7 +260,7 @@ class MigrationTests(unittest.TestCase):
         self.create_legacy_database()
         before = self.path.read_bytes()
         self.assertEqual(
-            migration_status(self.path), {'applied': [], 'pending': [1, 2]}
+            migration_status(self.path), {'applied': [], 'pending': [1, 2, 3]}
         )
         self.assertTrue(before == self.path.read_bytes())
 
@@ -258,7 +280,7 @@ class MigrationTests(unittest.TestCase):
             finally:
                 connection.close()
         self.assertEqual(
-            migration_status(self.path), {'applied': [1, 2], 'pending': []}
+            migration_status(self.path), {'applied': [1, 2, 3], 'pending': []}
         )
 
 

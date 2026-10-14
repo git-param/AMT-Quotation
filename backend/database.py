@@ -21,7 +21,7 @@ def init_db():
 
 def _seed_users():
     con = get_db()
-    if not con.execute("SELECT 1 FROM users WHERE role='manager' LIMIT 1").fetchone():
+    if not con.execute("SELECT 1 FROM users WHERE role IN ('manager', 'admin') LIMIT 1").fetchone():
         con.execute("INSERT OR IGNORE INTO users (username,password_hash,role) VALUES (?,?,?)",
                     ('manager', generate_password_hash('admin123'), 'manager'))
         con.commit()

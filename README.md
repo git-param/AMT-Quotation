@@ -113,6 +113,47 @@ The CLI does not seed accounts, load Shopify credentials, or create a signing
 key. It requires an existing parent directory. Migration status requires an
 existing database and never creates one.
 
+### Module 2: roles and permissions
+
+Migration 3 (`rbac`) adds an active-account flag and role index to `users`,
+plus role/permission catalog entries. Existing user IDs, role strings, password
+hashes, logs, signing keys, and session formats are preserved. At version 2 the
+permission catalog is empty; version 3 activates these grants:
+
+| Role | Quotation/search/copy | Own profile/password | Activity dashboard | User administration |
+| --- | --- | --- | --- | --- |
+| Sales Executive (`sales_executive`) | Yes | Yes | No | No |
+| Sales TL (`sales_tl`) | Yes | Yes | Yes | No |
+| Admin (`admin`) | Yes | Yes | Yes | Yes |
+| Legacy `user` | Yes | Yes | No | No |
+| Legacy `manager` | Yes | Yes | Yes | Yes |
+
+Sales TL sees the existing application-wide quotation activity statistics.
+There is no team ownership model or team filtering in this module. Legacy
+managers retain their existing administrative access as Admin equivalents.
+The dashboard user-management controls appear only for accounts with
+`users.manage`; backend checks enforce all access regardless of the UI.
+
+Every protected endpoint revalidates the active account and reads current
+database role permissions. API denials return JSON 401 (no valid account) or
+403 (insufficient permission); page denials redirect to login or display an
+access-denied page. Unknown roles have no grants. Static files, login, and
+logout remain public; static page markup provides no API access.
+
+Admins can create users, assign supported roles, deactivate/reactivate users,
+and use the existing password-reset API. Self role/status changes and removing
+the last active Admin equivalent are blocked. The existing `/delete` API is
+retained as a deactivation alias: it no longer deletes account records.
+Role changes affect open sessions on their next request. Deactivation prevents
+login and clears sessions when they next request a protected endpoint.
+
+There are no client, PI, or audit-dashboard features in this module. Existing
+session signing and password-reset session behavior remain unchanged.
+Before rolling back to pre-RBAC code, assess the authorization consequences:
+that code ignores deactivation and does not recognize the three new roles.
+Do not restore old access checks on an exposed deployment without an equivalent
+access gate. Prefer a forward fix that retains the current accounts and grants.
+
 ### Backup and rollback
 
 Before upgrading, stop all app instances and SQLite writers. Make a dated,
