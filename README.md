@@ -474,3 +474,48 @@ creator options, sharing/revocation, inactive clients and sources, source
 validation, address snapshot retention and migrations, alongside all earlier
 RBAC/CRM tests. Python/JavaScript checks are run locally; browser layout and
 interactive verification remain outstanding.
+
+### Module 5.1: client enquiries
+
+**Enquiries** is available from navigation and the client detail view. Each
+client may have multiple enquiries; enquiries keep their original client ID,
+creator and creation timestamp. Migration 10 adds only `client_enquiries`
+with restrictive client/user FKs and indexes for client, status/date and creator.
+References are globally unique, case-insensitively, and limited to 80 characters
+(letters, digits, spaces, slash, underscore, dot, hyphen). Reference, ISO enquiry
+date and subject are required; description is optional (up to 5000 characters).
+Statuses: open, in_progress, closed, cancelled. Updated-by and UTC timestamps
+are server-assigned. Client reassignment and metadata overrides are rejected.
+
+Client visibility controls enquiry lists, details, search and totals. Client
+edit permission controls creation and editing, including EDIT shares and existing
+TL supervision/Admin/legacy manager rules. VIEW shares never grant editing.
+Creating an enquiry does not establish independent access: revoking the parent
+client share removes access even to enquiries that recipient created. Neither
+enquiry creation nor EDIT sharing authorizes onward sharing. Inactive clients
+retain readable/editable enquiry history but cannot receive new enquiries until
+reactivated. Closed/cancelled enquiries remain stored; there is no delete API.
+
+APIs: `GET /api/enquiries` supports q, client_id, creator, status, page/page_size
+(default 25, maximum 100), sort (date/created/reference/status), direction.
+Counts and pagination use the same client-scoped query in a single read
+transaction. `GET /api/enquiries/<id>` returns 404 for inaccessible/missing IDs.
+`POST /api/enquiries` creates; `PUT /api/enquiries/<id>` preserves omitted fields.
+Writes recheck permissions inside BEGIN IMMEDIATE; duplicate references return
+409 without exposing the conflicting record. The UI provides searchable client
+selection, filtered enquiry lists and detail/create/edit views. A client detail
+shows its first ten enquiries and links to the full scoped list.
+
+Future enquiry SKU lines should reference `client_enquiries.id` with multiple
+lines per enquiry; future orders may reference an enquiry ID and must validate
+that their client matches the enquiry's client. No placeholder SKU/order tables
+are created here. Order delivery/consignee snapshots remain separate from client
+defaults as specified in [the address design](docs/order_address_design.md) and
+[PI field checklist](docs/pi_order_fields.md). Enquiries do not modify saved
+addresses or implement order management or PI generation.
+
+Tests cover multiple enquiries, case-insensitive duplicates, validation,
+immutable relationships, scoped counts/search/pagination, TL isolation,
+VIEW/EDIT sharing and revocation, inactive clients, restrictive FKs and migration
+preservation, plus prior modules. Browser layout and interactive testing remain
+outstanding. Back up the database before upgrades using the guidance above.

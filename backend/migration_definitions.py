@@ -231,6 +231,32 @@ CLIENT_DISCOVERY_SCHEMA = (
     "SELECT id, billing_address_json, shipping_address_json FROM client_leads",
 )
 
+ENQUIRY_SCHEMA = (
+    "CREATE TABLE client_enquiries ("
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "client_id INTEGER NOT NULL REFERENCES client_leads(id) "
+    "ON DELETE RESTRICT, "
+    "reference TEXT NOT NULL COLLATE NOCASE UNIQUE "
+    "CHECK (length(trim(reference)) BETWEEN 1 AND 80), "
+    "enquiry_date TEXT NOT NULL, "
+    "subject TEXT NOT NULL CHECK (length(trim(subject)) BETWEEN 1 AND 200), "
+    "description TEXT NOT NULL DEFAULT '' "
+    "CHECK (length(description) <= 5000), "
+    "status TEXT NOT NULL DEFAULT 'open' "
+    "CHECK (status IN ('open', 'in_progress', 'closed', 'cancelled')), "
+    "created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "updated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "created_at TEXT NOT NULL DEFAULT "
+    "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), "
+    "updated_at TEXT NOT NULL DEFAULT "
+    "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))",
+    "CREATE INDEX idx_enquiries_client_id ON client_enquiries(client_id, id)",
+    "CREATE INDEX idx_enquiries_status_date "
+    "ON client_enquiries(status, enquiry_date, id)",
+    "CREATE INDEX idx_enquiries_creator_id "
+    "ON client_enquiries(created_by, id)",
+)
+
 # Add new versions here; never edit the name or SQL of an applied version.
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
@@ -242,4 +268,5 @@ MIGRATIONS = (
     (7, 'client_share_levels', SHARE_LEVEL_SCHEMA),
     (8, 'client_crm_details', CRM_DETAIL_SCHEMA),
     (9, 'client_discovery', CLIENT_DISCOVERY_SCHEMA),
+    (10, 'client_enquiries', ENQUIRY_SCHEMA),
 )

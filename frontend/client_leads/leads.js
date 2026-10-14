@@ -37,6 +37,10 @@ async function load() {
     [lead.name, lead.company, lead.email, lead.phone, lead.creator_name, date.toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}), lead.notes].forEach(value => {
       const cell = document.createElement('td'); cell.textContent = value || '-'; cell.title = value || ''; row.append(cell);
     });
+    const enquiryCell = document.createElement('td');
+    const enquiryLink = document.createElement('a'); enquiryLink.className = 'enquiry-count';
+    enquiryLink.href = `/enquiries?client_id=${lead.id}`; enquiryLink.textContent = `${lead.enquiry_count} ${lead.enquiry_count === 1 ? 'enquiry' : 'enquiries'}`;
+    enquiryCell.append(enquiryLink); row.append(enquiryCell);
     const status = document.createElement('td');
     status.textContent = `${lead.status} / ${lead.is_active ? 'Active' : 'Inactive'}`; row.append(status);
     const access = document.createElement('td');
@@ -90,7 +94,7 @@ async function load() {
   });
   if (!data.leads.length) {
     const row = document.createElement('tr'); const cell = document.createElement('td');
-    cell.colSpan = 10; cell.className = 'source-empty'; cell.textContent = 'No leads yet. Click Add Lead to create your first client.';
+    cell.colSpan = 11; cell.className = 'source-empty'; cell.textContent = 'No leads yet. Click Add Lead to create your first client.';
     row.append(cell); byId('leads').append(row);
   }
 }
@@ -105,7 +109,7 @@ byId('leadForm').onsubmit = async event => {
   finally { byId('save').disabled = false; }
 };
 (async () => {
-  try { await loadOptions(); await load(); byId('content').hidden = false; }
+  try { await loadOptions(); await load(); byId('content').hidden = false; const id = new URLSearchParams(location.search).get('client_id'); if (id) await openDetails(id); }
   catch (error) { message(error.message, true); }
 })();
 
@@ -213,6 +217,23 @@ async function openDetails(id) {
   data.address_history.forEach(snapshot => {
     const line = document.createElement('p'); line.textContent = `${new Date(snapshot.recorded_at).toLocaleString()} / ${snapshot.actor_name || 'Migration baseline'}\nBilling: ${formatAddress(snapshot.billing_address) || '-'}\nDefault shipping: ${formatAddress(snapshot.default_shipping_address) || '-'}`; byId('addressHistory').append(line);
   });
+  const enquiries = await api('/api/enquiries?' + new URLSearchParams({client_id:id,page_size:10}));
+  const enquirySection = document.createElement('section'); enquirySection.className = 'client-enquiries';
+  const enquiryHeader = document.createElement('div'); enquiryHeader.className = 'enquiry-header';
+  const heading = document.createElement('h3'); heading.textContent = `Enquiries (${enquiries.total})`; enquiryHeader.append(heading);
+  const all = document.createElement('a'); all.className = 'btn-sm enquiry-link'; all.href = `/enquiries?client_id=${id}`; all.textContent = 'View all enquiries'; enquiryHeader.append(all);
+  if (client.can_edit && client.is_active) { const add = document.createElement('a'); add.className = 'btn-sm btn-add'; add.href = `/enquiries?client_id=${id}&new=1`; add.textContent = 'Add Enquiry'; enquiryHeader.append(add); }
+  enquirySection.append(enquiryHeader);
+  enquiries.enquiries.forEach(e => {
+    const card = document.createElement('a'); card.className = 'enquiry-card';
+    card.href = `/enquiries?client_id=${id}&enquiry_id=${e.id}`;
+    const title = document.createElement('strong'); title.textContent = e.subject;
+    const meta = document.createElement('span'); meta.textContent = `#${e.reference} / ${e.enquiry_date} / ${e.status.replaceAll('_', ' ')}`;
+    const arrow = document.createElement('span'); arrow.className = 'enquiry-card-action'; arrow.textContent = 'View details';
+    card.append(title,meta,arrow); enquirySection.append(card);
+  });
+  if (!enquiries.total) { const empty = document.createElement('p'); empty.textContent = 'No enquiries for this client yet.'; enquirySection.append(empty); }
+  byId('detailBody').append(enquirySection);
   byId('clientDetail').hidden = false; byId('clientDetail').scrollIntoView({behavior:'smooth',block:'start'});
 }
 byId('closeDetail').onclick = () => { byId('clientDetail').hidden = true; };
