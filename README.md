@@ -192,3 +192,30 @@ transaction rollback, checksum/history rejection, read-only status, integrity,
 foreign keys, and new constraints. The existing-database test is skipped when
 the application database is unavailable. No production upgrade is performed by
 the tests.
+
+### Module 3: enquiry source management
+
+Open **Enquiry Sources** from the quotation header or dashboard. Admins,
+Sales TLs, and legacy managers have `sources.manage`; Sales Executives and
+legacy users cannot access the page or its APIs. Names in navigation are shown
+without roles.
+
+Migration 4 (`enquiry_sources`) adds nullable channel/contact/update fields
+and a case-insensitive unique contact index to the existing source table.
+Existing rows, IDs, codes, names, timestamps, and active flags are preserved.
+Unclassified legacy sources remain visible and can be completed through Edit.
+New sources require a name, Email/WhatsApp channel, and valid contact. Emails
+are normalized to lowercase; WhatsApp numbers use + and country code, with
+spacing/hyphens/parentheses removed. Contacts cannot be duplicated, including
+inactive contacts. Editing preserves source identity and active status.
+
+APIs: `GET/POST /api/sources`, `PUT /api/sources/<id>`, and
+`POST /api/sources/<id>/deactivate` or `/activate`. No permanent-delete API
+exists. Deactivation is idempotent and preserves records for future historical
+references; future enquiry modules must reference stable IDs and offer only
+active sources for new selections. This phase adds no clients, enquiries,
+orders, or PI functionality.
+
+Run the full unittest command above to cover source CRUD, duplicate/invalid
+contacts, permission denials, deactivation/reactivation, disabled accounts,
+and preservation of source rows through the version-3-to-4 migration.

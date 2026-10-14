@@ -245,6 +245,7 @@ fetch('/api/me').then(async response => {
   const user = await response.json();
   document.getElementById('hdrUser').textContent = user.username;
   if (!user.permissions.includes('management.view')) { showAccessError(403); return; }
+  document.getElementById('sourcesLink').style.display = user.permissions.includes('sources.manage') ? 'inline-block' : 'none';
   _currentUserId = user.id;
   const manage = user.permissions.includes('users.manage');
   document.getElementById('dashboardContent').hidden = false;

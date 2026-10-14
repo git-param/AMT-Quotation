@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Enquiry Sources | AMT</title>
+<link rel="stylesheet" href="/static/manager_dashboard/manager.css">
+<link rel="stylesheet" href="/static/enquiry_sources/sources.css">
+</head>
+<body>
+<header class="hdr"><div><div class="hdr-logo">Enquiry Sources</div><div class="hdr-sub">Manage your email and WhatsApp channels</div></div>
+<nav><span id="hdrUser"></span><a class="back-link" href="/">Quotation Tool</a><a class="back-link" href="/manager">Dashboard</a><a class="back-link" href="/logout">Sign Out</a></nav></header>
+<main class="wrap"><p id="message" role="status" aria-live="polite"></p>
+<div id="content" hidden>
+<div class="page-intro"><div><span class="eyebrow">ENQUIRY CHANNELS</span><h1>Your sources, in one place</h1><p>Keep your team's email inboxes and WhatsApp numbers organized.</p></div><span class="intro-badge">Email &amp; WhatsApp</span></div>
+<section class="panel source-editor"><div class="editor-heading"><span class="section-icon" aria-hidden="true">+</span><div><h2 id="formTitle">Add an enquiry source</h2><p>Give each channel a clear name so your team can identify it.</p></div></div>
+<form id="sourceForm"><div class="form-row">
+<div class="form-field"><label for="name">Source name</label><input id="name" required maxlength="100" placeholder="e.g. Sales inbox"></div>
+<div class="form-field"><label for="kind">Channel</label><select id="kind"><option value="email">Email</option><option value="whatsapp">WhatsApp</option></select></div>
+<div class="form-field contact-field"><label for="contact" id="contactLabel">Email address</label><input id="contact" aria-describedby="contactHint" type="email" required maxlength="254" placeholder="sales@example.com"><small id="contactHint">Enter the email address used for enquiries.</small></div>
+<div class="form-actions"><button class="btn-sm btn-add" id="save" type="submit">Add source</button><button class="btn-sm" id="cancel" type="button" hidden>Cancel edit</button></div></div></form></section>
+<section class="panel"><div class="source-toolbar"><div><h2>All sources</h2><p id="summary"></p></div><label class="filter">Show <select id="filter"><option value="all">All sources</option><option value="active">Active only</option><option value="inactive">Inactive only</option></select></label></div>
+<div class="source-table"><table class="tbl"><thead><tr><th>Name</th><th>Channel</th><th>Contact</th><th>Status</th><th>Actions</th></tr></thead><tbody id="sources"></tbody></table></div>
+<p class="history-note">Deactivated sources stay available in history. Activate a source to use it again.</p></section></div></main>
+<script src="/static/enquiry_sources/sources.js"></script></body></html>

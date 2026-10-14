@@ -20,6 +20,7 @@ window.addEventListener('load', () => {
     return r.json();
   }).then(u => {
     document.getElementById('hdrUser').textContent = '👤 ' + u.username;
+    document.getElementById('sourcesLink').style.display = (u.permissions || []).includes('sources.manage') ? 'inline-block' : 'none';
     if ((u.permissions || []).includes('management.view')) document.getElementById('mgrLink').style.display = 'inline';
   }).catch(() => { window.location.href = '/login'; });
 });

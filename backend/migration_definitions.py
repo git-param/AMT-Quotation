@@ -104,9 +104,26 @@ RBAC_SCHEMA = (
     "('admin', 'users.manage')",
 )
 
+SOURCE_SCHEMA = (
+    "ALTER TABLE enquiry_sources ADD COLUMN source_type TEXT "
+    "CHECK (source_type IN ('email', 'whatsapp'))",
+    "ALTER TABLE enquiry_sources ADD COLUMN contact_value TEXT "
+    "CHECK (contact_value IS NULL OR length(trim(contact_value)) > 0)",
+    "ALTER TABLE enquiry_sources ADD COLUMN updated_at TEXT",
+    "CREATE UNIQUE INDEX idx_enquiry_sources_contact "
+    "ON enquiry_sources(source_type, contact_value COLLATE NOCASE) "
+    "WHERE contact_value IS NOT NULL",
+    "INSERT INTO permissions (code, description) VALUES "
+    "('sources.manage', 'Manage email and WhatsApp enquiry sources')",
+    "INSERT INTO role_permissions (role_code, permission_code) VALUES "
+    "('admin', 'sources.manage'), ('sales_tl', 'sources.manage'), "
+    "('manager', 'sources.manage')",
+)
+
 # Add new versions here; never edit the name or SQL of an applied version.
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
     (3, 'rbac', RBAC_SCHEMA),
+    (4, 'enquiry_sources', SOURCE_SCHEMA),
 )
