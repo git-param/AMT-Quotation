@@ -190,7 +190,7 @@ class CRMTests(unittest.TestCase):
             ).fetchall()
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [8])
+        self.assertEqual(migrate_database(path), [8, 9])
         connection = sqlite3.connect(path)
         try:
             row = connection.execute('SELECT * FROM client_leads').fetchone()

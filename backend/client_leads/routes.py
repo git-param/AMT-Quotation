@@ -1,12 +1,15 @@
 """Private client lead creation and database-scoped read access."""
 
+import json
+
 from flask import Blueprint, jsonify, request, send_file
 
 from backend.common.auth import (
     authenticated_required, get_current_user, get_permissions,
 )
 from backend.client_leads.details import (
-    decode, duplicate_exists, validated_details,
+    decode, duplicate_exists, record_addresses, validate_source,
+    validated_details,
 )
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
@@ -60,8 +63,8 @@ def edit_scope(user):
     return predicate, parameters + [user['id']]
 
 
-def read_leads(user, lead_id=None):
-    """Apply authorization inside SQL before any records are returned."""
+def lead_query(user):
+    """Build the common scoped projection for detail, discovery and counts."""
     predicate, parameters = visibility(user)
     editable, edit_parameters = edit_scope(user)
     sql = (
@@ -71,14 +74,23 @@ def read_leads(user, lead_id=None):
         'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1) '
         'AS is_shared, (SELECT s.access_level FROM client_lead_shares s '
         'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1) '
-        'AS shared_access_level FROM client_leads l '
-        'JOIN users u ON u.id = l.created_by WHERE (' + predicate + ')'
+        'AS shared_access_level, src.name AS enquiry_source_name, '
+        'src.is_active AS enquiry_source_active FROM client_leads l '
+        'JOIN users u ON u.id = l.created_by '
+        'LEFT JOIN enquiry_sources src ON src.id = l.enquiry_source_id '
+        'WHERE (' + predicate + ')'
     )
+    parameters = (edit_parameters + management_edit_scope(user)[1]
+                  + [user['id'], user['id']] + parameters)
+    return sql, parameters
+
+
+def read_leads(user, lead_id=None):
+    """Apply authorization inside SQL before any records are returned."""
+    sql, parameters = lead_query(user)
     if lead_id is not None:
         sql += ' AND l.id = ?'
         parameters.append(lead_id)
-    parameters = (edit_parameters + management_edit_scope(user)[1]
-                  + [user['id'], user['id']] + parameters)
     sql += ' ORDER BY l.id DESC'
     connection = get_db()
     try:
@@ -99,8 +111,14 @@ def lead_page():
 def list_leads():
     """Return authorized leads without accepting ownership query overrides."""
     user = get_current_user()
+    from backend.client_leads.discovery import discover
+
+    try:
+        results = discover(user, request.args)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
     return jsonify(
-        leads=read_leads(user), username=user['username'],
+        **results, username=user['username'],
         can_manage_sharing=(user['role'] in ('admin', 'manager', 'sales_tl')
                             and 'leads.share_manage' in get_permissions(user)),
     )
@@ -113,7 +131,25 @@ def lead_detail(lead_id):
     leads = read_leads(get_current_user(), lead_id)
     if not leads:
         return jsonify(error='Lead not found.'), 404
-    return jsonify(lead=leads[0])
+    connection = get_db()
+    try:
+        history = connection.execute(
+            'SELECT h.*, u.username AS actor_name '
+            'FROM client_address_history h '
+            'LEFT JOIN users u ON u.id = h.recorded_by '
+            'WHERE client_id = ? ORDER BY h.id DESC', (lead_id,),
+        ).fetchall()
+        snapshots = []
+        for row in history:
+            item = dict(row)
+            item['billing_address'] = json.loads(
+                item.pop('billing_address_json'))
+            item['default_shipping_address'] = json.loads(
+                item.pop('shipping_address_json'))
+            snapshots.append(item)
+        return jsonify(lead=leads[0], address_history=snapshots)
+    finally:
+        connection.close()
 
 
 @bp.route('/api/leads', methods=['POST'])
@@ -128,6 +164,10 @@ def create_lead():
     connection = get_db()
     try:
         connection.execute('BEGIN IMMEDIATE')
+        try:
+            validate_source(connection, values['enquiry_source_id'])
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
         if duplicate_exists(connection, values, user['id']):
             return jsonify(
                 error='A matching client exists in this ownership.'
@@ -139,6 +179,7 @@ def create_lead():
             'VALUES (' + placeholders + ', ?)',
             (*values.values(), user['id']),
         )
+        record_addresses(connection, cursor.lastrowid, values, user['id'])
         connection.commit()
         return jsonify(lead=read_leads(user, cursor.lastrowid)[0]), 201
     finally:
@@ -167,6 +208,11 @@ def update_lead(lead_id):
             )
         except ValueError as error:
             return jsonify(error=str(error)), 400
+        try:
+            validate_source(connection, values['enquiry_source_id'],
+                            visible[0]['enquiry_source_id'])
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
         if duplicate_exists(
                 connection, values, visible[0]['created_by'], lead_id):
             return jsonify(
@@ -182,6 +228,9 @@ def update_lead(lead_id):
         )
         if not cursor.rowcount:
             return jsonify(error='Edit access is no longer available.'), 403
+        if any(json.loads(values[field + '_json']) != visible[0][field]
+               for field in ('billing_address', 'shipping_address')):
+            record_addresses(connection, lead_id, values, user['id'])
         connection.commit()
         return jsonify(lead=read_leads(user, lead_id)[0])
     finally:
@@ -220,3 +269,12 @@ def set_client_active(lead_id):
         return jsonify(lead=read_leads(user, lead_id)[0])
     finally:
         connection.close()
+
+
+@bp.route('/api/leads/options')
+@authenticated_required
+def client_options():
+    """Expose source choices without providing source management authority."""
+    from backend.client_leads.discovery import options
+
+    return jsonify(**options(get_current_user()))
