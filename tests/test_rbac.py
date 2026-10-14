@@ -39,7 +39,9 @@ class RBACTests(unittest.TestCase):
         self.app.config.update(
             TESTING=True, SECRET_KEY='test-only-signing-key'
         )
-        for blueprint in (login_bp, manager_bp, quotation_bp, search_bp):
+        from backend.enquiry_sources.routes import bp as sources_bp
+        for blueprint in (
+                login_bp, manager_bp, quotation_bp, search_bp, sources_bp):
             self.app.register_blueprint(blueprint)
         self.client = self.app.test_client()
         self.ids = {}
@@ -70,7 +72,9 @@ class RBACTests(unittest.TestCase):
                 continue
             path = rule.rule.replace('<int:uid>', str(self.ids['user']))
             path = path.replace('<item_id>', 'test-item')
-            method = 'POST' if 'POST' in rule.methods else 'GET'
+            path = path.replace('<int:source_id>', '1')
+            method = ('POST' if 'POST' in rule.methods else
+                      'PUT' if 'PUT' in rule.methods else 'GET')
             with self.subTest(endpoint=rule.rule):
                 response = self.client.open(path, method=method, json={})
                 self.assertEqual(response.status_code, 401)
