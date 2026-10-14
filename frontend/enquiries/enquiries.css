@@ -59,3 +59,43 @@
 @media(max-width:650px) { .draft-lookup { padding:14px; } .sku-drafts .source-table { padding:8px; } .draft-status { margin-left:0; flex-basis:100%; } }
 
 .deal-settings{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:16px 0}.deal-currency{display:flex;align-items:center;gap:10px;flex-shrink:0}.deal-currency label{margin:0;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.04em}.deal-currency select{width:110px;padding:8px 10px;border:1px solid #CBD5E1;border-radius:8px;background:#FFF;font:inherit}.deal-settings small{max-width:440px}.sku-drafts>p[role="status"]:empty{display:none}
+
+/* Keep discovery first and show selected enquiry details below the list. */
+.wrap { max-width:1480px; }
+#enquiryList { margin-bottom:24px; }
+#enquiryList #summary { margin:7px 0 0; }
+#filters { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:12px; }
+#filters input,#filters select { width:100%; min-width:0; height:40px; padding:9px 12px; border:1px solid #CBD5E1; border-radius:8px; background:#FFF; font:inherit; font-size:13px; }
+#allEnquiries { color:#1D4ED8; font-size:12px; }
+#detail { margin-top:24px; }
+.enquiry-detail-header { display:flex; align-items:center; gap:16px; border-bottom:1px solid #E8EDF3; padding-bottom:22px; margin-bottom:22px; }
+.enquiry-detail-mark { display:grid; place-items:center; width:52px; height:52px; border-radius:14px; background:#EFF6FF; color:#1D4ED8; font-size:26px; font-weight:700; flex-shrink:0; }
+.enquiry-detail-heading { flex:1; min-width:0; }
+.enquiry-detail-heading h2 { font-size:22px; color:#1E3A5F; margin:5px 0; overflow-wrap:anywhere; }
+.enquiry-detail-heading>p { color:#64748B; font-size:13px; margin:0; }
+.enquiry-detail-badges { display:flex; gap:7px; flex-wrap:wrap; margin-top:12px; }
+.enquiry-detail-badges span { padding:4px 10px; border-radius:20px; background:#EFF6FF; color:#1D4ED8; font-size:11px; text-transform:capitalize; }
+.enquiry-detail-badges span:last-child { background:#F1F5F9; color:#475569; }
+#detailBody { grid-template-columns:repeat(3,minmax(0,1fr)); }
+#detailBody section { padding:18px 20px; background:#FFF; }
+#detailBody h3 { margin-bottom:10px; }
+#detailBody p { margin:0; }
+#detailBody>a { grid-column:1/-1; justify-self:start; padding:8px 12px; background:#EFF6FF; border:1px solid #DBEAFE; border-radius:7px; }
+.btn-sm.enquiry-action-icon { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; padding:0; border-radius:8px; vertical-align:middle; }
+.enquiry-action-icon svg { width:18px; height:18px; pointer-events:none; }
+.enquiry-action-icon:focus-visible { outline:3px solid #93C5FD; outline-offset:2px; }
+.enquiry-row-actions { white-space:nowrap; }
+.enquiry-row-actions .enquiry-action-icon:first-child { background:#EFF6FF; color:#1D4ED8; }
+#skuLines { margin-top:24px; border:1px solid #E2E8F0; border-radius:10px; padding:20px; }
+#skuLines>.form-field { max-width:170px; margin-bottom:16px; }
+@media(max-width:800px) {
+  #filters,#detailBody { grid-template-columns:1fr 1fr; }
+}
+@media(max-width:550px) {
+  #filters,#detailBody { grid-template-columns:1fr; }
+  .enquiry-detail-header { flex-wrap:wrap; gap:12px; }
+  .enquiry-detail-heading { flex-basis:calc(100% - 70px); }
+  .enquiry-detail-heading h2 { font-size:20px; }
+  .enquiry-detail-header>.enquiry-action-icon { margin-left:auto; }
+  #skuLines { padding:14px; }
+}

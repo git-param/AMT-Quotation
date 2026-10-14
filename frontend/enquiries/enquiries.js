@@ -1,4 +1,20 @@
 const byId = id => document.getElementById(id);
+function enquiryActionButton(action, name) {
+  const icons = {
+    details: ['View details', 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z'],
+    edit: ['Edit', 'm16 3 5 5-12 12-6 1 1-6L16 3Z M13 6l5 5'],
+    delete: ['Delete', 'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7'],
+  };
+  const [label, path] = icons[action];
+  const button=document.createElement('button');button.type='button';
+  button.className=`btn-sm enquiry-action-icon ${action==='delete'?'btn-del':''}`;
+  button.title=label;button.setAttribute('aria-label',`${label}: ${name}`);
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  for(const [key,value] of Object.entries({viewBox:'0 0 24 24',fill:'none',stroke:'currentColor','stroke-width':'1.8','stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true',focusable:'false'}))svg.setAttribute(key,value);
+  const shape=document.createElementNS('http://www.w3.org/2000/svg','path');shape.setAttribute('d',path);svg.append(shape);button.append(svg);
+  return button;
+}
+window.enquiryActionButton=enquiryActionButton;
 const query = new URLSearchParams(location.search);
 const clientFilter = query.get('client_id');
 let scopedClient = null;
@@ -42,10 +58,10 @@ async function load(){
   data.enquiries.forEach(e=>{
     const row=document.createElement('tr');[e.reference,e.client_name,e.enquiry_date,e.subject,e.status,e.creator_name].forEach(v=>cell(row,v));
     const referenceButton=document.createElement('button');referenceButton.type='button';referenceButton.className='enquiry-reference';referenceButton.textContent=e.reference;referenceButton.onclick=()=>details(e.id).catch(error=>message(error.message,true));row.firstElementChild.replaceChildren(referenceButton);
-    const actions=document.createElement('td');
-    const view=document.createElement('button');view.className='btn-sm';view.textContent='Details';view.onclick=()=>details(e.id).catch(error=>message(error.message,true));actions.append(view);
-    if(e.can_edit){const edit=document.createElement('button');edit.className='btn-sm';edit.textContent='Edit';edit.onclick=()=>editEnquiry(e.id).catch(error=>message(error.message,true));actions.append(edit);}
-    if(e.can_delete){const remove=document.createElement('button');remove.type='button';remove.className='btn-sm btn-del';remove.textContent='Delete';remove.onclick=()=>deleteEnquiry(e).catch(error=>message(error.message,true));actions.append(remove);}
+    const actions=document.createElement('td');actions.className='enquiry-row-actions';
+    const view=enquiryActionButton('details',e.reference);view.onclick=()=>details(e.id).catch(error=>message(error.message,true));actions.append(view);
+    if(e.can_edit){const edit=enquiryActionButton('edit',e.reference);edit.onclick=()=>editEnquiry(e.id).catch(error=>message(error.message,true));actions.append(edit);}
+    if(e.can_delete){const remove=enquiryActionButton('delete',e.reference);remove.onclick=()=>deleteEnquiry(e).catch(error=>message(error.message,true));actions.append(remove);}
     row.append(actions);byId('rows').append(row);
   });
   if(!data.enquiries.length){const row=document.createElement('tr');cell(row,'No enquiries match your filters.');row.firstChild.colSpan=7;byId('rows').append(row);}
@@ -56,7 +72,10 @@ async function details(id){
   byId('deleteEnquiry').onclick=()=>deleteEnquiry(e).catch(error=>message(error.message,true));
   if(clientFilter && String(e.client_id)!==String(clientFilter))throw new Error('This enquiry does not belong to the selected client.');
   byId('detailTitle').textContent=e.reference;byId('detailBody').replaceChildren();
-  [['Client',e.client_name],['Company',e.client_company],['Enquiry date',e.enquiry_date],['Subject',e.subject],['Description',e.description],['Deal currency',e.deal_currency||'Legacy / not set'],['Status',e.status.replaceAll('_',' ')],['Creator',e.creator_name],['Created',new Date(e.created_at).toLocaleString()],['Last updated',`${new Date(e.updated_at).toLocaleString()} / ${e.updated_by_name}`],['Access',e.can_edit?'Editable':'Read only']].forEach(([label,value])=>{
+  byId('detailSubtitle').textContent=[e.client_name,e.client_company].filter(Boolean).join(' / ');
+  byId('detailBadges').replaceChildren();
+  for(const label of [e.status.replaceAll('_',' '),e.deal_currency||'Currency not set',e.can_edit?'Editable':'Read only']){const badge=document.createElement('span');badge.textContent=label;byId('detailBadges').append(badge);}
+  [['Client',e.client_name],['Company',e.client_company],['Enquiry date',e.enquiry_date],['Subject',e.subject],['Description',e.description],['Creator',e.creator_name],['Created',new Date(e.created_at).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'})],['Last updated',`${new Date(e.updated_at).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'})} / ${e.updated_by_name}`]].forEach(([label,value])=>{
     const block=document.createElement('section'); if(label==='Description'||label==='Subject')block.className='detail-wide';
     const title=document.createElement('h3');title.textContent=label;const text=document.createElement('p');text.textContent=value||'Not provided';block.append(title,text);byId('detailBody').append(block);
   });

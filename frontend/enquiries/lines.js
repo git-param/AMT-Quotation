@@ -24,7 +24,7 @@
       [line.sku,line.description,Number.isInteger(Number(line.quantity))?String(Number(line.quantity)):line.quantity,line.unit_price,line.currency,line.line_total].forEach(value => { const td = document.createElement('td'); td.textContent = value; row.append(td); });
       const actions = document.createElement('td');
       if (enquiry.can_edit) {
-        const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'btn-sm'; edit.textContent = 'Edit';
+        const edit = window.enquiryActionButton('edit',line.sku);
         edit.onclick = async () => {
           try {
             const current = (await call(linePath(line.id))).line;
@@ -32,7 +32,7 @@
             editingLine = current.id; el('lineSku').value = current.sku; el('lineDescription').value = current.description; el('lineQuantity').value = Number.isInteger(Number(current.quantity))?String(Number(current.quantity)):current.quantity; el('linePrice').value = current.unit_price; el('lineCurrency').value = current.currency; el('lookupInfo').textContent = ''; el('lineForm').hidden = false; el('lineSku').focus();
           } catch (error) { notice(error.message,true); }
         };
-        const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn-sm btn-del'; remove.textContent = 'Delete';
+        const remove = window.enquiryActionButton('delete',line.sku);
         remove.onclick = async () => {
           if (!window.confirm(`Delete SKU ${line.sku}? Its history will be retained.`)) return;
           remove.disabled = true;
