@@ -22,7 +22,7 @@ async function load() {
     });
     const access = document.createElement('td');
     const badge = document.createElement('span'); badge.className = 'badge ' + (lead.is_shared ? 'badge-ok' : 'badge-warn');
-    badge.textContent = lead.is_shared ? (lead.can_edit ? 'Shared / editable' : 'Shared / read only') : (lead.can_edit ? 'Editable' : 'Read only');
+    badge.textContent = lead.is_shared ? `Shared / ${lead.shared_access_level}${lead.shared_access_level === 'VIEW' && lead.can_edit ? ' (independent edit)' : ''}` : (lead.can_edit ? 'Editable' : 'Read only');
     access.append(badge); row.append(access);
     const actions = document.createElement('td');
     if (lead.can_edit) {

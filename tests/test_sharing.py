@@ -247,7 +247,7 @@ class SharingTests(unittest.TestCase):
                 )
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [6])
+        self.assertEqual(migrate_database(path), [6, 7])
         connection = sqlite3.connect(path)
         try:
             self.assertEqual(connection.execute(
@@ -257,6 +257,162 @@ class SharingTests(unittest.TestCase):
             self.assertEqual(connection.execute(
                 'SELECT COUNT(*) FROM client_share_events'
             ).fetchone()[0], 0)
+        finally:
+            connection.close()
+
+    def test_cross_team_edit_grant_downgrade_revoke_and_ownership(self):
+        uid = self.create('exec1')
+        original = self.client.get(f'/api/leads/{uid}').json['lead']
+        self.assign('exec1', 'tl1')
+        self.assign('exec2', 'tl2')
+        self.as_user('tl1')
+        self.assertEqual(self.client.post(
+            f'/api/client-access/{uid}/grant',
+            json={'user_id': self.ids['exec2'], 'access_level': 'EDIT'},
+        ).status_code, 200)
+        self.as_user('exec2')
+        lead = self.client.get(f'/api/leads/{uid}').json['lead']
+        self.assertTrue(lead['can_edit'])
+        self.assertEqual(lead['shared_access_level'], 'EDIT')
+        self.assertEqual(self.client.put(
+            f'/api/leads/{uid}', json={'name': 'Updated client'}
+        ).status_code, 200)
+        for field in ('created_by', 'created_at'):
+            self.assertEqual(self.client.put(f'/api/leads/{uid}', json={
+                'name': 'Spoofed', field: self.ids['exec2'],
+            }).status_code, 400)
+        self.assertEqual(self.share(uid, 'legacy').status_code, 403)
+        self.as_user('tl2')
+        self.assertEqual(self.share(uid, 'legacy').status_code, 404)
+        self.as_user('tl1')
+        self.assertEqual(self.client.post(
+            f'/api/client-access/{uid}/level',
+            json={'user_id': self.ids['exec2'], 'access_level': 'VIEW'},
+        ).status_code, 200)
+        history = self.client.get(f'/api/client-access/{uid}').json['events']
+        self.assertEqual(history[0]['previous_access_level'], 'EDIT')
+        self.assertEqual(history[0]['access_level'], 'VIEW')
+        self.as_user('exec2')
+        self.assertEqual(self.client.put(
+            f'/api/leads/{uid}', json={'name': 'Denied'}
+        ).status_code, 403)
+        self.assertIn(uid, self.visible('exec2'))
+        self.as_user('tl1')
+        self.assertEqual(self.share(uid, action='revoke').status_code, 200)
+        self.assertNotIn(uid, self.visible('exec2'))
+        self.as_user('admin')
+        lead = self.client.get(f'/api/leads/{uid}').json['lead']
+        self.assertEqual(lead['created_by'], original['created_by'])
+        self.assertEqual(lead['created_at'], original['created_at'])
+        self.assertEqual(lead['name'], 'Updated client')
+
+    def test_admin_upgrade_and_revocation_remove_shared_edit_permission(self):
+        uid = self.create('tl1')
+        self.as_user('admin')
+        self.assertEqual(self.share(uid).status_code, 200)
+        self.assertEqual(self.client.post(
+            f'/api/client-access/{uid}/level',
+            json={'user_id': self.ids['exec2'], 'access_level': 'EDIT'},
+        ).status_code, 200)
+        self.as_user('exec2')
+        self.assertEqual(self.client.put(
+            f'/api/leads/{uid}', json={'name': 'Edited'}
+        ).status_code, 200)
+        self.as_user('admin')
+        self.assertEqual(self.share(uid, action='revoke').status_code, 200)
+        self.as_user('exec2')
+        self.assertEqual(self.client.put(
+            f'/api/leads/{uid}', json={'name': 'Denied'}
+        ).status_code, 404)
+
+    def test_edit_share_never_delegates_management_after_role_change(self):
+        uid = self.create('tl1')
+        self.as_user('admin')
+        self.client.post(f'/api/client-access/{uid}/grant', json={
+            'user_id': self.ids['exec2'], 'access_level': 'EDIT',
+        })
+        connection = database.get_db()
+        try:
+            with connection:
+                connection.execute(
+                    "UPDATE users SET role = 'sales_tl' WHERE id = ?",
+                    (self.ids['exec2'],),
+                )
+        finally:
+            connection.close()
+        self.as_user('exec2')
+        self.assertEqual(self.client.put(
+            f'/api/leads/{uid}', json={'name': 'Permitted edit'}
+        ).status_code, 200)
+        self.assertEqual(self.share(uid, 'legacy').status_code, 404)
+        self.assertEqual(self.client.post(
+            f'/api/client-access/{uid}/level',
+            json={'user_id': self.ids['exec2'], 'access_level': 'EDIT'},
+        ).status_code, 404)
+
+    def test_access_level_validation_and_schema_constraints(self):
+        uid = self.create('tl1')
+        self.as_user('admin')
+        for level in ('ADMIN', 'edit', '', None, ['EDIT']):
+            self.assertEqual(self.client.post(
+                f'/api/client-access/{uid}/grant',
+                json={'user_id': self.ids['exec2'], 'access_level': level},
+            ).status_code, 400)
+        self.assertEqual(self.client.post(
+            f'/api/client-access/{uid}/level',
+            json={'user_id': self.ids['exec2'], 'access_level': 'EDIT'},
+        ).status_code, 409)
+        self.share(uid)
+        self.assertEqual(self.client.post(
+            f'/api/client-access/{uid}/level',
+            json={'user_id': self.ids['exec2']},
+        ).status_code, 400)
+        connection = database.get_db()
+        try:
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    "UPDATE client_lead_shares SET access_level = 'ADMIN'"
+                )
+        finally:
+            connection.close()
+
+    def test_version_six_upgrade_preserves_shares_and_history_as_view(self):
+        path = Path(database.DB_PATH).parent / 'version_six.db'
+        migrate_database(path, MIGRATIONS[:6])
+        connection = sqlite3.connect(path)
+        try:
+            with connection:
+                for name in ('owner', 'recipient'):
+                    connection.execute(
+                        'INSERT INTO users (username, password_hash) '
+                        'VALUES (?, ?)', (name, 'test-placeholder'),
+                    )
+                connection.execute(
+                    "INSERT INTO client_leads (name, created_by) "
+                    "VALUES ('Existing client', 1)"
+                )
+                connection.execute(
+                    'INSERT INTO client_lead_shares (lead_id, user_id) '
+                    'VALUES (1, 2)'
+                )
+                connection.execute(
+                    'INSERT INTO client_share_events '
+                    '(lead_id, user_id, action, actor_user_id, actor_name) '
+                    "VALUES (1, 2, 'grant', 1, 'owner')"
+                )
+        finally:
+            connection.close()
+        self.assertEqual(migrate_database(path), [7])
+        connection = sqlite3.connect(path)
+        try:
+            self.assertEqual(connection.execute(
+                'SELECT lead_id, user_id, access_level FROM client_lead_shares'
+            ).fetchone(), (1, 2, 'VIEW'))
+            self.assertEqual(connection.execute(
+                'SELECT action, actor_name, access_level, '
+                'previous_access_level '
+                'FROM client_share_events'
+            ).fetchone(), ('grant', 'owner', 'VIEW', None))
         finally:
             connection.close()
 

@@ -30,8 +30,8 @@ def visibility(user):
     return predicate, parameters
 
 
-def edit_scope(user):
-    """Shares grant read access only; ownership and supervision grant edits."""
+def management_edit_scope(user):
+    """Authorize management by ownership and supervision, not shared access."""
     if user['role'] in ('admin', 'manager'):
         return '1 = 1', []
     predicate = 'l.created_by = ?'
@@ -46,6 +46,17 @@ def edit_scope(user):
     return predicate, parameters
 
 
+def edit_scope(user):
+    """Allow independent editing or an active EDIT share, never resharing."""
+    predicate, parameters = management_edit_scope(user)
+    predicate += (
+        ' OR EXISTS (SELECT 1 FROM client_lead_shares s '
+        'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1 '
+        "AND s.access_level = 'EDIT')"
+    )
+    return predicate, parameters + [user['id']]
+
+
 def read_leads(user, lead_id=None):
     """Apply authorization inside SQL before any records are returned."""
     predicate, parameters = visibility(user)
@@ -54,13 +65,15 @@ def read_leads(user, lead_id=None):
         'SELECT l.*, u.username AS creator_name, (' + editable +
         ') AS can_edit, EXISTS (SELECT 1 FROM client_lead_shares s '
         'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1) '
-        'AS is_shared FROM client_leads l '
+        'AS is_shared, (SELECT s.access_level FROM client_lead_shares s '
+        'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1) '
+        'AS shared_access_level FROM client_leads l '
         'JOIN users u ON u.id = l.created_by WHERE (' + predicate + ')'
     )
     if lead_id is not None:
         sql += ' AND l.id = ?'
         parameters.append(lead_id)
-    parameters = edit_parameters + [user['id']] + parameters
+    parameters = edit_parameters + [user['id'], user['id']] + parameters
     sql += ' ORDER BY l.id DESC'
     connection = get_db()
     try:

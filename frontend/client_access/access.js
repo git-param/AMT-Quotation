@@ -19,7 +19,7 @@ function empty(id, columns, text) {
 function date(value) { return value ? new Date(value).toLocaleString() : 'Not recorded'; }
 async function details() {
   byId('shares').replaceChildren(); byId('events').replaceChildren();
-  if (!byId('client').value) { empty('shares', 5, 'No manageable clients yet. Create a lead first.'); return; }
+  if (!byId('client').value) { empty('shares', 6, 'No manageable clients yet. Create a lead first.'); return; }
   const current = byId('client').value;
   const data = await api(`/api/client-access/${current}`);
   if (byId('client').value !== current) return;
@@ -30,6 +30,22 @@ async function details() {
     const state = cell(row, ''); const badge = document.createElement('span');
     badge.className = `badge ${share.is_active ? 'badge-ok' : 'badge-warn'}`;
     badge.textContent = share.is_active ? (share.account_active ? 'Granted' : 'Granted / account inactive') : 'Revoked'; state.append(badge);
+    const levelCell = cell(row, '');
+    if (share.is_active && share.account_active) {
+      const selector = document.createElement('select');
+      selector.className = 'role-select';
+      selector.setAttribute('aria-label', `Access level for ${share.username}`);
+      ['VIEW', 'EDIT'].forEach(level => selector.add(new Option(level, level, false, level === share.access_level)));
+      selector.onchange = async () => {
+        selector.disabled = true;
+        try {
+          await api(`/api/client-access/${current}/level`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: share.user_id, access_level: selector.value})});
+          await details(); message('Access level updated. Ownership is unchanged.');
+        } catch (error) { selector.value = share.access_level; message(error.message, true); }
+        finally { selector.disabled = false; }
+      };
+      levelCell.append(selector);
+    } else { levelCell.textContent = share.access_level; }
     cell(row, date(share.granted_at)); cell(row, share.revoked_at ? date(share.revoked_at) : '-');
     const actions = cell(row, '');
     if (share.is_active) {
@@ -49,11 +65,11 @@ async function details() {
   });
   data.events.forEach(event => {
     const row = document.createElement('tr');
-    [event.action === 'grant' ? 'Granted' : 'Revoked', event.recipient_name, event.actor_name, date(event.occurred_at)].forEach(value => cell(row, value));
+    [event.action === 'grant' ? (event.previous_access_level ? 'Level changed' : 'Granted') : 'Revoked', event.recipient_name, event.previous_access_level && event.action === 'grant' ? `${event.previous_access_level} ? ${event.access_level}` : event.access_level, event.actor_name, date(event.occurred_at)].forEach(value => cell(row, value));
     byId('events').append(row);
   });
-  if (!data.shares.length) empty('shares', 5, 'No executives have been granted access to this client.');
-  if (!data.events.length) empty('events', 4, 'No sharing changes recorded. Imported shares may have no attribution.');
+  if (!data.shares.length) empty('shares', 6, 'No executives have been granted access to this client.');
+  if (!data.events.length) empty('events', 5, 'No sharing changes recorded. Imported shares may have no attribution.');
 }
 async function load() {
   const selected = byId('client').value;
@@ -70,8 +86,8 @@ byId('refresh').onclick = () => load().catch(error => message(error.message, tru
 byId('grantForm').onsubmit = async event => {
   event.preventDefault(); byId('grant').disabled = true;
   try {
-    await api(`/api/client-access/${byId('client').value}/grant`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: Number(byId('executive').value)})});
-    await details(); message('Read-only access granted. Existing edit permissions are unchanged.');
+    await api(`/api/client-access/${byId('client').value}/grant`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: Number(byId('executive').value), access_level: byId('accessLevel').value})});
+    await details(); message(`${byId('accessLevel').value} access granted. Ownership is unchanged.`);
   } catch (error) { message(error.message, true); }
   finally { byId('grant').disabled = !clients.length; }
 };

@@ -2,7 +2,7 @@
 
 from flask import Blueprint, jsonify, request, send_file
 
-from backend.client_leads.routes import edit_scope
+from backend.client_leads.routes import management_edit_scope
 from backend.common.auth import (
     get_current_user, get_permissions, permission_required,
 )
@@ -13,11 +13,11 @@ bp = Blueprint('client_access', __name__)
 
 
 def management_scope(user):
-    """Executives and read-only shares never grant sharing authority."""
+    """Shared VIEW/EDIT grants never provide sharing authority."""
     if (user['role'] not in ('admin', 'manager', 'sales_tl')
             or 'leads.share_manage' not in get_permissions(user)):
         return '0 = 1', []
-    return edit_scope(user)
+    return management_edit_scope(user)
 
 
 def managed_leads(connection, user, lead_id=None):
@@ -90,18 +90,26 @@ def sharing_details(lead_id):
         connection.close()
 
 
+@bp.route('/api/client-access/<int:lead_id>/level', methods=['POST'])
 @bp.route('/api/client-access/<int:lead_id>/grant', methods=['POST'])
 @bp.route('/api/client-access/<int:lead_id>/revoke', methods=['POST'])
 @permission_required('leads.share_manage')
 def change_share(lead_id):
     """Keep share changes and their recorded history atomic."""
     data = request.get_json(silent=True)
-    if (not isinstance(data, dict) or set(data) != {'user_id'}
+    grant = request.path.endswith('/grant')
+    modify = request.path.endswith('/level')
+    if (not isinstance(data, dict) or 'user_id' not in data
+            or set(data) - {'user_id', 'access_level'}
             or type(data['user_id']) is not int
             or not 1 <= data['user_id'] <= 9223372036854775807):
         return jsonify(error='Provide a valid executive user_id.'), 400
+    level = data.get('access_level', 'VIEW')
+    if (not isinstance(level, str) or level not in ('VIEW', 'EDIT')
+            or (modify and 'access_level' not in data)
+            or (not grant and not modify and 'access_level' in data)):
+        return jsonify(error='Choose VIEW or EDIT access.'), 400
     recipient = data['user_id']
-    grant = request.path.endswith('/grant')
     connection = get_db()
     try:
         connection.execute('BEGIN IMMEDIATE')
@@ -116,30 +124,38 @@ def change_share(lead_id):
         ).fetchone()
         if not target:
             return jsonify(error='User not found.'), 404
-        if grant and (not target['is_active'] or target['role'] not in (
-                'user', 'sales_executive')):
+        if (grant or modify) and (
+                not target['is_active']
+                or target['role'] not in ('user', 'sales_executive')):
             return jsonify(error='Choose an active Sales Executive.'), 400
-        if grant and recipient == leads[0]['created_by']:
+        if (grant or modify) and recipient == leads[0]['created_by']:
             return jsonify(error='The creator already has access.'), 400
         share = connection.execute(
-            'SELECT is_active FROM client_lead_shares '
+            'SELECT is_active, access_level FROM client_lead_shares '
             'WHERE lead_id = ? AND user_id = ?', (lead_id, recipient),
         ).fetchone()
         if grant and share and share['is_active']:
             return jsonify(error='Access is already granted.'), 409
         if not grant and (not share or not share['is_active']):
-            return jsonify(error='No active share to revoke.'), 409
+            return jsonify(error='No active share to change or revoke.'), 409
+        if modify and share['access_level'] == level:
+            return jsonify(error='This access level is already set.'), 409
+        previous = (share['access_level']
+                    if share and share['is_active'] else None)
         # One row per lead/recipient; event history preserves every cycle.
-        if grant:
+        if grant or modify:
             connection.execute(
                 'INSERT INTO client_lead_shares '
-                '(lead_id, user_id, is_active, granted_by, granted_at) '
-                "VALUES (?, ?, 1, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) "
+                '(lead_id, user_id, is_active, granted_by, granted_at, '
+                'access_level) '
+                "VALUES (?, ?, 1, ?, "
+                "strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), ?) "
                 'ON CONFLICT(lead_id, user_id) DO UPDATE SET '
                 'is_active = 1, granted_by = excluded.granted_by, '
                 'granted_at = excluded.granted_at, '
+                'access_level = excluded.access_level, '
                 'revoked_by = NULL, revoked_at = NULL',
-                (lead_id, recipient, user['id']),
+                (lead_id, recipient, user['id'], level),
             )
         else:
             connection.execute(
@@ -150,10 +166,12 @@ def change_share(lead_id):
             )
         connection.execute(
             'INSERT INTO client_share_events '
-            '(lead_id, user_id, action, actor_user_id, actor_name) '
-            'VALUES (?, ?, ?, ?, ?)',
-            (lead_id, recipient, 'grant' if grant else 'revoke',
-             user['id'], user['username']),
+            '(lead_id, user_id, action, actor_user_id, actor_name, '
+            'access_level, previous_access_level) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (lead_id, recipient, 'grant' if grant or modify else 'revoke',
+             user['id'], user['username'],
+             level if grant or modify else previous, previous),
         )
         connection.commit()
         return jsonify(ok=True)

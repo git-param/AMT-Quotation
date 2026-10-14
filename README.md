@@ -296,8 +296,8 @@ No second client table or ownership hierarchy is introduced.
 
 Admins and legacy managers can manage shares for any client. Sales TLs can
 manage their own leads and those of their assigned active executives using the
-existing supervision/edit scope. Read-only shares and `leads.view_all` read
-grants alone do not authorize sharing. The `leads.share_manage` permission is
+existing ownership/supervision scope. Neither VIEW nor EDIT shares, nor
+`leads.view_all` read grants alone, authorize sharing. The `leads.share_manage` permission is
 required in addition to the manager role and per-client SQL scope. Executives
 cannot reshare or escalate access, even if a lead is shared with them.
 
@@ -324,13 +324,13 @@ active state without deleting records. Subsequent list/detail requests stop
 returning the client through that share immediately; ownership, supervision,
 and independent RBAC grants remain effective. An already loaded browser must
 refresh to reflect the new permissions; previously viewed content cannot be
-withdrawn. Shared-access badges distinguish read-only and independently
-editable leads in the Client Leads list.
+withdrawn. Shared-access badges show VIEW or EDIT in the Client Leads list,
+and identify independently editable VIEW recipients.
 
 APIs: `GET /api/client-access` lists manageable clients and eligible recipients;
 `GET /api/client-access/<lead_id>` lists scoped share state and history;
-`POST /api/client-access/<lead_id>/grant` and `/revoke` accept only a JSON
-`user_id`. Unauthorized clients return 404, and unauthorized roles/anonymous
+`POST /api/client-access/<lead_id>/grant` accepts `user_id` and `access_level`;
+`/revoke` accepts only `user_id`. Unauthorized clients return 404, and unauthorized roles/anonymous
 sessions are rejected by backend permission checks. Duplicate grants or revokes
 without an active share return 409. This module includes no enquiries, orders,
 PI features, permanent deletion, or general permission-management editor.
@@ -342,3 +342,39 @@ Tests cover grant/revoke/regrant, legacy-share preservation, actor/timestamp
 history, concurrent duplicates, atomic failure rollback, unauthorized sharing,
 read-only enforcement, cross-TL isolation, and preserved independent access.
 Browser layout and interactive testing remain a separate validation step.
+
+### VIEW and EDIT client sharing
+
+Migration 7 (`client_share_levels`) adds a constrained `access_level` column
+(VIEW/EDIT) to the existing shares and event history, plus nullable
+`previous_access_level` on events. No tables are duplicated or rebuilt. Versions
+1?6 are unchanged. Existing shares and historical events retain their records
+and default to VIEW, preserving their original read-only behavior.
+
+Admins and authorized TLs can grant either level to active executives, including
+executives outside their team. VIEW allows reading only; EDIT additionally
+allows updating client details through the existing scoped update API.
+Independent ownership, supervision, and role grants still apply. Neither level
+transfers ownership or permits onward sharing. Management queries use the
+independent ownership/supervision scope, never shared edit permission.
+
+Use `POST /api/client-access/<lead_id>/level` with `user_id` and `access_level`
+to change an active grant. Grant requests also accept an explicit access level;
+omitting it defaults to VIEW for compatibility with existing API callers.
+Invalid levels are rejected. Same-level changes and duplicate active grants
+return 409. Inactive shares must be regranted. Every level change is recorded
+as a grant event with previous/new levels, actor and timestamp; revocations
+record the level being removed. Original grant events remain in history.
+
+The access screen provides a level selector for new grants and for each active
+recipient. The lead list shows the shared level and exposes Edit only when the
+server authorizes it. Downgrading EDIT to VIEW immediately removes shared edit
+permission; revocation removes both shared reading and editing on the next
+request. Independent access remains effective. Creator and creation timestamps
+are never updated by sharing or lead editing.
+
+Tests cover cross-team TL grants, VIEW/EDIT validation, upgrades/downgrades,
+revocation, recipient edit access, prevention of onward sharing even after role
+changes, ownership preservation, and version-6-to-7 data preservation. Browser
+layout and interactive verification remain outstanding. Older code cannot honor
+EDIT grants, so prefer a forward fix and retain schema/history on code rollback.

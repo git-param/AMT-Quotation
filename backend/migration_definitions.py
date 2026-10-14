@@ -178,6 +178,15 @@ SHARING_SCHEMA = (
     "('sales_tl', 'leads.share_manage')",
 )
 
+SHARE_LEVEL_SCHEMA = (
+    "ALTER TABLE client_lead_shares ADD COLUMN access_level TEXT NOT NULL "
+    "DEFAULT 'VIEW' CHECK (access_level IN ('VIEW', 'EDIT'))",
+    "ALTER TABLE client_share_events ADD COLUMN access_level TEXT NOT NULL "
+    "DEFAULT 'VIEW' CHECK (access_level IN ('VIEW', 'EDIT'))",
+    "ALTER TABLE client_share_events ADD COLUMN previous_access_level TEXT "
+    "CHECK (previous_access_level IN ('VIEW', 'EDIT'))",
+)
+
 # Add new versions here; never edit the name or SQL of an applied version.
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
@@ -186,4 +195,5 @@ MIGRATIONS = (
     (4, 'enquiry_sources', SOURCE_SCHEMA),
     (5, 'private_client_leads', LEAD_SCHEMA),
     (6, 'client_sharing', SHARING_SCHEMA),
+    (7, 'client_share_levels', SHARE_LEVEL_SCHEMA),
 )
