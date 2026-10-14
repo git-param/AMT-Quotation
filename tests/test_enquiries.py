@@ -29,6 +29,9 @@ class EnquiryTests(unittest.TestCase):
             'client_id': client_id, 'reference': reference,
             'enquiry_date': '2026-10-14', 'subject': 'Marine parts request',
             'description': 'Please provide availability.',
+            'deal_currency': 'USD',
+            'lines': [{'sku': 'INITIAL', 'description': 'Initial enquiry item',
+                       'quantity': '1', 'unit_price': '0', 'currency': 'USD'}],
         })
 
     def test_multiple_enquiries_detail_edit_and_immutable_relationships(self):
@@ -228,7 +231,7 @@ class EnquiryTests(unittest.TestCase):
             ).fetchone()[0]
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [10])
+        self.assertEqual(migrate_database(path), [10, 11, 12])
         connection = sqlite3.connect(path)
         try:
             self.assertEqual(connection.execute(

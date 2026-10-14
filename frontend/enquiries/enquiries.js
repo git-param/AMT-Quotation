@@ -4,6 +4,8 @@ const clientFilter = query.get('client_id');
 let scopedClient = null;
 let editing = null; let page = 1; let pages = 0; let clientPage = 1; let clientPages = 0;
 const fields = ['reference','enquiry_date','subject','description','status'];
+const initialSkuEditor=window.createSkuDraftEditor(byId('creationSkus'),()=>({client_id:Number(byId('client').value)}),()=>byId('dealCurrency').value);
+byId('dealCurrency').onchange=()=>initialSkuEditor.currencyChanged();
 function message(text,error=false) { byId('message').textContent=text; byId('message').className=error?'error':''; }
 async function api(path,options={}) {
   const response=await fetch(path,options); const data=await response.json();
@@ -42,14 +44,14 @@ async function details(id){
   const e=(await api(`/api/enquiries/${id}`)).enquiry;
   if(clientFilter && String(e.client_id)!==String(clientFilter))throw new Error('This enquiry does not belong to the selected client.');
   byId('detailTitle').textContent=e.reference;byId('detailBody').replaceChildren();
-  [['Client',e.client_name],['Company',e.client_company],['Enquiry date',e.enquiry_date],['Subject',e.subject],['Description',e.description],['Status',e.status.replaceAll('_',' ')],['Creator',e.creator_name],['Created',new Date(e.created_at).toLocaleString()],['Last updated',`${new Date(e.updated_at).toLocaleString()} / ${e.updated_by_name}`],['Access',e.can_edit?'Editable':'Read only']].forEach(([label,value])=>{
+  [['Client',e.client_name],['Company',e.client_company],['Enquiry date',e.enquiry_date],['Subject',e.subject],['Description',e.description],['Deal currency',e.deal_currency||'Legacy / not set'],['Status',e.status.replaceAll('_',' ')],['Creator',e.creator_name],['Created',new Date(e.created_at).toLocaleString()],['Last updated',`${new Date(e.updated_at).toLocaleString()} / ${e.updated_by_name}`],['Access',e.can_edit?'Editable':'Read only']].forEach(([label,value])=>{
     const block=document.createElement('section'); if(label==='Description'||label==='Subject')block.className='detail-wide';
     const title=document.createElement('h3');title.textContent=label;const text=document.createElement('p');text.textContent=value||'Not provided';block.append(title,text);byId('detailBody').append(block);
   });
-  const link=document.createElement('a');link.href=`/leads?client_id=${e.client_id}`;link.textContent='View client details';byId('detailBody').append(link);byId('detail').hidden=false;byId('detail').scrollIntoView({behavior:'smooth'});
+  const link=document.createElement('a');link.href=`/leads?client_id=${e.client_id}`;link.textContent='View client details';byId('detailBody').append(link);byId('detail').hidden=false;await window.showEnquiryLines(e);byId('detail').scrollIntoView({behavior:'smooth'});
 }
 async function createForm(){
-  editing=null;byId('form').reset();await clients();byId('client').disabled=false;byId('chooseClient').hidden=false;
+  editing=null;byId('form').reset();initialSkuEditor.reset();byId('creationSkus').hidden=false;await clients();byId('client').disabled=false;byId('chooseClient').hidden=false;
   if(clientFilter){const c=(await api(`/api/leads/${clientFilter}`)).lead;if(!c.can_edit||!c.is_active)throw new Error('This client cannot receive a new enquiry.');if(![...byId('client').options].some(o=>Number(o.value)===c.id))byId('client').add(new Option(c.name,c.id));byId('client').value=c.id;byId('client').disabled=true;byId('chooseClient').hidden=true;}
   const dateParts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));
   byId('enquiry_date').value=`${dateParts.year}-${dateParts.month}-${dateParts.day}`;
@@ -57,9 +59,9 @@ async function createForm(){
 }
 async function editEnquiry(id){
   const e=(await api(`/api/enquiries/${id}`)).enquiry;if(!e.can_edit)throw new Error('Client access is read-only.');
-  editing=id;fields.forEach(f=>{byId(f).value=e[f];});byId('client').replaceChildren(new Option(e.client_name,e.client_id,true,true));byId('client').disabled=true;byId('chooseClient').hidden=true;byId('formTitle').textContent='Edit enquiry';byId('editor').hidden=false;byId('editor').scrollIntoView({behavior:'smooth'});
+  editing=id;initialSkuEditor.reset();byId('creationSkus').hidden=true;byId('dealCurrency').value=e.deal_currency||'';fields.forEach(f=>{byId(f).value=e[f];});byId('client').replaceChildren(new Option(e.client_name,e.client_id,true,true));byId('client').disabled=true;byId('chooseClient').hidden=true;byId('formTitle').textContent='Edit enquiry';byId('editor').hidden=false;await details(id);byId('editor').scrollIntoView({behavior:'smooth'});
 }
-byId('form').onsubmit=async event=>{event.preventDefault();byId('save').disabled=true;try{const data=Object.fromEntries(fields.map(f=>[f,byId(f).value]));if(editing===null)data.client_id=Number(byId('client').value);await api(editing===null?'/api/enquiries':`/api/enquiries/${editing}`,{method:editing===null?'POST':'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});byId('editor').hidden=true;byId('detail').hidden=true;await load();message('Enquiry saved.');}catch(error){message(error.message,true);}finally{byId('save').disabled=false;}};
+byId('form').onsubmit=async event=>{event.preventDefault();byId('save').disabled=true;try{const data=Object.fromEntries(fields.map(f=>[f,byId(f).value]));data.deal_currency=byId('dealCurrency').value||null;if(editing===null){data.client_id=Number(byId('client').value);data.lines=initialSkuEditor.values();}await api(editing===null?'/api/enquiries':`/api/enquiries/${editing}`,{method:editing===null?'POST':'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});byId('editor').hidden=true;byId('detail').hidden=true;await load();message('Enquiry saved.');}catch(error){message(error.message,true);}finally{byId('save').disabled=false;}};
 byId('add').onclick=()=>createForm().catch(error=>message(error.message,true));byId('cancel').onclick=()=>{byId('editor').hidden=true;};byId('closeDetail').onclick=()=>{byId('detail').hidden=true;};
 byId('filters').onsubmit=event=>{event.preventDefault();page=1;load().catch(error=>message(error.message,true));};
 byId('previous').onclick=()=>{if(page>1){page--;load().catch(error=>message(error.message,true));}};byId('next').onclick=()=>{if(page<pages){page++;load().catch(error=>message(error.message,true));}};

@@ -54,7 +54,8 @@ def editable_client(connection, user, client_id):
 
 def validated(data, existing=None):
     """Validate details and reject client reassignment or metadata input."""
-    fields = {'reference', 'enquiry_date', 'subject', 'description', 'status'}
+    fields = {'reference', 'enquiry_date', 'subject', 'description',
+              'status', 'deal_currency'}
     allowed = fields if existing else fields | {'client_id'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError(
@@ -83,6 +84,11 @@ def validated(data, existing=None):
         raise ValueError('Enter a valid enquiry date.') from error
     if result['status'] not in STATUSES:
         raise ValueError('Choose a valid enquiry status.')
+    currency = data.get('deal_currency', existing.get('deal_currency'))
+    if (currency not in ('USD', 'INR')
+            and (not existing or currency is not None)):
+        raise ValueError('Choose USD or INR deal currency.')
+    result['deal_currency'] = currency
     return result
 
 
@@ -198,7 +204,25 @@ def save_enquiry(enquiry_id=None):
             return jsonify(
                 error='Reactivate the client to create enquiries.'
             ), 400
-        values = validated(data, existing)
+        from backend.enquiries.lines import create_lines
+        from backend.enquiries.lines import validated as line_data
+
+        if not isinstance(data, dict):
+            raise ValueError('Provide a JSON object.')
+        header = {key: value for key, value in data.items() if key != 'lines'}
+        values = validated(header, existing)
+        lines = data.get('lines')
+        if existing is None:
+            if not isinstance(lines, list) or not 1 <= len(lines) <= 50:
+                raise ValueError('At least one complete SKU line is required.')
+            lines = [line_data(item) for item in lines]
+            if any(item['currency'] != values['deal_currency']
+                   for item in lines):
+                raise ValueError(
+                    'Initial lines must use the chosen deal currency.'
+                )
+        elif lines is not None:
+            raise ValueError('Edit saved lines in the enquiry SKU section.')
         if existing is None:
             columns = ', '.join(values)
             marks = ', '.join('?' for _ in values)
@@ -209,6 +233,7 @@ def save_enquiry(enquiry_id=None):
                 [*values.values(), client_id, user['id'], user['id']],
             )
             enquiry_id = cursor.lastrowid
+            create_lines(connection, enquiry_id, lines, user['id'])
             status = 201
         else:
             assignments = ', '.join(key + ' = ?' for key in values)

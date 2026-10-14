@@ -43,9 +43,10 @@ class RBACTests(unittest.TestCase):
         from backend.client_leads.routes import bp as leads_bp
         from backend.client_access.routes import bp as access_bp
         from backend.enquiries.routes import bp as enquiries_bp
+        from backend.enquiries.lines import bp as lines_bp
         for blueprint in (
                 login_bp, manager_bp, quotation_bp, search_bp, sources_bp,
-                leads_bp, access_bp, enquiries_bp):
+                leads_bp, access_bp, enquiries_bp, lines_bp):
             self.app.register_blueprint(blueprint)
         self.client = self.app.test_client()
         self.ids = {}
@@ -79,6 +80,7 @@ class RBACTests(unittest.TestCase):
             path = path.replace('<int:source_id>', '1')
             path = path.replace('<int:lead_id>', '1')
             path = path.replace('<int:enquiry_id>', '1')
+            path = path.replace('<int:line_id>', '1')
             method = ('POST' if 'POST' in rule.methods else
                       'PUT' if 'PUT' in rule.methods else 'GET')
             with self.subTest(endpoint=rule.rule):
