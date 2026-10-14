@@ -234,21 +234,30 @@ function setSource(client) {
 async function openDetails(id) {
   const data = await api(`/api/leads/${id}`); const client = data.lead;
   byId('detailTitle').textContent = client.name;
+  byId('detailAvatar').textContent = client.name.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase();
+  byId('detailSubtitle').textContent = client.company || 'Client profile';
+  byId('detailBadges').replaceChildren();
+  const accessLabel = client.is_shared ? `Shared ${client.shared_access_level} / ${client.can_edit ? 'Editable' : 'Read only'}` : client.can_edit ? 'Editable' : 'Read only';
+  for (const [label, style] of [[client.status, 'client-status'], [client.is_active ? 'Active' : 'Inactive', client.is_active ? 'client-active' : 'client-inactive'], [accessLabel, 'client-access']]) {
+    const badge=document.createElement('span');badge.className=style;badge.textContent=label;byId('detailBadges').append(badge);
+  }
+  byId('detailActions').replaceChildren();
+  if(client.can_delete){const remove=clientActionButton('delete',client.name,'btn-del');remove.onclick=()=>deleteClient(client).catch(error=>message(error.message,true));byId('detailActions').append(remove);}
   byId('detailBody').replaceChildren();
   const section = (label, value) => {
     const block = document.createElement('section'); const heading = document.createElement('h3'); heading.textContent = label;
-    const text = document.createElement('p'); text.textContent = value || 'Not provided'; block.append(heading,text); byId('detailBody').append(block);
+    const text = document.createElement('p'); text.textContent = value || 'Not provided';
+    if (!value) block.classList.add('detail-empty');
+    if (label === 'Notes') block.classList.add('detail-notes');
+    block.append(heading,text); byId('detailBody').append(block);
   };
-  const formatAddress = address => ['line1','line2','city','state','postal_code','country'].map(k => address[k]).filter(Boolean).join(', ');
+  const formatAddress = address => [address.line1,address.line2,[address.city,address.state,address.postal_code].filter(Boolean).join(', '),address.country].filter(Boolean).join('\n');
   section('Company information', [client.company,client.business_details].filter(Boolean).join('\n'));
-  section('Contacts', [client.email,client.phone,...client.emails,...client.phones,...client.contact_persons.map(c => [c.name,c.email,c.phone].filter(Boolean).join(' / '))].filter(Boolean).join('\n'));
+  section('Contacts', [...new Set([client.email,client.phone,...client.emails,...client.phones,...client.contact_persons.map(c => [c.name,c.email,c.phone].filter(Boolean).join(' / '))].filter(Boolean))].join('\n'));
   section('Reusable billing address',formatAddress(client.billing_address));
   section('Default shipping address',formatAddress(client.shipping_address));
   section('Notes',client.notes);
-  section('Status and availability',`${client.status} / ${client.is_active ? 'Active' : 'Inactive'}`);
-  section('Ownership and creation',`${client.creator_name} (owner and creator) / ${new Date(client.created_at).toLocaleString()}`);
-  section('Access',client.is_shared ? `Shared ${client.shared_access_level} / ${client.can_edit ? 'Editable' : 'Read only'}` : client.can_edit ? 'Editable' : 'Read only');
-  if(client.can_delete){const remove=document.createElement('button');remove.type='button';remove.className='btn-sm btn-del';remove.textContent='Delete client';remove.onclick=()=>deleteClient(client).catch(error=>message(error.message,true));byId('detailBody').append(remove);}
+  section('Owner and creation',`${client.creator_name}\nCreated ${new Date(client.created_at).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'})}`);
   section('Enquiry source',client.enquiry_source_name ? `${client.enquiry_source_name}${client.enquiry_source_active ? '' : ' (inactive)'}` : 'Not specified');
   byId('addressHistory').replaceChildren();
   data.address_history.forEach(snapshot => {

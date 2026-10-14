@@ -37,3 +37,35 @@
 .client-action-icon:focus-visible { outline:3px solid #93C5FD; outline-offset:2px; }
 .client-action-icon.btn-activate { background:#ECFDF5; color:#047857; border:1px solid #A7F3D0; }
 .source-table td.client-actions { min-width:174px; }
+
+/* Selected profiles follow the lead list instead of pushing it down. */
+#clientDetail { margin-top:24px; padding:24px; }
+.client-detail-header { display:flex; align-items:center; gap:16px; padding-bottom:22px; border-bottom:1px solid #E8EDF3; margin-bottom:22px; }
+.client-avatar { display:grid; place-items:center; width:52px; height:52px; flex-shrink:0; border-radius:14px; background:#EFF6FF; color:#1D4ED8; font-size:18px; font-weight:700; }
+.client-detail-heading { min-width:0; flex:1; }
+.client-detail-heading h2 { font-size:22px; color:#1E3A5F; margin:5px 0; overflow-wrap:anywhere; }
+.client-detail-heading>p { font-size:13px; color:#64748B; margin:0; }
+.client-detail-badges { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
+.client-detail-badges span { font-size:11px; padding:4px 10px; border-radius:20px; text-transform:capitalize; }
+.client-status,.client-access { background:#EFF6FF; color:#1D4ED8; }
+.client-active { background:#ECFDF5; color:#047857; }
+.client-inactive { background:#F1F5F9; color:#64748B; }
+.client-detail-actions { display:flex; align-items:center; gap:8px; }
+.client-detail-actions .client-action-icon { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; padding:0; }
+#clientDetail .detail-grid { gap:16px; }
+#clientDetail .detail-grid>section { background:#FFF; padding:18px 20px; }
+#clientDetail .detail-grid h3 { font-size:11px; color:#64748B; margin-bottom:10px; }
+#clientDetail .detail-grid p { color:#334155; font-size:13px; line-height:1.7; }
+#clientDetail .detail-grid .detail-empty p { color:#94A3B8; }
+.detail-notes { grid-column:1/-1; }
+#clientDetail .detail-grid .client-enquiries { background:#F8FBFF; border-color:#DBEAFE; padding:20px; }
+.client-address-history { padding:16px 18px; border:1px solid #E8EDF3; border-radius:10px; background:#F8FAFC; }
+.client-address-history summary { font-weight:600; }
+@media(max-width:650px) {
+  #clientDetail { padding:18px; }
+  .client-detail-header { flex-wrap:wrap; gap:12px; }
+  .client-detail-heading { flex-basis:calc(100% - 70px); }
+  .client-detail-heading h2 { font-size:20px; }
+  .client-detail-actions { margin-left:auto; }
+  #clientDetail .detail-grid>section { padding:16px; }
+}
