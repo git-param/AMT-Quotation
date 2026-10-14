@@ -243,7 +243,7 @@ function showAccessError(status) {
 fetch('/api/me').then(async response => {
   if (!response.ok) { showAccessError(response.status); return; }
   const user = await response.json();
-  document.getElementById('hdrUser').textContent = `${user.username} / ${user.role_label}`;
+  document.getElementById('hdrUser').textContent = user.username;
   if (!user.permissions.includes('management.view')) { showAccessError(403); return; }
   _currentUserId = user.id;
   const manage = user.permissions.includes('users.manage');
@@ -274,26 +274,42 @@ async function loadUsers() {
     const row = document.createElement('tr');
     const name = document.createElement('td');
     name.textContent = user.username;
+    name.className = 'account-name';
     const role = document.createElement('td');
     const select = document.createElement('select');
-    Object.entries(data.roles).forEach(([code, label]) => select.add(new Option(label, code, false, code === user.role)));
+    select.className = 'role-select';
+    select.setAttribute('aria-label', `Role for ${user.username}`);
+    const roles = {sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
+    const currentRole = {user: 'sales_executive', manager: 'admin'}[user.role] || user.role;
+    Object.entries(roles).forEach(([code, label]) => select.add(new Option(label, code, false, code === currentRole)));
     select.disabled = user.id === _currentUserId;
     select.onchange = () => updateUser(user.id, 'role', {role: select.value});
     role.append(select);
     const created = document.createElement('td');
-    created.textContent = user.created_at || '';
+    const date = new Date((user.created_at || '').replace(' ', 'T'));
+    created.textContent = Number.isNaN(date.getTime()) ? '?' : date.toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'});
+    created.title = user.created_at || '';
+    created.className = 'account-created';
     const actions = document.createElement('td');
     const button = document.createElement('button');
     button.textContent = user.is_active ? 'Deactivate' : 'Activate';
+    button.className = `btn-sm ${user.is_active ? 'btn-del' : 'btn-activate'}`;
     button.disabled = user.id === _currentUserId;
+    button.setAttribute('aria-label', `${user.is_active ? 'Deactivate' : 'Activate'} ${user.username}`);
     button.onclick = () => updateUser(user.id, user.is_active ? 'deactivate' : 'activate');
-    actions.append(user.is_active ? 'Active ' : 'Inactive ', button);
+    const status = document.createElement('span');
+    status.className = `account-status ${user.is_active ? 'is-active' : 'is-inactive'}`;
+    status.textContent = user.is_active ? 'Active' : 'Inactive';
+    const controls = document.createElement('div');
+    controls.className = 'account-actions';
+    controls.append(status, button);
+    actions.append(controls);
     row.append(name, role, created, actions);
     tbody.append(row);
   });
   // Populate reset-password dropdown
   const sel = document.getElementById('resetUserId');
-  sel.replaceChildren(...users.map(u => new Option(`${u.username} (${data.roles[u.role] || u.role})`, u.id)));
+  sel.replaceChildren(...users.map(u => new Option(u.username, u.id)));
 }
 
 async function addUser() {
