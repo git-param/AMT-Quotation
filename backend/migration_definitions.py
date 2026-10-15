@@ -232,6 +232,178 @@ CLIENT_DISCOVERY_SCHEMA = (
 )
 
 # Add new versions here; never edit the name or SQL of an applied version.
+SOFT_DELETE_SCHEMA = (
+    "ALTER TABLE client_leads ADD COLUMN deleted_at TEXT",
+    "ALTER TABLE client_leads ADD COLUMN deleted_by INTEGER "
+    "REFERENCES users(id) ON DELETE RESTRICT",
+    "ALTER TABLE client_enquiries ADD COLUMN deleted_at TEXT",
+    "ALTER TABLE client_enquiries ADD COLUMN deleted_by INTEGER "
+    "REFERENCES users(id) ON DELETE RESTRICT",
+    "CREATE INDEX idx_leads_not_deleted ON client_leads(deleted_at, id)",
+    "CREATE INDEX idx_enquiries_not_deleted "
+    "ON client_enquiries(client_id, deleted_at, id)",
+)
+
+ORDER_SCHEMA = (
+    "CREATE UNIQUE INDEX idx_enquiry_client_pair "
+    "ON client_enquiries(id, client_id)",
+    """CREATE TABLE client_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reference TEXT NOT NULL UNIQUE CHECK (length(trim(reference)) > 0),
+        client_id INTEGER NOT NULL REFERENCES client_leads(id)
+            ON DELETE RESTRICT,
+        enquiry_id INTEGER NOT NULL,
+        order_date TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft'
+            CHECK (status IN ('draft','confirmed','processing','dispatched',
+                             'completed','cancelled')),
+        currency TEXT NOT NULL CHECK (currency IN ('USD','INR')),
+        po_reference TEXT NOT NULL DEFAULT '',
+        pi_reference TEXT NOT NULL DEFAULT '',
+        pi_date TEXT NOT NULL DEFAULT '',
+        payment_terms TEXT NOT NULL DEFAULT '',
+        delivery_terms TEXT NOT NULL DEFAULT '',
+        delivery_time TEXT NOT NULL DEFAULT '',
+        dispatch_method TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '',
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        updated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        created_at TEXT NOT NULL DEFAULT
+            (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT
+            (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        FOREIGN KEY (enquiry_id, client_id)
+            REFERENCES client_enquiries(id, client_id) ON DELETE RESTRICT
+    )""",
+    "CREATE INDEX idx_orders_client ON client_orders(client_id, id)",
+    "CREATE INDEX idx_orders_enquiry ON client_orders(enquiry_id, id)",
+    "CREATE INDEX idx_orders_status_date "
+    "ON client_orders(status, order_date, id)",
+    """CREATE TABLE order_sku_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES client_orders(id)
+            ON DELETE RESTRICT,
+        source_enquiry_line_id INTEGER REFERENCES enquiry_sku_lines(id)
+            ON DELETE RESTRICT,
+        source_snapshot_json TEXT CHECK
+            (source_snapshot_json IS NULL OR json_valid(source_snapshot_json)),
+        sku TEXT NOT NULL CHECK (length(trim(sku)) BETWEEN 1 AND 100),
+        description TEXT NOT NULL
+            CHECK (length(trim(description)) BETWEEN 1 AND 2000),
+        quantity_milli INTEGER NOT NULL CHECK
+            (quantity_milli BETWEEN 1000 AND 999999000
+             AND quantity_milli % 1000 = 0),
+        unit_price_minor INTEGER NOT NULL CHECK
+            (unit_price_minor BETWEEN 0 AND 99999999999),
+        currency TEXT NOT NULL CHECK (currency IN ('USD','INR')),
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        updated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        created_at TEXT NOT NULL DEFAULT
+            (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT
+            (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )""",
+    "CREATE INDEX idx_order_lines_active "
+    "ON order_sku_lines(order_id, is_active, id)",
+    "CREATE UNIQUE INDEX idx_order_lines_source "
+    "ON order_sku_lines(order_id, source_enquiry_line_id) "
+    "WHERE is_active = 1 AND source_enquiry_line_id IS NOT NULL",
+    """CREATE TABLE order_delivery_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES client_orders(id)
+            ON DELETE RESTRICT,
+        saved_address_id INTEGER REFERENCES client_address_history(id)
+            ON DELETE RESTRICT,
+        saved_address_kind TEXT CHECK
+            (saved_address_kind IN ('billing','shipping')),
+        snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+        recorded_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        recorded_at TEXT NOT NULL DEFAULT
+            (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        CHECK ((saved_address_id IS NULL AND saved_address_kind IS NULL) OR
+               (saved_address_id IS NOT NULL
+                AND saved_address_kind IS NOT NULL))
+    )""",
+    "CREATE INDEX idx_order_delivery_version "
+    "ON order_delivery_versions(order_id, id)",
+    """CREATE TABLE order_revisions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES client_orders(id)
+            ON DELETE RESTRICT,
+        action TEXT NOT NULL CHECK
+            (action IN ('create','edit','line_create','line_edit',
+                        'line_remove')),
+        snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+        actor_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        created_at TEXT NOT NULL DEFAULT
+            (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )""",
+    "CREATE INDEX idx_order_revisions ON order_revisions(order_id, id)",
+)
+
+# Rebuild only the parent table, retaining every ID and child FK. Deferred FK
+# checking allows the transactional replacement; the runner checks all FKs.
+WORKSPACE_SCHEMA = (
+    'PRAGMA defer_foreign_keys = ON',
+    ORDER_SCHEMA[1].replace('client_orders (', 'client_orders_new (', 1)
+        .replace('enquiry_id INTEGER NOT NULL', 'enquiry_id INTEGER'),
+    'INSERT INTO client_orders_new SELECT * FROM client_orders',
+    'DROP TABLE client_orders',
+    'ALTER TABLE client_orders_new RENAME TO client_orders',
+    *ORDER_SCHEMA[2:5],
+    "ALTER TABLE client_orders ADD COLUMN destination TEXT NOT NULL DEFAULT ''",
+    'ALTER TABLE client_orders ADD COLUMN shipping_minor INTEGER NOT NULL '
+    'DEFAULT 0 CHECK (shipping_minor BETWEEN 0 AND 99999999999)',
+    "ALTER TABLE order_sku_lines ADD COLUMN hsn_code TEXT NOT NULL DEFAULT '' "
+    'CHECK (length(hsn_code) <= 20)',
+    "ALTER TABLE order_sku_lines ADD COLUMN item_condition TEXT NOT NULL DEFAULT '' "
+    'CHECK (length(item_condition) <= 100)',
+    "ALTER TABLE order_sku_lines ADD COLUMN uom TEXT NOT NULL DEFAULT 'PCs' "
+    'CHECK (length(trim(uom)) BETWEEN 1 AND 30)',
+    '''CREATE TABLE order_invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES client_orders(id) ON DELETE RESTRICT,
+        reference TEXT NOT NULL UNIQUE,
+        currency TEXT NOT NULL CHECK (currency IN ('USD','INR')),
+        snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+        workbook BLOB NOT NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )''',
+    'CREATE INDEX idx_order_invoices_order ON order_invoices(order_id, id)',
+    # Preserve the original enquiry link, author, date, and text. Never infer a
+    # currency from mixed historical lines: retain their individual currencies.
+    '''INSERT INTO client_orders
+       (reference, client_id, enquiry_id, order_date, currency, status, notes,
+        created_by, updated_by, created_at, updated_at)
+       SELECT 'LEGACY-ENQ-' || e.id, e.client_id, e.id, e.enquiry_date,
+              COALESCE(e.deal_currency, 'USD'),
+              CASE WHEN e.status = 'cancelled' THEN 'cancelled' ELSE 'draft' END,
+              substr(e.subject || char(10) || e.description, 1, 5000),
+              e.created_by, e.updated_by, e.created_at, e.updated_at
+       FROM client_enquiries e WHERE e.deleted_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM client_orders o WHERE o.enquiry_id = e.id)''',
+    # Fractional legacy enquiry quantities cannot enter the existing whole-unit
+    # order schema. Keep them in their original records for explicit review.
+    '''INSERT INTO order_sku_lines
+       (order_id, source_enquiry_line_id, source_snapshot_json, sku, description,
+        quantity_milli, unit_price_minor, currency, created_by, updated_by,
+        created_at, updated_at)
+       SELECT o.id, s.id, json_object('legacy_line_id',s.id,
+              'quantity_milli',s.quantity_milli,'unit_price_minor',s.unit_price_minor,
+              'sku',s.sku,'description',s.description,'currency',s.currency),
+              s.sku, s.description, s.quantity_milli, s.unit_price_minor,
+              s.currency, s.created_by, s.updated_by, s.created_at, s.updated_at
+       FROM client_orders o JOIN enquiry_sku_lines s ON s.enquiry_id = o.enquiry_id
+       WHERE o.reference = 'LEGACY-ENQ-' || o.enquiry_id AND s.is_active = 1
+       AND s.quantity_milli % 1000 = 0''',
+    '''INSERT INTO audit_logs (action, entity_type, entity_id, details)
+       SELECT 'workspace_migration', 'order', CAST(id AS TEXT),
+              json_object('enquiry_id',enquiry_id,'requires_commercial_review',1)
+       FROM client_orders WHERE reference = 'LEGACY-ENQ-' || enquiry_id''',
+)
+
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
@@ -242,4 +414,13 @@ MIGRATIONS = (
     (7, 'client_share_levels', SHARE_LEVEL_SCHEMA),
     (8, 'client_crm_details', CRM_DETAIL_SCHEMA),
     (9, 'client_discovery', CLIENT_DISCOVERY_SCHEMA),
+<<<<<<< Updated upstream
+=======
+    (10, 'client_enquiries', ENQUIRY_SCHEMA),
+    (11, 'enquiry_sku_lines', ENQUIRY_LINE_SCHEMA),
+    (12, 'enquiry_deal_currency', ENQUIRY_DEAL_SCHEMA),
+    (13, 'client_enquiry_soft_deletion', SOFT_DELETE_SCHEMA),
+    (14, 'orders_delivery_snapshots', ORDER_SCHEMA),
+    (15, 'clients_orders_workspace', WORKSPACE_SCHEMA),
+>>>>>>> Stashed changes
 )

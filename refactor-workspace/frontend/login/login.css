@@ -1,0 +1,16 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#F3F4F6;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.logo-area{text-align:center;margin-bottom:28px}
+.logo-area h1{font-size:22px;font-weight:700;color:#1E3A5F}
+.logo-area p{font-size:13px;color:#6B7280;margin-top:4px}
+.card{background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:32px 36px;width:100%;max-width:380px;box-shadow:0 4px 20px rgba(0,0,0,.07)}
+.field{margin-bottom:18px}
+label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}
+input[type=text],input[type=password]{width:100%;padding:10px 13px;border:1px solid #D1D5DB;border-radius:6px;font-size:14px;color:#111827;transition:border-color .15s}
+input:focus{outline:none;border-color:#1A56DB;box-shadow:0 0 0 3px rgba(26,86,219,.1)}
+.btn-login{width:100%;padding:11px;background:#1E3A5F;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s;margin-top:6px}
+.btn-login:hover{background:#1A3352}
+.btn-login:disabled{background:#93C5FD;cursor:not-allowed}
+.error{background:#FEF2F2;color:#991B1B;border:1px solid #FECACA;border-radius:6px;padding:9px 13px;font-size:13px;margin-bottom:16px;display:none}
+.error.show{display:block}
+.footer-note{font-size:11px;color:#9CA3AF;text-align:center;margin-top:20px}

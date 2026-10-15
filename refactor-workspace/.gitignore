@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.py[cod]
+backend/secret.key
+database/*.db
+database/*.db-*
+.env
+__init__.py

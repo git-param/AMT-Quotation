@@ -1,0 +1,95 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#F3F4F6;color:#111827;min-height:100vh}
+
+.hdr{background:#1E3A5F;color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.hdr-logo{font-size:17px;font-weight:700}
+.hdr-sub{font-size:12px;color:#93C5FD;margin-top:2px}
+.back-link{color:#93C5FD;font-size:12px;text-decoration:none;border:1px solid #93C5FD;border-radius:4px;padding:4px 10px;transition:all .2s}
+.back-link:hover{background:#93C5FD;color:#1E3A5F}
+
+.wrap{max-width:1400px;margin:0 auto;padding:18px 20px}
+
+/* Summary cards */
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.card{background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:18px 20px}
+.card-val{font-size:32px;font-weight:700;color:#1E3A5F;line-height:1}
+.card-lbl{font-size:12px;color:#6B7280;margin-top:6px;font-weight:500}
+.card-icon{font-size:22px;float:right;opacity:.5}
+
+/* Charts row */
+.charts-row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:14px;margin-bottom:18px}
+.panel{background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:18px 20px}
+.panel-title{font-size:13px;font-weight:700;color:#374151;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #F3F4F6}
+
+/* Tables */
+.tables-row{display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:18px}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{background:#F3F4F6;color:#374151;font-weight:600;padding:7px 10px;text-align:left;border-bottom:2px solid #E5E7EB;white-space:nowrap}
+.tbl td{padding:6px 10px;border-bottom:1px solid #F3F4F6;color:#111827;vertical-align:middle}
+.tbl tr:hover td{background:#F9FAFB}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
+.badge-ok{background:#D1FAE5;color:#065F46}
+.badge-warn{background:#FEF3C7;color:#92400E}
+.badge-err{background:#FEE2E2;color:#991B1B}
+.skus-cell{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6B7280;font-size:11.5px}
+.empty{color:#9CA3AF;font-size:13px;padding:20px;text-align:center}
+
+.refresh-btn{background:#F3F4F6;border:1px solid #D1D5DB;color:#374151;padding:5px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:500}
+.refresh-btn:hover{background:#E5E7EB}
+.last-updated{font-size:11px;color:#9CA3AF;margin-left:10px}
+
+/* overlap guards: grid children may not overflow their track */
+.cards>*,.charts-row>*,.tables-row>*,.user-grid>*{min-width:0}
+.charts-row canvas{max-width:100%!important}
+.tables-row table,.user-grid table{width:100%}
+.tables-row>div,.user-grid>div{overflow-x:auto}
+@media(max-width:1100px){.user-grid{grid-template-columns:1fr}}
+@media(max-width:900px){
+  .cards{grid-template-columns:repeat(2,1fr)}
+  .charts-row{grid-template-columns:1fr}
+  .tables-row{grid-template-columns:1fr}
+}
+
+/* User management */
+.user-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px}
+.form-field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:120px}
+.form-field label{font-size:11px;font-weight:600;color:#6B7280;text-transform:uppercase}
+.form-field input,.form-field select{padding:7px 10px;border:1px solid #D1D5DB;border-radius:6px;font-size:13px;color:#111827}
+.form-field input:focus,.form-field select:focus{outline:none;border-color:#1A56DB}
+.btn-sm{padding:7px 14px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn-add{background:#1A56DB;color:#fff}.btn-add:hover{background:#1548C4}
+.btn-del{background:#FEE2E2;color:#991B1B;border:1px solid #FECACA}.btn-del:hover{background:#FCA5A5}
+.btn-pwd{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}.btn-pwd:hover{background:#FDE68A}
+.msg{font-size:12px;padding:6px 12px;border-radius:6px;margin-top:8px;display:none}
+.msg.ok{background:#D1FAE5;color:#065F46;display:block}
+.msg.err{background:#FEE2E2;color:#991B1B;display:block}
+.role-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
+.role-manager{background:#EFF6FF;color:#1E40AF}
+.role-user{background:#F3F4F6;color:#374151}
+
+/* Account controls share the dashboard's spacing and visual language. */
+.panel{border-radius:12px;box-shadow:0 2px 8px rgba(30,58,95,.035)}
+.panel-title{font-size:14px;color:#1E3A5F}
+#userListPanel .tbl th{padding:12px 16px;background:#F8FAFC;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #E2E8F0}
+#userListPanel .tbl td{padding:12px 16px}
+.account-name{font-weight:600}
+.account-created{color:#64748B!important;font-variant-numeric:tabular-nums;white-space:nowrap}
+.role-select{width:190px;max-width:100%;min-height:36px;padding:7px 32px 7px 12px;border:1px solid #CBD5E1;border-radius:8px;background:#fff;color:#334155;font:inherit;cursor:pointer}
+.role-select:focus-visible,.form-field input:focus-visible,.form-field select:focus-visible,.btn-sm:focus-visible{outline:3px solid #BFDBFE;outline-offset:2px;border-color:#2563EB}
+.role-select:disabled{background:#F8FAFC;color:#64748B;cursor:not-allowed}
+.account-actions{display:flex;align-items:center;gap:16px;justify-content:space-between;max-width:230px;white-space:nowrap}
+.account-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600}
+.account-status::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.is-active{color:#15803D}.is-inactive{color:#64748B}
+.btn-sm{min-height:36px;border-radius:8px;transition:background .15s,box-shadow .15s}
+.btn-del{background:#FFF1F2;color:#BE123C;border-color:#FECDD3}
+.btn-del:hover{background:#FFE4E6}
+.btn-activate{background:#ECFDF5;color:#047857;border:1px solid #A7F3D0}
+.btn-activate:hover{background:#D1FAE5}
+.btn-sm:disabled{opacity:.45;cursor:not-allowed}
+.form-field input,.form-field select{min-height:40px;background:#fff;width:100%;border-radius:8px}
+.form-field label{letter-spacing:.035em;margin-bottom:3px}
+#accessStatus:not(:empty){max-width:1360px;margin:18px auto;padding:14px 20px;background:#FFF1F2;color:#9F1239;border-radius:8px}
+@media(max-width:1100px){.user-grid{grid-template-columns:1fr}}
+@media(max-width:650px){.hdr{height:auto;min-height:64px;padding:14px 16px;flex-wrap:wrap;gap:12px}.hdr>div:last-child{flex-wrap:wrap}.wrap{padding:14px 12px}.panel{padding:16px}.account-actions{gap:10px}.role-select{width:165px}#userListPanel .tbl td{padding:10px 12px}}

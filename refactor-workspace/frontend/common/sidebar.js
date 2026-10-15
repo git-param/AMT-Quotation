@@ -1,0 +1,55 @@
+/* Shared navigation preserves existing link IDs and page permission handlers. */
+(() => {
+  const header=document.querySelector('.hdr');
+  if(!header)return;
+  const entries=[
+    ['Quotation Tool','/','M4 3h16v18H4z M8 7h8 M8 11h8 M8 15h5'],
+    ['Clients & Orders','/clients-orders','M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z M4 21v-2a8 8 0 0 1 16 0v2'],
+    ['Client Access / Sharing','/client-access','M15 5a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z M3 12a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z M15 19a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z M9 11l6-5 M9 13l6 5','leads.share_manage'],
+    ['Enquiry Sources','/sources','M3 5h18v14H3z m0 0 9 8 9-8','sources.manage'],
+    ['Dashboard','/manager','M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z','management.view'],
+    ['Sign Out','/logout','M10 3H4v18h6 M13 7l5 5-5 5 M8 12h13'],
+  ];
+  const sidebar=document.createElement('aside');sidebar.id='appSidebar';sidebar.className='app-sidebar';sidebar.setAttribute('aria-label','Application navigation');
+  const brand=document.createElement('a');brand.href='/';brand.className='sidebar-brand';
+  const name=document.createElement('strong');name.textContent='AMT Quotation';
+  const subtitle=document.createElement('span');subtitle.textContent='Sales & client workspace';brand.append(name,subtitle);sidebar.append(brand);
+  const nav=document.createElement('nav');nav.setAttribute('aria-label','Main navigation');sidebar.append(nav);
+  const original=[...header.querySelectorAll('a[href]')];
+  for(const link of original)if(['/leads','/enquiries','/orders'].includes(link.getAttribute('href')))link.remove();
+  const restricted=[];
+  for(const [label,url,path,permission] of entries){
+    const link=original.find(item=>item.getAttribute('href')===url)||document.createElement('a');
+    link.href=url;link.className='sidebar-link';link.replaceChildren();
+    link.removeAttribute('onmouseover');link.removeAttribute('onmouseout');
+    link.style.removeProperty('color');link.style.removeProperty('border-color');link.style.removeProperty('background');
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    for(const [key,value] of Object.entries({viewBox:'0 0 24 24',fill:'none',stroke:'currentColor','stroke-width':'1.7','stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true',focusable:'false'}))svg.setAttribute(key,value);
+    const shape=document.createElementNS('http://www.w3.org/2000/svg','path');shape.setAttribute('d',path);svg.append(shape);
+    const text=document.createElement('span');text.textContent=label;link.append(svg,text);
+    if(location.pathname===url||(url==='/clients-orders'&&['/leads','/orders','/enquiries'].includes(location.pathname))){link.classList.add('is-current');link.setAttribute('aria-current','page');}
+    const row=document.createElement('div');row.className='sidebar-item';row.append(link);nav.append(row);
+    if(url==='/logout')row.classList.add('sidebar-signout');
+    if(permission){row.hidden=true;restricted.push({row,link,permission});}
+  }
+  document.body.classList.add('has-sidebar');document.body.prepend(sidebar);
+  const toggle=document.createElement('button');toggle.type='button';toggle.className='sidebar-toggle';toggle.textContent='☰';toggle.setAttribute('aria-label','Open navigation');toggle.setAttribute('aria-controls',sidebar.id);toggle.setAttribute('aria-expanded','false');header.prepend(toggle);
+  const backdrop=document.createElement('button');backdrop.type='button';backdrop.className='sidebar-backdrop';backdrop.setAttribute('aria-label','Close navigation');backdrop.tabIndex=-1;document.body.append(backdrop);
+  const mobile=window.matchMedia('(max-width:900px)');
+  function setOpen(open){
+    document.body.classList.toggle('sidebar-open',open);toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'Close navigation':'Open navigation');sidebar.inert=mobile.matches&&!open;
+    if(open)nav.querySelector('a')?.focus();
+  }
+  toggle.onclick=()=>setOpen(!document.body.classList.contains('sidebar-open'));
+  backdrop.onclick=()=>{setOpen(false);toggle.focus();};
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('sidebar-open')){setOpen(false);toggle.focus();}});
+  mobile.addEventListener('change',()=>setOpen(false));setOpen(false);
+  fetch('/api/me').then(async response=>{
+    if(!response.ok)return;
+    const user=await response.json();
+    for(const item of restricted){
+      const roleAllowed=item.permission!=='leads.share_manage'||['admin','manager','sales_tl'].includes(user.role);
+      item.row.hidden=!roleAllowed||!(user.permissions||[]).includes(item.permission);
+    }
+  }).catch(()=>{});
+})();
