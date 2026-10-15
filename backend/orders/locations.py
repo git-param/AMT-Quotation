@@ -11,7 +11,9 @@ COPIED_CONTACT = re.compile(r'^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephon
 
 
 def address_only(value):
-    return '\n'.join(line for i,line in enumerate(value.splitlines()) if not i or not COPIED_CONTACT.match(line)).rstrip()
+    return '\n'.join(line for i,line in enumerate(value.splitlines()) if not i or (
+        not COPIED_CONTACT.match(line) and not re.match(r'^\s*Country\s*:',line,re.I)
+        and line.strip().upper() not in COUNTRIES)).rstrip()
 
 
 def party_parts(value):

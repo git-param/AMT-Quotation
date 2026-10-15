@@ -10,7 +10,7 @@ from backend.client_leads.details import text,phone
 from backend.enquiries.lines import number, serialize
 from backend.orders.company import get_profile
 from backend.orders.parties import text_delivery
-from backend.orders.locations import country_block, gst_number, with_gst, address_only
+from backend.orders.locations import country_block, gst_number, with_gst, address_only, COPIED_CONTACT
 from backend.orders.service import header, order_line
 
 ASSETS = ('header.png', 'address.png', 'payment_options.png', 'signature.png')
@@ -85,8 +85,10 @@ def prepare(state, user, currency, rate):
     consignee = destination.get('consignee_text',party_block(destination.get('consignee'),destination.get('shipping_address')))
     buyer = destination.get('buyer_text') or party_block(destination.get('buyer'),destination.get('billing_address')) or consignee
     notify = destination.get('notify_text') or party_block(destination.get('notify_party'),destination.get('notify_party',{}).get('address')) or consignee
-    if buyer == consignee: buyer = address_only(buyer)
-    if notify == consignee: notify = address_only(notify)
+    if buyer == consignee or (address_only(buyer)==address_only(consignee) and not any(COPIED_CONTACT.match(line) for line in buyer.splitlines()[1:])):
+        buyer = address_only(buyer)
+    if notify == consignee or (address_only(notify)==address_only(consignee) and not any(COPIED_CONTACT.match(line) for line in notify.splitlines()[1:])):
+        notify = address_only(notify)
     assets = {}
     for name in ASSETS:
         path = ROOT_DIR/'assets'/'PI-img'/name

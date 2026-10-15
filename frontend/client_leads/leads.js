@@ -4,7 +4,7 @@ let totalPages = 0;
 let loadVersion = 0;
 let editingId = null;
 let readOnly = false;
-const scalarFields = ['name', 'company', 'email', 'phone', 'notes', 'location'];
+const scalarFields = ['name', 'company', 'email', 'phone', 'notes'];
 const byId = id => document.getElementById(id);
 function clientActionButton(action, name, style = '') {
   const icons = {
@@ -232,7 +232,6 @@ async function openDetails(id) {
   };
   section('Company information', client.company);
   section('Contacts', [...new Set([client.email,client.phone,...client.emails,...client.phones,...client.contact_persons.map(c => [c.name,c.email,c.phone].filter(Boolean).join(' / '))].filter(Boolean))].join('\n'));
-  section('Location',client.location);
   section('Notes',client.notes);
   section('Owner and creation',`${client.creator_name}\nCreated ${new Date(client.created_at).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'})}`);
   section('Enquiry source',client.enquiry_source_name ? `${client.enquiry_source_name}${client.enquiry_source_active ? '' : ' (inactive)'}` : 'Not specified');

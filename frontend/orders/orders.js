@@ -52,7 +52,7 @@ function showPartyFields(prefix){
   const [primary,secondary]=window.orderLocations.partyParts(el(prefix+'_text').value,el('destination').value);
   el(prefix+'_primary').value=primary;el(prefix+'_details').value=secondary;
 }
-function syncConsignee(){for(const prefix of ['buyer','notify'])if(el(prefix+'_same').checked){el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value);showPartyFields(prefix);}}
+function syncConsignee(){for(const prefix of ['buyer','notify'])if(el(prefix+'_same').checked){el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);showPartyFields(prefix);}}
 for(const prefix of ['consignee','buyer','notify']){
   const changed=()=>{
     el(prefix+'_text').value=prefix==='consignee'?window.orderLocations.joinParty(el(prefix+'_primary').value,el(prefix+'_details').value):el(prefix+'_primary').value;
@@ -77,8 +77,8 @@ el('consigneeGst').oninput=()=>{
   showPartyFields('consignee');syncConsignee();
 };
 for(const prefix of ['buyer','notify']){
-  el(prefix+'_text').oninput=()=>{el(prefix+'_same').checked=el(prefix+'_text').value===window.orderLocations.addressOnly(el('consignee_text').value);refreshConsigneeGst();};
-  el(prefix+'_same').onchange=()=>{if(el(prefix+'_same').checked)el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value);showPartyFields(prefix);refreshConsigneeGst();};
+  el(prefix+'_text').oninput=()=>{el(prefix+'_same').checked=el(prefix+'_text').value===window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);refreshConsigneeGst();};
+  el(prefix+'_same').onchange=()=>{if(el(prefix+'_same').checked)el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);showPartyFields(prefix);refreshConsigneeGst();};
 }
 el('consignee_text').oninput=()=>{syncConsignee();refreshConsigneeGst();};
 const initialDrafts=window.createSkuDraftEditor(el('initialDrafts'),()=>({client_id:Number(clientScope)}),()=>el('currency').value,null,true);
@@ -156,11 +156,7 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
   const contact=client.contact_persons?.[0]||{};
   const base={name:client.company||client.name,email:client.email||client.emails?.[0]||contact.email,
     phone:client.phone||client.phones?.[0]||contact.phone,pic:contact.name};
-  let defaults=formatPartyBlock(base,saved);
-  if(client.location){
-    defaults=[base.name,client.location,saved.country?'Country: '+saved.country:null,
-      'Tel: '+(base.phone||''),'PIC: '+(base.pic||''),'Email: '+(base.email||'')].filter(value=>value!==null&&value!==undefined).join('\n');
-  }
+  const defaults=formatPartyBlock(base,saved);
   const consignee=delivery?.consignee_text??(delivery?.consignee?.name?
     formatPartyBlock(delivery.consignee,delivery.shipping_address):defaults);
   el('consignee_text').value=consignee;
@@ -168,9 +164,10 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
     ['buyer','buyer_text',delivery?.buyer,delivery?.billing_address],
     ['notify','notify_text',delivery?.notify_party,delivery?.notify_party?.address],
   ]){
-    let value=delivery?.[key]??(party?.name?formatPartyBlock(party,address):window.orderLocations.addressOnly(consignee));
-    if(value===consignee)value=window.orderLocations.addressOnly(value);
-    el(prefix+'_text').value=value;el(prefix+'_same').checked=value===window.orderLocations.addressOnly(consignee);
+    let value=delivery?.[key]??(party?.name?formatPartyBlock(party,address):window.orderLocations.addressOnly(consignee,el('destination').value));
+    if(value===consignee||(window.orderLocations.addressOnly(value)===window.orderLocations.addressOnly(consignee,el('destination').value)&&
+      !/^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:/im.test(value)))value=window.orderLocations.addressOnly(value);
+    el(prefix+'_text').value=value;el(prefix+'_same').checked=value===window.orderLocations.addressOnly(consignee,el('destination').value);
   }
   for(const prefix of ['consignee','buyer','notify'])showPartyFields(prefix);
   if(!delivery)el('destination').value=saved.country||'';

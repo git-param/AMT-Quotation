@@ -1,10 +1,14 @@
-/* Country suggestions and editable buyer GST, shared by orders and PI previews. */
+/* Country suggestions and consignee GST, shared by orders and PI previews. */
 (() => {
   const countries = new Set();
   const gstLine = /^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$/i;
   const contactLine = /^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:/i;
-  function addressOnly(value) {
-    return value.split('\n').filter((line,index)=>!index||!/^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line)).join('\n').trimEnd();
+  function addressOnly(value, country = '') {
+    return value.split('\n').filter((line,index)=>!index||(
+      !/^\s*(?:Country|GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line)
+      && !countries.has(line.trim().toUpperCase())
+      && !(country && line.trim().toUpperCase()===country.trim().toUpperCase())
+    )).join('\n').trimEnd();
   }
   function partyParts(value, country = '') {
     const lines = value.split('\n');

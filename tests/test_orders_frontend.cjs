@@ -144,6 +144,8 @@ test('country suggestions sync the consignee and set INR and show consignee GST 
   assert.equal(saved.destination,'INDIA');
   assert.match(saved.delivery.consignee_text,/GST No\.: 24AAGMO289C1ZP/);
   assert.doesNotMatch(saved.delivery.buyer_text,/GST No/);
+  assert.doesNotMatch(saved.delivery.buyer_text,/^(?:Country: ?)?INDIA$/im);
+  assert.doesNotMatch(saved.delivery.notify_text,/^(?:Country: ?)?INDIA$/im);
   assert.equal(saved.currency,'INR');
 });
 
