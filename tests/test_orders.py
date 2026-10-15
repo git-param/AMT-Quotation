@@ -88,6 +88,21 @@ class OrderTests(unittest.TestCase):
                     'created_at'):
             self.assertEqual(updated.json['order'][key], first['order'][key])
 
+    def test_recent_lookup_stock_blocks_out_of_stock_and_excess_order_quantities(self):
+        from backend.orders.catalog import remember_stock
+        state=self.order();base=f'/api/orders/{state["order"]["id"]}/lines'
+        data={'sku':'STOCK-CHECK','description':'Stock checked part','quantity':'1','unit_price':'10.00','currency':'USD',
+              'hsn_code':'85371090','item_condition':'Used','uom':'Kit'}
+        remember_stock('STOCK-CHECK',0)
+        result=self.client.post(base,json=data)
+        self.assertEqual(result.status_code,400);self.assertIn('out of stock',result.json['error'])
+        remember_stock('STOCK-CHECK',2)
+        result=self.client.post(base,json={**data,'quantity':'3'})
+        self.assertEqual(result.status_code,400);self.assertIn('only 2 available',result.json['error'])
+        self.assertEqual(self.client.post(base,json={**data,'quantity':'2'}).status_code,201)
+        self.assertEqual(self.client.post(base,json=data).status_code,400)
+        self.assertEqual(self.client.post(base,json={**data,'uom':'unsupported'}).status_code,400)
+
     def test_independent_copies_decimal_totals_and_stable_order_line_ids(self):
         first, second = self.order(), self.order()
         order_id = first['order']['id']

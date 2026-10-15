@@ -201,8 +201,7 @@
                                     id="lineHsn" maxlength="20"></div>
                             <div class="form-field"><label for="lineCondition">Item condition (required for
                                     PI)</label><input id="lineCondition" maxlength="100"></div>
-                            <div class="form-field"><label for="lineUom">Unit of measure</label><input id="lineUom"
-                                    maxlength="30"></div>
+                            <div class="form-field"><label for="lineUom">Unit of measure</label><select id="lineUom"><option>PCs</option><option>Lot</option><option>Kit</option><option>set</option></select></div>
                             <div class="form-field"><label for="lineCurrency">Currency</label><select id="lineCurrency">
                                     <option>USD</option>
                                     <option>INR</option>
@@ -256,9 +255,7 @@
                                     <option>USD</option>
                                     <option>INR</option>
                                 </select></div>
-                            <div class="form-field" id="rateField" hidden><label for="piRate">INR per 1
-                                    USD</label><input id="piRate" type="number" step="0.000001" min="0.000001"
-                                    max="1000000"></div>
+
                         </div>
                         <p id="conversionHint">Choose the currency for this proforma invoice.</p><button id="generatePi"
                             class="btn-sm btn-add" type="submit">Preview PI</button>

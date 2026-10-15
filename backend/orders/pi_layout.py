@@ -78,7 +78,7 @@ def layout(doc):
             editable(5,1,'',line['item_condition'],prefix+'item_condition','center'),
             editable(6,2,'',line['quantity'],prefix+'quantity','center',uom=line['uom'],uom_field=prefix+'uom',type='number'),
             editable(8,1,'',line['unit_price'],prefix+'unit_price','amount',type='number'),
-            c(9,2,line['line_total'],'amount',numeric=True)])
+            editable(9,2,'',line['line_total'],prefix+'line_total','amount',numeric=True,type='number',calculated=f'lines.{index}.line_total')])
     # The original reserves four ruled item rows, even for a one-line invoice.
     while len(items)<5:items.append([c(cell['col'],cell['span']) for cell in item_header])
     bank=[c(0,8,'BANK DETAIL','bank_title')]+[c(0,8,value,'bold') for value in doc['company']['bank']]
@@ -86,8 +86,8 @@ def layout(doc):
     tax_label=f'GST {Decimal(total["tax_rate"])*100:g}%'
     free=Decimal(total['shipping'])==0
     summaries=[(editable(9,2,'',total['shipping'],'shipping_charges','amount',type='number',free=free,display_text='Free' if free else total['shipping']),'Shipping'),
-               (c(9,2,total['subtotal'],'amount',numeric=True),'Sub Total')]
-    if Decimal(total['tax_rate']):summaries.append((c(9,2,total['tax'],'amount',numeric=True),tax_label))
+               (c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Sub Total')]
+    if Decimal(total['tax_rate']):summaries.append((c(9,2,total['tax'],'amount',numeric=True,calculated='tax'),tax_label))
     count=max(len(bank),len(summaries)+1)
     bank_rows=[]
     for index in range(count):
@@ -97,8 +97,8 @@ def layout(doc):
             amount,label=summaries[index-start];right=[c(8,1,label,'center',line_top=True),{**amount,'line_top':True}]
         else:right=[c(8,1),c(9,2)]
         bank_rows.append([left,*right])
-    bank_rows.append([c(0,2,'Amount In Word','bold'),c(2,6,total['amount_in_words'],'bold'),
-                      c(8,1,'Grand Total','bold'),c(9,2,total['grand_total'],'bold_amount',numeric=True)])
+    bank_rows.append([c(0,2,'Amount In Word','bold'),c(2,6,total['amount_in_words'],'bold',calculated='amount_in_words'),
+                      c(8,1,'Grand Total','bold'),c(9,2,total['grand_total'],'bold_amount',numeric=True,calculated='grand_total')])
     clauses=[[c(0,11,'Terms & Conditions:-','bold')]]
     term_text = terms(doc)
     for index,value in enumerate(term_text.splitlines() or ['']):

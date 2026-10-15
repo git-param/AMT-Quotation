@@ -40,8 +40,13 @@
     return value.split('\n').slice(1).map(line => line.match(gstLine)).find(Boolean)?.[1].trim() || '';
   }
   function withGst(value, number) {
-    const block = value.split('\n').filter((line, index) => !index || !gstLine.test(line)).join('\n');
-    return block + (number.trim() ? '\nGST No.: ' + number.trim() : '');
+    const lines = value.split('\n').filter((line, index) => !index || !gstLine.test(line));
+    if(number.trim()){
+      const country=lines.findIndex((line,index)=>index>0&&(/^\s*Country\s*:/i.test(line)||countries.has(line.trim().toUpperCase())));
+      const contact=lines.findIndex((line,index)=>index>0&&contactLine.test(line));
+      lines.splice(country>=0?country+1:contact>=0?contact:lines.length,0,'GST No.: '+number.trim());
+    }
+    return lines.join('\n');
   }
   const ready = fetch('/static/common/countries.json').then(response => {
     if (!response.ok) throw new Error('Unable to load country suggestions.');

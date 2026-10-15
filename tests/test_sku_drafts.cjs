@@ -131,12 +131,34 @@ test('order lookup retains HSN, condition and units after refreshing catalog det
   const editor=setup(()=>({client_id:7}),async()=>({ok:true,json:async()=>({drafts:[{...line}]})}),'USD',true);
   await editor.button.onclick();
   const fields=editor.host.children[3].children[1];
-  for(const [index,value] of [[4,'85371090'],[5,'Refurbished'],[6,'Units']]){
+  for(const [index,value] of [[4,'85371090'],[5,'Refurbished'],[6,'Kit']]){
     const control=fields.children[index].children[0];control.value=value;control.oninput();
   }
   await editor.button.onclick();
   const saved=editor.drafts.values()[0];
-  assert.equal(saved.hsn_code,'85371090');assert.equal(saved.item_condition,'Refurbished');assert.equal(saved.uom,'Units');
+  assert.equal(saved.hsn_code,'85371090');assert.equal(saved.item_condition,'Refurbished');assert.equal(saved.uom,'Kit');
+});
+
+test('order lookup fills shared HSN and offers the four supported UOM choices',async()=>{
+  const editor=setup(()=>({client_id:7}),async()=>({ok:true,json:async()=>({shared_hsn_code:'85371090',drafts:[{
+    sku:'1258',description:'Part',quantity:'1',unit_price:'10.00',currency:'USD',found:true,stock:3,catalog_prices:{}
+  }]})}),'USD',true);
+  await editor.button.onclick();
+  const fields=editor.host.children[3].children[1];
+  const hsn=fields.children[4].children[0],uom=fields.children[6].children[0];
+  assert.equal(hsn.value,'85371090');assert.equal(hsn.readOnly,true);
+  assert.equal(uom.tag,'select');assert.deepEqual(uom.children.map(option=>option.value),['PCs','Lot','Kit','set']);
+});
+
+test('order lookup explains zero stock, zero quantity and excess quantity before adding',async()=>{
+  for(const [stock,quantity,message]of [[0,'1',/out of stock.*0 available/],[2,'0',/at least 1/],[2,'3',/requested 3.*only 2 available/]]){
+    const editor=setup(()=>({client_id:7}),async()=>({ok:true,json:async()=>({drafts:[{
+      sku:'1258',description:'Part',quantity:'1',unit_price:'10.00',currency:'USD',found:true,stock,catalog_prices:{}
+    }]})}),'USD',true);
+    await editor.button.onclick();
+    const control=editor.host.children[3].children[1].children[2].children[0];control.value=quantity;control.oninput();
+    assert.throws(()=>editor.drafts.values(),message);assert.match(editor.status.textContent,message);
+  }
 });
 
 test('repeated lookup merges identical SKUs and preserves user edits', async () => {

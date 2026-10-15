@@ -10,7 +10,7 @@ from backend.client_leads.details import text,phone
 from backend.enquiries.lines import number, serialize
 from backend.orders.company import get_profile
 from backend.orders.parties import text_delivery
-from backend.orders.locations import country_block, gst_number, with_gst, address_only, COPIED_CONTACT
+from backend.orders.locations import country_block, gst_number, with_gst, without_gst, address_only, COPIED_CONTACT
 from backend.orders.service import header, order_line
 
 ASSETS = ('header.png', 'address.png', 'payment_options.png', 'signature.png')
@@ -53,8 +53,11 @@ def sync_locations(doc):
     previous = [(source_delivery.get('shipping_address') or {}).get('country'),
                 doc['source_state']['order'].get('destination')]
     doc['delivery']['consignee_text'] = country_block(doc['delivery']['consignee_text'], country, previous)
+    number_value=gst_number(doc['delivery']['consignee_text'])
+    doc['delivery']['consignee_text']=with_gst(doc['delivery']['consignee_text'],number_value)
     doc['order']['destination'] = country
     doc['consignee_gst_number'] = gst_number(doc['delivery']['consignee_text'])
+    for key in ('buyer_text','notify_text'):doc['delivery'][key]=without_gst(doc['delivery'][key])
     return doc
 
 
@@ -78,6 +81,12 @@ def prepare(state, user, currency, rate):
     tax = Decimal(company['tax_rates'][currency])
     if not tax.is_finite() or not 0 <= tax <= 1:
         raise ValueError('Company PI tax configuration is invalid.')
+    if rate is None and any(code!=currency for code in [state['order']['currency'],*[line['currency'] for line in state['lines']]]):
+        from backend.quotation_tool.shopify import get_inr_rate
+        quoted_rate=get_inr_rate()
+        if quoted_rate is None:raise ValueError('The quotation exchange rate is unavailable. Try again shortly.')
+        try:rate=format(Decimal(str(quoted_rate)).quantize(Decimal('0.000001')),'.6f')
+        except Exception as error:raise ValueError('The quotation exchange rate is unavailable. Try again shortly.') from error
     totals = calculate(state,currency,rate,tax)
     order = deepcopy(state['order'])
     order['payment_terms'] = order['payment_terms'] or company['payment_terms'][currency]
@@ -167,6 +176,25 @@ def edit(document, edits):
              'lines':[{**line,'currency':doc['currency']} for line in lines]}
     doc['totals'] = calculate(state,doc['currency'],None,Decimal(doc['totals']['tax_rate']))
     return sync_locations(doc)
+
+
+def recalculate(document, edits):
+    """Calculate numeric edits independently of incomplete party/commercial text."""
+    if not isinstance(edits,dict) or set(edits)-{'lines','shipping_charges'}:
+        raise ValueError('Provide item prices, quantities and shipping charges.')
+    numeric={}
+    if 'lines' in edits:
+        if not isinstance(edits['lines'],list):raise ValueError('Provide item lines.')
+        originals={line['id']:line for line in document['totals']['lines']}
+        values=[]
+        for line in edits['lines']:
+            if not isinstance(line,dict) or type(line.get('id')) is not int or line['id'] not in originals:
+                raise ValueError('Invalid preview item.')
+            original=originals[line['id']]
+            values.append({key:line.get(key,original[key]) if key in ('quantity','unit_price') else original[key] for key in LINE_FIELDS})
+        numeric['lines']=values
+    if 'shipping_charges' in edits:numeric['shipping_charges']=edits['shipping_charges']
+    return edit(document,numeric)
 
 
 def print_document(document, edits):

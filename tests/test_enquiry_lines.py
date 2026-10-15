@@ -299,6 +299,9 @@ class LineTests(unittest.TestCase):
         self.assertEqual(self.client.get(self.path).json['lines'], [])
 
     def test_bulk_lookup_currency_conversion_and_authorization(self):
+        connection=database.get_db()
+        with connection:connection.execute("UPDATE app_settings SET value='85371090' WHERE key='hsn_code'")
+        connection.close()
         with patch('backend.enquiries.lines.lookup_product', return_value={
                 'found': True, 'sku': 'NEW', 'title': 'Fetched part',
                 'price': 20, 'sale_price': 10, 'qty': 5}), \
@@ -312,6 +315,8 @@ class LineTests(unittest.TestCase):
                 response.json['drafts'][0]['unit_price'], '900.00'
             )
             self.assertEqual(len(response.json['drafts']), 2)
+            self.assertEqual(response.json['drafts'][0]['hsn_code'],'85371090')
+            self.assertEqual(response.json['shared_hsn_code'],'85371090')
             self.assertEqual(response.json['drafts'][0]['catalog_prices'], {
                 'USD': {'price': '20.00', 'sale_price': '10.00'},
                 'INR': {'price': '1800.00', 'sale_price': '900.00'},

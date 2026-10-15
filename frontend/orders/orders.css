@@ -108,6 +108,8 @@ body.embedded{margin:0;background:#f5f7fb}body.embedded .wrap{padding:18px 24px 
 .pi-paper .pi-company-grid .pi-field>span{display:inline;font:inherit;margin:0}
 .pi-paper .pi-company-grid .pi-unlabelled>span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%)}
 .pi-paper .pi-company-grid .pi-field input,.pi-paper .pi-company-grid .pi-field textarea{border:1px solid transparent;border-radius:0;background:transparent;color:inherit;font:inherit;padding:1px 0;width:100%;box-sizing:border-box;line-height:1.3}
+.pi-paper .pi-company-grid .pi-field select{border:1px solid #dce5ef;border-radius:3px;background:#fff;color:inherit;font:inherit;padding:2px;width:100%;box-sizing:border-box;line-height:1.3}
+.pi-paper .pi-company-grid .pi-field select:focus{outline:1px solid #2563eb}
 .pi-paper .pi-company-grid .pi-field input:hover,.pi-paper .pi-company-grid .pi-field textarea:hover{background:#f7faff;border-color:#adc3df}
 .pi-paper .pi-company-grid .pi-field input:focus,.pi-paper .pi-company-grid .pi-field textarea:focus{background:#fff;outline:1px solid #2563eb}
 .pi-paper .pi-company-grid .pi-field input:disabled,.pi-paper .pi-company-grid .pi-field textarea:disabled{border-color:transparent;background:transparent}

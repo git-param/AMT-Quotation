@@ -23,6 +23,8 @@ class NativePiTests(unittest.TestCase):
 
     def setUp(self):
         self.setUpBase()
+        rate_patch=patch('backend.quotation_tool.shopify.get_inr_rate',return_value=80)
+        rate_patch.start();self.addCleanup(rate_patch.stop)
         self.company = {'seller':['Fixture Seller','Fixture Street','GST: TEST'],
             'bank':['Fixture bank','Company account fixture'], 'bank_charges':'Sender pays',
             'payment_terms':{'USD':'100% Advance','INR':'100% Advance'},
@@ -69,7 +71,7 @@ class NativePiTests(unittest.TestCase):
                 self.assertIn('Fixture bank',strings)
                 self.assertNotIn('AFGHANISTAN',strings.upper())
                 sheet=ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
-                self.assertFalse(sheet.findall('.//{*}f'))
+                self.assertTrue(sheet.findall('.//{*}f'))
             self.assertEqual(len(self.client.get(f'/api/orders/{self.order_id}').json['invoices']),1)
             self.assertEqual(self.client.put(self.base+'/preview/'+preview['preview_id'],json={}).status_code,409)
 
@@ -161,7 +163,9 @@ class NativePiTests(unittest.TestCase):
             self.assertIn('Consignee\nOrder destination',book.read('xl/sharedStrings.xml').decode())
 
     def test_edits_recalculate_in_selected_currency_and_keep_source_order_unchanged(self):
-        self.assertEqual(self.client.post(self.base+'/preview',json={'currency':'INR'}).status_code,400)
+        automatic=self.client.post(self.base+'/preview',json={'currency':'INR'})
+        self.assertEqual(automatic.status_code,201,automatic.json)
+        self.assertEqual(automatic.json['document']['totals']['usd_inr_rate'],'80')
         preview=self.preview(currency='INR',usd_inr_rate='80')
         self.assertEqual(preview['document']['totals']['subtotal'],'2961.60')
         changes=self.edits(preview['document'])
@@ -176,6 +180,39 @@ class NativePiTests(unittest.TestCase):
         self.assertEqual(saved.json['document']['source_conversion']['usd_inr_rate'],'80')
         self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['lines'][0]['unit_price'],'12.34')
         self.assertEqual(self.issue(saved.json).status_code,201)
+
+    def test_live_calculation_and_excel_formulas_keep_line_and_invoice_totals_in_sync(self):
+        preview=self.preview(currency='INR')
+        changes=self.edits(preview['document'])
+        changes['lines'][0].update(quantity='2',unit_price='100.01')
+        changes['shipping_charges']='25.50'
+        result=self.client.post(self.base+'/preview/'+preview['preview_id']+'/calculate',json=changes)
+        self.assertEqual(result.status_code,200,result.json)
+        total=result.json['totals']
+        self.assertEqual(total['lines'][0]['line_total'],'200.02')
+        self.assertEqual((total['subtotal'],total['tax'],total['grand_total']),('200.02','40.59','266.11'))
+        self.assertEqual(total['currency'],'INR')
+        bad=self.edits(preview['document']);bad['lines'][0]['quantity']='0'
+        self.assertEqual(self.client.post(self.base+'/preview/'+preview['preview_id']+'/calculate',json=bad).status_code,400)
+        with ZipFile(BytesIO(pi_exports.xlsx(preview['document']))) as book:
+            sheet=ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
+            formulas=[node.text for node in sheet.findall('.//{*}f')]
+            self.assertTrue(any('*I' in formula for formula in formulas))
+            self.assertTrue(any('SUM(' in formula for formula in formulas))
+            self.assertTrue(any('+N(' in formula for formula in formulas))
+            formula_values=[cell.find('{*}v').text for cell in sheet.findall('.//{*}c') if cell.find('{*}f') is not None]
+            self.assertIn(preview['document']['totals']['grand_total'].rstrip('0').rstrip('.'),[value.rstrip('0').rstrip('.') for value in formula_values])
+
+    def test_gst_is_below_country_above_phone_and_removed_from_other_parties(self):
+        preview=self.preview()
+        saved=self.client.put(self.base+'/preview/'+preview['preview_id'],json={
+            'order':{'destination':'INDIA'},'consignee_gst_number':'24TEST123',
+            'delivery':{'consignee_text':'Company\nStreet\nINDIA\nTel: +919876543210\nEmail: client@example.com',
+                'buyer_text':'Buyer\nStreet\nGST No.: 24TEST123','notify_text':'Notify\nStreet\nGST: 24TEST123'}})
+        self.assertEqual(saved.status_code,200,saved.json)
+        delivery=saved.json['document']['delivery']
+        self.assertIn('INDIA\nGST No.: 24TEST123\nTel:',delivery['consignee_text'])
+        self.assertNotIn('GST',delivery['buyer_text']);self.assertNotIn('GST',delivery['notify_text'])
 
     def test_protected_fields_validation_and_incomplete_metadata(self):
         preview=self.preview()

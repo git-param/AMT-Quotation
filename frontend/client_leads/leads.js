@@ -4,7 +4,7 @@ let totalPages = 0;
 let loadVersion = 0;
 let editingId = null;
 let readOnly = false;
-const scalarFields = ['name', 'company', 'email', 'phone', 'notes'];
+const scalarFields = ['name', 'email', 'phone'];
 const byId = id => document.getElementById(id);
 function clientActionButton(action, name, style = '') {
   const icons = {
@@ -230,9 +230,7 @@ async function openDetails(id) {
     if (label === 'Notes') block.classList.add('detail-notes');
     block.append(heading,text); byId('detailBody').append(block);
   };
-  section('Company information', client.company);
   section('Contacts', [...new Set([client.email,client.phone,...client.emails,...client.phones,...client.contact_persons.map(c => [c.name,c.email,c.phone].filter(Boolean).join(' / '))].filter(Boolean))].join('\n'));
-  section('Notes',client.notes);
   section('Owner and creation',`${client.creator_name}\nCreated ${new Date(client.created_at).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'})}`);
   section('Enquiry source',client.enquiry_source_name ? `${client.enquiry_source_name}${client.enquiry_source_active ? '' : ' (inactive)'}` : 'Not specified');
   await window.renderRelatedOrders(byId('detailBody'),{client_id:id},client.can_edit&&client.is_active);

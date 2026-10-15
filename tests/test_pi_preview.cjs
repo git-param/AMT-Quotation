@@ -60,3 +60,30 @@ test('PI party textareas keep multiline address and contact sections in one cont
   assert.equal(printed[0].body.delivery.consignee_text,'');
   assert.equal(host.querySelectorAll('iframe')[0].src,'blob:print-preview');
 });
+
+test('PI numeric edits refresh displayed totals and UOM uses fixed choices',async()=>{
+  const host=new Element('section');let pending;
+  const line={id:1,sku:'PART',description:'Part',quantity:'2',unit_price:'10.00',line_total:'20.00',hsn_code:'85371090',item_condition:'Used',uom:'PCs'};
+  const state={preview_id:'p',pdf_url:'/p.pdf',document:{date:'2026-10-15',currency:'INR',prepared_phone:'',order:{destination:'INDIA'},delivery:{},assets:{},
+    totals:{lines:[line],shipping:'0.00',subtotal:'20.00',tax:'3.60',grand_total:'23.60',amount_in_words:'Twenty three'}},layout:{widths:[1],sections:[{name:'items',rows:[[
+      {span:1,style:'center',field:'lines.0.quantity',label:'Quantity',value:'2',type:'number',uom:'PCs',uom_field:'lines.0.uom'},
+      {span:1,style:'amount',field:'lines.0.unit_price',value:'10.00',type:'number'},
+      {span:1,style:'amount',field:'lines.0.line_total',value:'20.00',type:'number',calculated:'lines.0.line_total'},
+      {span:1,style:'amount',text:'20.00',calculated:'subtotal'},
+      {span:1,style:'bold_amount',text:'23.60',calculated:'grand_total'}
+    ]]}]}};
+  const context={window:{},document:{createElement:tag=>new Element(tag)},Date,
+    setTimeout:callback=>{pending=callback;return 1;},clearTimeout(){}};
+  vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/orders/pi-preview.js'),'utf8'),context);
+  const preview=context.window.createPiPreview(host,async(url,options)=>{
+    assert.equal(url,'/preview/p/calculate');const body=JSON.parse(options.body);
+    assert.equal(body.lines[0].unit_price,'25.00');assert.equal(body.lines[0].quantity,'2');
+    return {totals:{...state.document.totals,lines:[{...line,unit_price:'25.00',line_total:'50.00'}],subtotal:'50.00',tax:'9.00',grand_total:'59.00'}};
+  },(method,data)=>({method,body:JSON.stringify(data)}),async()=>{});
+  preview.open(state,'/preview');
+  const uom=host.querySelectorAll('select')[0];assert.deepEqual(uom.children.map(option=>option.value),['PCs','Lot','Kit','set']);
+  const price=host.querySelectorAll('input').find(input=>input.dataset.piField==='lines.0.unit_price');
+  price.value='25.00';price.oninput();await pending();
+  const total=host.querySelectorAll('input').find(input=>input.dataset.piField==='lines.0.line_total');assert.equal(total.value,'50.00');
+  assert.ok(host.querySelectorAll('div').some(node=>node.textContent==='₹ 59.00'));
+});

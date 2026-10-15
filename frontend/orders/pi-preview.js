@@ -9,6 +9,25 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     status,
     toolbar;
   let printUrl=null;
+  let calculationTimer=null,calculationVersion=0,calculated=[];
+  function scheduleCalculation(){
+    if(calculationTimer)clearTimeout(calculationTimer);
+    const version=++calculationVersion;
+    calculationTimer=setTimeout(async()=>{
+      try{
+        const data=collect();
+        const result=await api(state.base+'/'+state.preview_id+'/calculate',json('POST',{lines:data.lines,shipping_charges:data.shipping_charges}));
+        if(version!==calculationVersion||issued)return;
+        state.document.totals=result.totals;
+        for(const item of calculated){
+          const value=item.path.split('.').reduce((target,key)=>target[key],result.totals);
+          if(item.input)item.input.value=value;
+          else item.node.textContent=(item.amount?(state.document.currency==='INR'?'\u20b9 ':'$ '):'')+value;
+        }
+        status.textContent='Totals updated in '+state.document.currency+'. Use Update preview to save your changes.';
+      }catch(error){if(version===calculationVersion)status.textContent=error.message;}
+    },250);
+  }
   function clearPrintUrl(){if(printUrl){URL.revokeObjectURL(printUrl);printUrl=null;}}
   const node = (tag, text, className) => {
     const n = document.createElement(tag);
@@ -27,8 +46,10 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
   function field(parent, label, value, path, multiline = false, type = "text") {
     const wrap = node("label", undefined, "pi-field");
     wrap.append(node("span", label));
-    const input = node(multiline ? "textarea" : "input");
-    if (!multiline) input.type = type;
+    const unit=path.endsWith('.uom');
+    const input = node(unit?'select':multiline ? "textarea" : "input");
+    if (!multiline&&!unit) input.type = type;
+    if(unit)for(const value of ['PCs','Lot','Kit','set']){const option=node('option',value);option.value=value;input.append(option);}
     input.value = value ?? "";
     input.dataset.piField = path;
     input.setAttribute("aria-label", label);
@@ -56,6 +77,13 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         "Unsaved preview changes. Update preview to review calculated totals and the printed page.";
       printFrame.hidden = true;
       paper.hidden = false;
+      if(path.endsWith('.line_total')){
+        const base=path.slice(0,-'line_total'.length);
+        const quantity=Number(inputs.find(item=>item.path===base+'quantity')?.input.value);
+        const price=inputs.find(item=>item.path===base+'unit_price');
+        if(quantity>0&&price&&Number.isFinite(Number(input.value)))price.input.value=(Number(input.value)/quantity).toFixed(2);
+      }
+      if(path==='shipping_charges'||/^lines\.\d+\.(quantity|unit_price|line_total)$/.test(path))scheduleCalculation();
     };
     wrap.append(input);
     parent.append(wrap);
@@ -85,7 +113,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     const doc = state.document;
     const data = {date:doc.date,prepared_phone:doc.prepared_phone||'',order:{},delivery:{},shipping_charges:doc.totals.shipping,
       lines:doc.totals.lines.map(line=>Object.fromEntries(["id","sku","description","hsn_code","item_condition","uom","quantity","unit_price"].map(key=>[key,line[key]])))};
-    for(const item of inputs){const keys=item.path.split('.');let target=data;for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)]=valueOf(item);}
+    for(const item of inputs){if(item.path.endsWith('.line_total'))continue;const keys=item.path.split('.');let target=data;for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)]=valueOf(item);}
     if(String(data.shipping_charges).trim().toLowerCase()==='free')data.shipping_charges='0.00';
     return data;
   }
@@ -106,6 +134,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     control.onclick=()=>run(callback);toolbar.append(control);
   }
   function render(){
+    if(calculationTimer)clearTimeout(calculationTimer);calculationVersion++;calculated=[];
     host.replaceChildren();host.hidden=false;inputs=[];
     toolbar=node('div',undefined,'pi-preview-toolbar');host.append(toolbar);
     button('Close preview',async()=>{host.hidden=true;});
@@ -160,13 +189,14 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
           } else if (cell.field) {
             const amount = cell.style.includes("amount") && !cell.free;
             const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.free ? 'Free' : cell.value, cell.field, cell.multiline, cell.free ? 'text' : cell.type || "text");
+            if(cell.calculated)calculated.push({path:cell.calculated,input});
             if (cell.readonly) { input.readOnly = true; input.title = 'Shared HSN code managed in Configuration'; }
             if (!cell.label && !amount) td.lastChild.classList.add("pi-unlabelled");
             if (cell.editor_rows) input.rows = 12;
             else if (cell.multiline) input.rows = cell.field.startsWith("delivery.") ? 5 : 2;
             if (cell.field === 'terms') input.rows = Math.max(5, String(cell.value).split('\n').length);
             if (cell.uom_field) {field(td, "UOM", cell.uom, cell.uom_field);td.classList.add("pi-quantity-cell");}
-          } else td.append(node("div", (cell.style.includes("amount") ? symbol + " " : "") + cell.text, "pi-cell-text"));
+          } else {const content=node("div", (cell.style.includes("amount") ? symbol + " " : "") + cell.text, "pi-cell-text");td.append(content);if(cell.calculated)calculated.push({path:cell.calculated,node:content,amount:cell.style.includes('amount')});}
           tr.append(td);
         }
         body.append(tr);
@@ -189,6 +219,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       host.scrollIntoView({ behavior: "smooth", block: "start" });
     },
     reset() {
+      if(calculationTimer)clearTimeout(calculationTimer);calculationVersion++;
       clearPrintUrl();
       host.hidden = true;
       host.replaceChildren();

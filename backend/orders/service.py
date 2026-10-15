@@ -39,6 +39,8 @@ def order_line(data, existing=None):
                            limit, key)
     if not values['uom']:
         raise ValueError('Unit of measure is required.')
+    if values['uom'] not in ('PCs','Lot','Kit','set') and (existing is None or 'uom' in data):
+        raise ValueError('Choose PCs, Lot, Kit or set as the unit of measure.')
     return values
 
 
@@ -271,6 +273,10 @@ def insert_lines(connection, order_id, lines, actor):
     if not lines or count + len(lines) > 50:
         raise ValueError('An order supports 1 to 50 active SKU lines.')
     for line in lines:
+        from backend.orders.catalog import validate_stock
+        existing_quantity=connection.execute('SELECT COALESCE(SUM(quantity_milli),0) FROM order_sku_lines WHERE order_id=? AND sku=? COLLATE NOCASE AND is_active=1',
+            (order_id,line['sku'])).fetchone()[0]
+        validate_stock(line['sku'],Decimal(existing_quantity+line['quantity_milli'])/1000)
         columns = ', '.join(line)
         marks = ', '.join('?' for _ in line)
         connection.execute(

@@ -9,7 +9,7 @@ from backend.common.auth import authenticated_required,get_current_user
 from backend.database import get_db
 from backend.orders.routes import bp
 from backend.orders.service import details,read_order,record_revision
-from backend.orders.pi_document import prepare,edit,validate_ready,print_document
+from backend.orders.pi_document import prepare,edit,validate_ready,print_document,recalculate
 from backend.orders import pi_exports
 from backend.orders.pi_layout import layout
 
@@ -105,6 +105,22 @@ def print_preview(order_id,preview_id):
         if not isinstance(data,dict):return jsonify(error='Provide PI preview fields.'),400
         doc=print_document(json.loads(row['document_json']),data)
         return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',download_name='pi-preview.pdf',max_age=0)
+    finally:connection.close()
+
+
+@bp.route('/api/orders/<int:order_id>/invoices/preview/<preview_id>/calculate',methods=['POST'])
+@authenticated_required
+def calculate_preview(order_id,preview_id):
+    connection=get_db()
+    try:
+        user,order,error=authorized(connection,order_id)
+        if error:return error
+        row=preview_row(connection,order_id,preview_id,user)
+        if not row:return jsonify(error='PI preview not found.'),404
+        if row['issued_invoice_id']:return jsonify(error='This PI has already been issued.'),409
+        doc=recalculate(json.loads(row['document_json']),request.get_json(silent=True))
+        return jsonify(totals=doc['totals'])
+    except ValueError as error:return jsonify(error=str(error)),400
     finally:connection.close()
 
 

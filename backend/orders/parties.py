@@ -3,6 +3,7 @@
 import re
 
 from backend.client_leads.details import email, phone, text
+from backend.orders.locations import without_gst
 
 TEXT_FIELDS = ('consignee_text', 'buyer_text', 'notify_text')
 LABELS = {'tel': 'phone', 'telephone': 'phone', 'phone': 'phone',
@@ -62,6 +63,7 @@ def text_delivery(data, old, country, draft):
         fallback = blocks.get('consignee_text', '')
         linked = key != 'consignee_text' and old.get(key) == old.get('consignee_text')
         value = data.get(key, fallback if linked else old.get(key, fallback))
+        if key!='consignee_text' and isinstance(value,str):value=without_gst(value)
         blocks[key], parties[key], addresses[key] = parse_block(value, country)
     if not draft:
         if not parties['consignee_text']['name']:

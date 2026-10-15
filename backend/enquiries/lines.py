@@ -384,15 +384,19 @@ def bulk_lookup():
             # A display conversion must not prevent USD lookup or manual entry.
             rate = None
         results = []
+        from backend.settings import shared_hsn
+        hsn=shared_hsn(connection)
         for raw in skus:
             sku = raw.strip()
-            row = {'sku': sku, 'description': '', 'quantity': '1',
+            row = {'sku': sku, 'description': '', 'quantity': '1', 'hsn_code':hsn,
                    'unit_price': '', 'currency': currency, 'found': False}
             try:
                 product = lookup_product(sku)
                 if not product.get('found'):
                     row['error'] = 'SKU not found; complete or remove row.'
                 else:
+                    from backend.orders.catalog import remember_stock
+                    remember_stock(sku,product.get('qty'))
                     row.update(description=product.get('title', ''),
                                found=True,
                                stock=product.get('qty'),
@@ -440,6 +444,6 @@ def bulk_lookup():
         if error:
             return error
         return jsonify(drafts=results, currency=currency,
-                       usd_inr_rate=str(rate) if rate else None)
+                       usd_inr_rate=str(rate) if rate else None,shared_hsn_code=hsn)
     finally:
         connection.close()

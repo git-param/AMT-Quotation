@@ -48,7 +48,7 @@ function formatPartyBlock(party={},address={}){
   return lines.join('\n');
 }
 function showPartyFields(prefix){
-  if(prefix!=='consignee'){el(prefix+'_primary').value=el(prefix+'_text').value;return;}
+  if(prefix!=='consignee'){el(prefix+'_text').value=window.orderLocations.withGst(el(prefix+'_text').value,'');el(prefix+'_primary').value=el(prefix+'_text').value;return;}
   const [primary,secondary]=window.orderLocations.partyParts(el(prefix+'_text').value,el('destination').value);
   el(prefix+'_primary').value=primary;el(prefix+'_details').value=secondary;
 }
@@ -113,7 +113,7 @@ function updatePiReadiness(){
   el('completeItemDetails').hidden=!current.order.can_edit||!missing.length;
   el('piReadiness').className='pi-readiness'+(dirty||missing.length||empty||legacy?' needs-attention':' is-ready');
   el('readinessTitle').textContent=dirty?'Save your item changes':empty?'Add items to this order':missing.length?`${missing.length} item${missing.length===1?' needs':'s need'} PI details`:legacy?'Review historical quantities':'Item details are complete';
-  el('readinessHint').textContent=dirty?'Save item details below before generating your PI.':empty?'Add SKU lines, quantities and agreed prices to get started.':missing.length?`Enter the missing HSN code and item condition in the highlighted fields (${missing.slice(0,3).map(line=>line.sku).join(', ')}${missing.length>3?' and '+(missing.length-3)+' more':''}).`:legacy?'Complete the outstanding historical quantity review below.':'Choose the invoice currency below. Amounts use your saved order prices and any exchange rate you enter.';
+  el('readinessHint').textContent=dirty?'Save item details below before generating your PI.':empty?'Add SKU lines, quantities and agreed prices to get started.':missing.length?`Enter the missing HSN code and item condition in the highlighted fields (${missing.slice(0,3).map(line=>line.sku).join(', ')}${missing.length>3?' and '+(missing.length-3)+' more':''}).`:legacy?'Complete the outstanding historical quantity review below.':'Choose the invoice currency below. Amounts use your saved order prices and the quotation tool exchange rate.';
   el('itemDetailsHint').textContent=dirty?'You have unsaved item details.':current.shared_hsn_code?'HSN code is shared across all SKUs and managed by TLs/admins in Configuration. Review each item condition before saving.':'HSN code and item condition are required for PI generation. TLs/admins can set a shared HSN code in Configuration.';
 }
 el('completeItemDetails').onclick=()=>{
@@ -159,7 +159,7 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
   const defaults=formatPartyBlock(base,saved);
   const consignee=delivery?.consignee_text??(delivery?.consignee?.name?
     formatPartyBlock(delivery.consignee,delivery.shipping_address):defaults);
-  el('consignee_text').value=consignee;
+  el('consignee_text').value=window.orderLocations.withGst(consignee,window.orderLocations.gstNumber(consignee));
   for(const [prefix,key,party,address]of [
     ['buyer','buyer_text',delivery?.buyer,delivery?.billing_address],
     ['notify','notify_text',delivery?.notify_party,delivery?.notify_party?.address],
@@ -203,6 +203,7 @@ el('orderForm').onsubmit=async event=>{
     if(!clientData)throw new Error('Choose a client before saving.');
     el('destination').value=el('destination').value.trim().toUpperCase();setIndiaCurrency();
     el('consignee_text').value=window.orderLocations.countryBlock(el('consignee_text').value,el('destination').value);
+    el('consignee_text').value=window.orderLocations.withGst(el('consignee_text').value,window.orderLocations.gstNumber(el('consignee_text').value));
     syncConsignee();
     const data=Object.fromEntries(headerFields.map(key=>[key,el(key).value]));
     data.delivery={consignee_text:el('consignee_text').value,buyer_text:el('buyer_text').value,
@@ -219,7 +220,7 @@ async function showDetails(id) {
   current=data;commercialInputs=[];editingLine=null;el('editor').hidden=true;el('piError').hidden=true;el('lineForm').hidden=true;el('lineDrafts').hidden=true;el('copyPanel').hidden=true;lineDrafts.reset();
   const order=data.order;
   el('conversionHint').textContent='Choose the currency for this proforma invoice.';
-  el('piForm').hidden=!order.can_edit||order.status==='cancelled';el('piCurrency').value='';el('piRate').value='';el('piRate').required=false;el('rateField').hidden=true;
+  el('piForm').hidden=!order.can_edit||order.status==='cancelled';el('piCurrency').value='';
   el('invoiceList').replaceChildren();
   invoicePreview.reset();
   for(const invoice of data.invoices||[])appendInvoice(invoice,id);
@@ -312,9 +313,7 @@ el('next').onclick=()=>{if(page<pages){page++;load().catch(error=>message(error.
 el('piCurrency').onchange=()=>{
   const currency=el('piCurrency').value;
   const convert=Boolean(currency)&&[current.order.currency,...current.lines.map(line=>line.currency)].some(code=>code!==currency);
-  el('rateField').hidden=!convert;el('piRate').required=convert;
-  if(!convert)el('piRate').value='';
-  el('conversionHint').textContent=convert?'Enter INR per 1 USD. USD to INR multiplies; INR to USD divides. Unit rates round to 2 decimals before multiplying quantities. Shipping is converted separately.':'Amounts already in the selected currency use their saved prices.';
+  el('conversionHint').textContent=convert?'The quotation tool exchange rate will be applied automatically.':'Amounts already in the selected currency use their saved prices.';
 };
 function appendInvoice(invoice,id){
   const row=document.createElement('div');row.className='pi-download-row';
@@ -334,7 +333,7 @@ el('piForm').onsubmit=async event=>{
   if(commercialDirty()||!current.lines.length){updatePiReadiness();el('completeItemDetails').onclick();return;}
   el('piError').hidden=true;el('generatePi').disabled=true;
   try{
-    const data={currency:el('piCurrency').value};if(!el('rateField').hidden)data.usd_inr_rate=el('piRate').value;
+    const data={currency:el('piCurrency').value};
     const base=`/api/orders/${current.order.id}/invoices/preview`;
     const result=await api(base,json('POST',data));
     invoicePreview.open(result,base);

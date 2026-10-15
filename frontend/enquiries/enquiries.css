@@ -44,6 +44,23 @@
 .draft-edit-fields { display:grid; grid-template-columns:120px minmax(200px,1fr) 110px 160px; gap:14px; align-items:start; }
 .draft-edit-fields label { color:#475569; font-size:11px; line-height:1.5; }
 .draft-edit-fields input,.draft-edit-fields textarea { display:block; width:100%; padding:9px 10px; margin-top:6px; border:1px solid #CBD5E1; border-radius:6px; background:#FFF; font:inherit; font-size:13px; }
+.draft-edit-fields select{display:block;box-sizing:border-box;width:100%;padding:9px 10px;margin-top:6px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;font:inherit;font-size:13px;min-height:38px}
+.draft-commercial-fields{grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+.draft-commercial-fields label{min-width:0;font-weight:600}
+.draft-commercial-fields input,.draft-commercial-fields textarea{box-sizing:border-box}
+.draft-commercial-fields .draft-field-sku,.draft-commercial-fields .draft-field-hsn_code{grid-column:span 2}
+.draft-commercial-fields .draft-field-description,.draft-commercial-fields .draft-field-item_condition{grid-column:span 6}
+.draft-commercial-fields .draft-field-quantity,.draft-commercial-fields .draft-field-unit_price,.draft-commercial-fields .draft-field-uom{grid-column:span 2}
+.draft-commercial-fields input[readonly]{background:#eef2f6;color:#526173}
+.sku-drafts--order .draft-item-editor{background:#f8fbff;border-color:#dbe6f4;padding:20px;border-radius:12px}
+.sku-drafts--order .draft-edit-toolbar{padding-bottom:12px;border-bottom:1px solid #e2e8f0}
+.sku-drafts--order .tbl th{font-size:11px;padding:12px 10px;background:#edf3fa;color:#334155;white-space:nowrap}
+.sku-drafts--order .tbl td{font-size:12px;padding:12px 10px;vertical-align:middle}
+.sku-drafts--order .draft-product-row.is-active{background:#eff6ff}
+.sku-drafts--order .draft-status{font-size:12px;line-height:1.5}
+.sku-drafts--order .draft-status.error{color:#b91c1c;background:#fff1f2;border-radius:6px;padding:8px 10px}
+@media(max-width:900px){.draft-commercial-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.draft-commercial-fields label[class]{grid-column:span 1}.draft-commercial-fields .draft-field-description{grid-column:1/-1}}
+@media(max-width:550px){.draft-commercial-fields{grid-template-columns:1fr}}
 .draft-edit-fields textarea { resize:vertical; min-height:62px; }
 .draft-note { font-size:11px; color:#64748B; line-height:1.6; margin-top:10px; }
 @media(max-width:900px) { .draft-edit-fields { grid-template-columns:1fr 1fr; } }

@@ -9,6 +9,7 @@ from xml.sax.saxutils import escape
 
 from PIL import Image as PILImage
 import xlsxwriter
+from xlsxwriter.utility import xl_rowcol_to_cell
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
@@ -214,6 +215,7 @@ def xlsx(doc):
     for col in range(1,10):sheet.write_blank(0,col,None,border_top)
     image('header.png',0,0,950,125)
     row_index=4
+    coordinates={};formula_cells=[]
     import textwrap
     for section in model['sections']:
         for index,row in enumerate(section['rows']):
@@ -241,13 +243,20 @@ def xlsx(doc):
                             'left':0 if cell.get('open_left') else 2,'right':0 if cell.get('open_right') else 2,
                             'valign':'bottom' if cell.get('bottom_aligned') else 'top'})
                     fmt=formats[key]
-                    number=(cell.get('numeric') or cell['field']=='shipping_charges' or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
+                    path=cell.get('calculated') or cell.get('field')
+                    if chunk_index==0 and path:coordinates[path]=xl_rowcol_to_cell(row_index,col)
+                    quantity=(cell.get('field') or '').endswith('.quantity')
+                    if quantity:
+                        fmt=book.add_format({**format_values[cell['style']],'num_format':'0 "'+cell.get('uom','PCs')+'"','top':2 if top else 0,'bottom':2 if bottom else 0})
+                    number=(cell.get('numeric') or cell['field']=='shipping_charges' or quantity or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
                     if cell['span']>1:sheet.merge_range(row_index,col,row_index,end,'',fmt)
                     if number:
                         decimal=Decimal(cell['text'])
                         if len(decimal.as_tuple().digits)<=15:sheet.write_number(row_index,col,float(decimal),fmt)
                         else:sheet.write_string(row_index,col,symbol+' '+cell['text'],fmt)
                     else:sheet.write_string(row_index,col,value,fmt)
+                    if chunk_index==0 and (cell.get('calculated') in ('subtotal','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
+                        formula_cells.append((row_index,col,fmt,cell['calculated'],cell['text']))
                     height=max(height,len(lines)*(13 if cell['style'] in ('terms','final_term') else 16))
                     if cell.get('header_metadata'):height=max(height,len(lines)*16+2)
                 if section['name']=='parties' and index==1:height=max(height,45)
@@ -266,4 +275,15 @@ def xlsx(doc):
             row_index+=1
         if part==0:image('address.png',row_index,0,950,92)
     sheet.print_area(0,0,row_index-1,10);sheet.set_footer('&CPage &P of &N')
+    for row,col,fmt,path,cached in formula_cells:
+        if path.endswith('.line_total'):
+            prefix=path.rsplit('.',1)[0]
+            formula=f'=ROUND({coordinates[prefix+".quantity"]}*{coordinates[prefix+".unit_price"]},2)'
+        elif path=='subtotal':
+            refs=','.join(value for key,value in coordinates.items() if key.endswith('.line_total'))
+            formula=f'=ROUND(SUM({refs}),2)'
+        elif path=='tax':formula=f'=ROUND(({coordinates["subtotal"]}+N({coordinates["shipping_charges"]}))*{doc["totals"]["tax_rate"]},2)'
+        else:formula=f'=ROUND({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("tax","0")},2)'
+        sheet.write_formula(row,col,formula,fmt,float(Decimal(cached)))
+    book.set_calc_mode('auto')
     book.close();return clip_workbook_header(output.getvalue())

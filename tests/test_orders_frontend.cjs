@@ -182,13 +182,12 @@ test('related order summaries preserve client scope and read-only navigation',as
   assert.ok(fixture.requests.some(item=>item.url.includes('exclude_drafts=1')));
 });
 
- test('PI conversion asks for one explicit INR-per-USD rate and resets it for same-currency issuance',async()=>{
+ test('PI conversion uses the quotation rate without requesting an executive-entered rate',async()=>{
   const fixture=setup();await settle();await fixture.context.showDetails(7);
   fixture.element('piCurrency').value='INR';fixture.element('piCurrency').onchange();
-  assert.equal(fixture.element('rateField').hidden,false);assert.equal(fixture.element('piRate').required,true);
-  fixture.element('piRate').value='84.50';
+  assert.match(fixture.element('conversionHint').textContent,/quotation tool exchange rate.*automatically/);
   fixture.element('piCurrency').value='USD';fixture.element('piCurrency').onchange();
-  assert.equal(fixture.element('rateField').hidden,true);assert.equal(fixture.element('piRate').value,'');
+  assert.match(fixture.element('conversionHint').textContent,/saved prices/);
 });
 
 

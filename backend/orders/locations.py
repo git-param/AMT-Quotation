@@ -53,5 +53,10 @@ def without_gst(value):
 
 
 def with_gst(value, number):
-    value = without_gst(value)
-    return value + ('\nGST No.: ' + number if number else '')
+    lines = without_gst(value).splitlines()
+    if number:
+        country=next((i for i,line in enumerate(lines) if i and (
+            re.match(r'^\s*Country\s*:',line,re.I) or line.strip().upper() in COUNTRIES)),None)
+        contact=next((i for i,line in enumerate(lines) if i and CONTACT_LINE.match(line)),len(lines))
+        lines.insert(country+1 if country is not None else contact,'GST No.: '+number)
+    return '\n'.join(lines)
