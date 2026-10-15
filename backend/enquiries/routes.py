@@ -4,7 +4,7 @@ from datetime import date
 import re
 import sqlite3
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, jsonify, request, redirect
 
 from backend.client_leads.discovery import integer
 from backend.client_leads.routes import delete_scope, edit_scope, visibility
@@ -98,8 +98,24 @@ def validated(data, existing=None):
 @bp.route('/enquiries')
 @authenticated_required
 def enquiry_page():
-    """Serve searchable enquiries and create/edit/detail views."""
-    return send_file(str(FRONTEND_DIR / 'enquiries' / 'enquiries.html'))
+    """Old bookmarks enter the unified workspace; historical APIs stay available."""
+    try:
+        client_id = request.args.get('client_id')
+        if client_id:
+            client_id = integer(client_id, 'client ID')
+        if request.args.get('enquiry_id'):
+            connection = get_db()
+            try:
+                enquiry = read_enquiry(connection, get_current_user(), integer(
+                    request.args['enquiry_id'], 'enquiry ID'))
+                if not enquiry:
+                    return jsonify(error='Enquiry not found.'), 404
+                client_id = enquiry['client_id']
+            finally:
+                connection.close()
+        return redirect('/clients-orders' + (f'?client_id={client_id}' if client_id else ''))
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
 
 
 @bp.route('/api/enquiries')

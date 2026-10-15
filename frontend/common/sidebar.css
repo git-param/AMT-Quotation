@@ -1,0 +1,31 @@
+/* One sidebar shell across quotation, CRM and management pages. */
+body.has-sidebar { padding-left:224px; }
+.app-sidebar { position:fixed; inset:0 auto 0 0; width:224px; z-index:7000; display:flex; flex-direction:column; background:#183450; color:#FFF; border-right:1px solid #294766; }
+.sidebar-brand { display:block; padding:26px 20px; border-bottom:1px solid #294766; text-decoration:none; color:#FFF; }
+.sidebar-brand strong { display:block; font-size:18px; letter-spacing:-.3px; }
+.sidebar-brand>span { display:block; color:#A9C1DA; font-size:11px; margin-top:7px; }
+.app-sidebar>nav { display:flex; flex-direction:column; gap:5px; flex:1; padding:18px 12px; overflow-y:auto; }
+.sidebar-item[hidden] { display:none!important; }
+.app-sidebar a.sidebar-link { display:flex!important; align-items:center; gap:12px; min-height:44px; padding:11px 12px; border:0; border-radius:8px; color:#D5E2EF; background:transparent; text-decoration:none; font-size:13px; font-weight:500; line-height:1.4; }
+.sidebar-link svg { width:19px; height:19px; flex-shrink:0; }
+.app-sidebar a.sidebar-link:hover { background:#244563; color:#FFF; }
+.app-sidebar a.sidebar-link.is-current { background:#2563EB; color:#FFF; }
+.sidebar-link:focus-visible { outline:2px solid #93C5FD; outline-offset:2px; }
+.sidebar-signout { margin-top:auto; padding-top:16px; border-top:1px solid #294766; }
+.app-sidebar .sidebar-signout a { color:#FCA5A5; }
+.sidebar-toggle,.sidebar-backdrop { display:none; }
+.has-sidebar .hdr { gap:14px; }
+.has-sidebar .hdr nav:empty { display:none; }
+@media(max-width:900px) {
+  body.has-sidebar { padding-left:0; }
+  .app-sidebar { transform:translateX(-100%); transition:transform .18s ease; }
+  .sidebar-open .app-sidebar { transform:translateX(0); box-shadow:12px 0 36px rgba(15,23,42,.25); }
+  .sidebar-toggle { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border:1px solid #537394; border-radius:7px; background:transparent; color:#FFF; font-size:20px; cursor:pointer; flex-shrink:0; }
+  .sidebar-open .sidebar-backdrop { display:block; position:fixed; inset:0; z-index:6999; border:0; background:rgba(15,23,42,.45); }
+  body.sidebar-open { overflow:hidden; }
+  .has-sidebar .hdr { justify-content:flex-start; }
+  .has-sidebar .hdr>nav,.has-sidebar .hdr>.hdr-right { margin-left:auto; }
+}
+@media(prefers-reduced-motion:reduce) { .app-sidebar { transition:none; } }
+
+@media(max-width:900px){.sidebar-toggle{width:42px;font-size:12px;font-weight:600}}

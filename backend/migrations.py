@@ -127,6 +127,12 @@ def migrate_database(database_path, migrations=MIGRATIONS):
         _validate_legacy_schema(connection)
         if connection.execute('PRAGMA foreign_key_check').fetchone():
             raise MigrationError('Database contains foreign key violations.')
+        # A transactional parent-table replacement can leave SQLite's deferred
+        # violation counter set after the original table is dropped, even though
+        # its replacement satisfies every FK. Reset deferral only after checking
+        # the complete final schema while BEGIN IMMEDIATE excludes other writers.
+        # PRAGMA foreign_keys stays enabled throughout the migration.
+        connection.execute('PRAGMA defer_foreign_keys = OFF')
         connection.commit()
         return applied
     except BaseException:

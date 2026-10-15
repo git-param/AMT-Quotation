@@ -10,7 +10,7 @@ from backend.client_leads.discovery import integer
 from backend.common.auth import authenticated_required, get_current_user
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
-from backend.enquiries.lines import serialize, validated as validate_line
+from backend.enquiries.lines import serialize
 from backend.enquiries.routes import editable_client, read_enquiry
 from backend.orders.service import (
     STATUSES, copied_line, delivery, details, header, insert_lines,
@@ -45,6 +45,11 @@ def list_orders():
         if status != 'all':
             query += ' AND o.status = ?'
             parameters.append(status)
+        exclude = request.args.get('exclude_drafts', '0')
+        if exclude not in ('0', '1'):
+            raise ValueError('Invalid draft filter.')
+        if exclude == '1':
+            query += " AND o.status != 'draft'"
         search = request.args.get('q', '').strip()
         if len(search) > 200:
             raise ValueError('Search is limited to 200 characters.')
@@ -140,7 +145,8 @@ def save_order(order_id=None):
                 if not enquiry['can_edit']:
                     return jsonify(error='Client access is read-only.'), 403
                 client_id = enquiry['client_id']
-                if 'client_id' in data and data['client_id'] != client_id:
+                if 'client_id' in data and (type(data['client_id']) is not int
+                                            or data['client_id'] != client_id):
                     raise ValueError('Enquiry does not belong to this client.')
             else:
                 client_id = data.get('client_id')
@@ -161,11 +167,16 @@ def save_order(order_id=None):
             'SELECT * FROM client_leads WHERE id = ?', (client_id,),
         ).fetchone()
         previous = details(connection, old)['delivery'] if old else None
+        if old and connection.execute(
+                'SELECT 1 FROM order_invoices WHERE order_id = ?', (order_id,)).fetchone():
+            if any(values[key] != old[key] for key in ('pi_reference', 'pi_date')):
+                raise ValueError('Generated PI references and dates cannot be edited.')
         destination = None
         if not old or 'delivery' in data:
             destination = delivery(connection, client, data.get('delivery', {}),
                                    previous, values['status'] == 'draft' and
-                                   (enquiry_id is None if not old else old['enquiry_id'] is None))
+                                   (enquiry_id is None if not old else old['enquiry_id'] is None),
+                                   values['destination'])
         if old:
             assignments = ', '.join(key + ' = ?' for key in values)
             connection.execute(
@@ -204,6 +215,13 @@ def save_order(order_id=None):
                 insert_lines(connection, order_id, lines, user['id'])
         if destination:
             save_delivery(connection, order_id, destination, user['id'])
+        if values['status'] != 'draft' and (not old or old['status'] == 'draft'):
+            state = details(connection, read_order(connection, user, order_id))
+            if not state['lines']:
+                raise ValueError('Add at least one SKU line before confirming an order.')
+            if not state['delivery']:
+                raise ValueError('Complete delivery details before confirming an order.')
+            delivery(connection, client, {}, state['delivery'], destination=values['destination'])
         record_revision(connection, order_id, user,
                         'edit' if old else 'create')
         result = details(connection, read_order(connection, user, order_id))
@@ -304,3 +322,67 @@ def order_lines(order_id, line_id=None):
     finally:
         connection.rollback()
         connection.close()
+
+
+@bp.route('/api/orders/<int:order_id>/legacy-enquiry')
+@authenticated_required
+def historical_enquiry(order_id):
+    """Keep original commercial records reviewable inside their client workspace."""
+    connection = get_db()
+    try:
+        connection.execute('BEGIN')
+        order = read_order(connection, get_current_user(), order_id)
+        if not order or order['enquiry_id'] is None:
+            return jsonify(error='Historical enquiry not found.'), 404
+        enquiry = connection.execute('SELECT * FROM client_enquiries WHERE id = ?',
+                                     (order['enquiry_id'],)).fetchone()
+        lines = [serialize(row) for row in connection.execute(
+            'SELECT * FROM enquiry_sku_lines WHERE enquiry_id = ? ORDER BY id',
+            (order['enquiry_id'],))]
+        return jsonify(enquiry=dict(enquiry), lines=lines)
+    finally:
+        connection.close()
+
+
+@bp.route('/api/orders/<int:order_id>/legacy-lines/<int:source_id>/review', methods=['POST'])
+@authenticated_required
+def review_legacy_line(order_id, source_id):
+    """Explicitly map a fractional historical quantity to a reviewed order line."""
+    connection = get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        user = get_current_user()
+        order = read_order(connection, user, order_id)
+        if not order:
+            return jsonify(error='Order not found.'), 404
+        if not order['can_edit']:
+            return jsonify(error='Client access is read-only.'), 403
+        data = request.get_json(silent=True)
+        if (not isinstance(data, dict) or set(data) != {'replacement_line_id'}
+                or type(data['replacement_line_id']) is not int):
+            raise ValueError('Choose a replacement SKU line from this order.')
+        state = details(connection, order)
+        if not any(line['id'] == source_id for line in state['legacy_lines_requiring_review']):
+            raise ValueError('No pending historical quantity review for this line.')
+        if not any(line['id'] == data['replacement_line_id'] for line in state['lines']):
+            raise ValueError('Choose an active replacement line belonging to this order.')
+        connection.execute('INSERT INTO order_legacy_line_reviews '
+            '(order_id, source_line_id, replacement_line_id, reviewed_by) VALUES (?, ?, ?, ?)',
+            (order_id, source_id, data['replacement_line_id'], user['id']))
+        connection.execute('INSERT INTO audit_logs (actor_user_id, actor_name, action, '
+            'entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+            (user['id'], user['username'], 'legacy_quantity_review', 'order', str(order_id),
+             json.dumps({'source_line_id': source_id, **data})))
+        record_revision(connection, order_id, user, 'edit')
+        result = details(connection, read_order(connection, user, order_id))
+        connection.commit()
+        return jsonify(result)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+# Imported after blueprint and routes are defined to avoid a circular dependency.
+from backend.orders import invoices  # noqa: E402,F401

@@ -4,7 +4,8 @@ import json
 import re
 
 SCALARS = {'name': 150, 'company': 150, 'email': 254, 'phone': 40,
-           'notes': 2000, 'business_details': 2000, 'status': 20}
+           'notes': 2000, 'business_details': 2000, 'status': 20,
+           'location': 2000}
 JSON_FIELDS = ('contact_persons', 'emails', 'phones',
                'billing_address', 'shipping_address')
 

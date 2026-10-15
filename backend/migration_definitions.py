@@ -470,6 +470,34 @@ WORKSPACE_SCHEMA = (
        FROM client_orders WHERE reference = 'LEGACY-ENQ-' || enquiry_id''',
 )
 
+LEGACY_REVIEW_SCHEMA = (
+    '''CREATE TABLE order_legacy_line_reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES client_orders(id) ON DELETE RESTRICT,
+        source_line_id INTEGER NOT NULL REFERENCES enquiry_sku_lines(id) ON DELETE RESTRICT,
+        replacement_line_id INTEGER NOT NULL REFERENCES order_sku_lines(id) ON DELETE RESTRICT,
+        reviewed_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        reviewed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )''',
+    'CREATE INDEX idx_order_legacy_reviews ON order_legacy_line_reviews(order_id, source_line_id)',
+)
+
+_LOCATION_ADDRESS = (
+    "CASE WHEN json_valid(shipping_address_json) THEN CASE WHEN "
+    "COALESCE(json_extract(shipping_address_json, '$.line1'),'') != '' "
+    "THEN shipping_address_json WHEN json_valid(billing_address_json) "
+    "THEN billing_address_json ELSE '{}' END "
+    "WHEN json_valid(billing_address_json) THEN billing_address_json ELSE '{}' END"
+)
+CLIENT_LOCATION_SCHEMA = (
+    "ALTER TABLE client_leads ADD COLUMN location TEXT NOT NULL DEFAULT '' "
+    'CHECK (length(location) <= 2000)',
+    'UPDATE client_leads SET location = trim(' + ' || char(10) || '.join(
+        "COALESCE(json_extract(" + _LOCATION_ADDRESS + ", '$." + key + "'),'')"
+        for key in ('line1', 'line2', 'city', 'state', 'postal_code', 'country')
+    ) + ", char(10) || ' ')",
+)
+
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
@@ -486,4 +514,6 @@ MIGRATIONS = (
     (13, 'client_enquiry_soft_deletion', SOFT_DELETE_SCHEMA),
     (14, 'orders_delivery_snapshots', ORDER_SCHEMA),
     (15, 'clients_orders_workspace', WORKSPACE_SCHEMA),
+    (16, 'order_legacy_line_review', LEGACY_REVIEW_SCHEMA),
+    (17, 'client_location', CLIENT_LOCATION_SCHEMA),
 )

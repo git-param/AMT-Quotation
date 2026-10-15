@@ -231,7 +231,7 @@ class EnquiryTests(unittest.TestCase):
             ).fetchone()[0]
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [10, 11, 12, 13])
+        self.assertEqual(migrate_database(path), list(range(10, len(MIGRATIONS) + 1)))
         connection = sqlite3.connect(path)
         try:
             self.assertEqual(connection.execute(

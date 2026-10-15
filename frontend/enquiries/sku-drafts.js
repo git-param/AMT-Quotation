@@ -1,12 +1,12 @@
 (() => {
-  window.createSkuDraftEditor = (host, scope, currency, onSave = null) => {
+  window.createSkuDraftEditor = (host, scope, currency, onSave = null, commercial = false) => {
     let rows = [];
     let fetching = false;
     let activeRow = 0;
     let displayRate = null;
     host.classList.add('sku-drafts');
     host.replaceChildren();
-    const heading = document.createElement('h3'); heading.textContent = 'Enquiry SKU items';
+    const heading = document.createElement('h3'); heading.textContent = commercial ? 'Order SKU items' : 'Enquiry SKU items';
     const hint = document.createElement('p'); hint.textContent = 'Enter SKUs (one per line or comma-separated)';
     const input = document.createElement('textarea'); input.rows = 3; input.placeholder = '1258\n2456'; input.setAttribute('aria-label','SKU codes');
     const tools = document.createElement('div'); tools.className = 'draft-tools';
@@ -84,17 +84,17 @@
       activeRow=Math.min(activeRow,rows.length-1);
       const row=rows[activeRow];
       const toolbar=document.createElement('div');toolbar.className='draft-edit-toolbar';
-      const label=document.createElement('span');label.textContent='Edit enquiry item';
+      const label=document.createElement('span');label.textContent=commercial?'Edit order item':'Edit enquiry item';
       const picker=document.createElement('select');picker.setAttribute('aria-label','Choose SKU item to edit');
       rows.forEach((item,index)=>{const option=document.createElement('option');option.value=index;option.textContent=item.sku || 'Manual item';picker.append(option);});
       picker.value=activeRow;picker.onchange=()=>{activeRow=Number(picker.value);renderEditor();};toolbar.append(label,picker);
       const remove=document.createElement('button');remove.type='button';remove.className='btn-sm btn-del';remove.textContent='Remove item';remove.onclick=()=>{rows.splice(activeRow,1);render();};toolbar.append(remove);editBox.append(toolbar);
       const fields=document.createElement('div');fields.className='draft-edit-fields';
-      [['sku','SKU / item code','text',100],['description','Description','text',2000],['quantity','Quantity','number'],['unit_price',`Agreed unit price (${row.currency})`,'number']].forEach(([key,title,type,max])=>{
+      [['sku','SKU / item code','text',100],['description','Description','text',2000],['quantity','Quantity','number'],['unit_price',`Agreed unit price (${row.currency})`,'number'],...(commercial?[['hsn_code','HSN code','text',20],['item_condition','Item condition','text',100],['uom','Unit of measure','text',30]]:[])].forEach(([key,title,type,max])=>{
         const label=document.createElement('label');label.textContent=title;
         const control=document.createElement(key==='description'?'textarea':'input');
         if(key!=='description')control.type=type;
-        control.value=row[key];control.required=row.included!==false;control.disabled=row.included===false;if(max)control.maxLength=max;
+        control.value=row[key]||(key==='uom'?'PCs':'');control.required=row.included!==false&&(!commercial||!['hsn_code','item_condition'].includes(key));control.disabled=row.included===false;if(max)control.maxLength=max;
         if(type==='number'){control.min=key==='quantity'?'1':'0';control.step=key==='quantity'?'1':'0.01';}
         control.setAttribute('aria-label',title);control.oninput=()=>{row[key]=control.value;renderTable();};label.append(control);fields.append(label);
       });
@@ -132,12 +132,18 @@
         if(target[keys[0]]!==scope()[keys[0]] || curr!==currency())throw new Error('Client or currency changed while fetching. Look up SKUs again.');
         let added = 0;let updated = 0;
         for (const draft of data.drafts) {
+          if(commercial){draft.item_condition=draft.condition||'';draft.hsn_code=draft.hsn_code||'';draft.uom='PCs';}
           if (Number.isInteger(Number(draft.quantity))) draft.quantity = String(Number(draft.quantity));
           const existing = rows.find(row=>row.sku.trim()===draft.sku.trim());
           if (existing) {
             const edits = {sku:existing.sku, description:existing.description || draft.description,
               quantity:existing.quantity, unit_price:existing.unit_price || draft.unit_price,
               included:existing.included};
+            if(commercial)Object.assign(edits,{
+              hsn_code:existing.hsn_code||draft.hsn_code,
+              item_condition:existing.item_condition||draft.item_condition,
+              uom:existing.uom||draft.uom,
+            });
             Object.assign(existing,draft,edits);updated++;
           } else { rows.push({...draft});added++; }
         }
@@ -162,7 +168,7 @@
           renderEditor();
           throw new Error('Complete each selected item with a positive whole-number quantity and a valid price (up to 2 decimals).');
         }
-        return selected.map(row=>Object.fromEntries(['sku','description','quantity','unit_price','currency'].map(key=>[key,row[key]])));
+        return selected.map(row=>Object.fromEntries(['sku','description','quantity','unit_price','currency',...(commercial?['hsn_code','item_condition','uom']:[])].map(key=>[key,row[key]||(key==='uom'?'PCs':'')])));
       },
       currencyChanged() { rows.forEach(row=>{row.currency=currency();row.unit_price='';});render();status.textContent='Currency changed. Fetch again or enter unit prices in the chosen currency.'; },
       reset() { rows=[];activeRow=0;input.value='';status.textContent='';render(); }

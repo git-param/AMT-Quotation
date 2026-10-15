@@ -58,7 +58,7 @@ def discover(user, args):
     if search:
         pattern = '%' + search.replace('!', '!!').replace('%', '!%').replace(
             '_', '!_') + '%'
-        fields = ['l.name', 'l.company', 'l.email', 'l.phone']
+        fields = ['l.name', 'l.company', 'l.email', 'l.phone', 'l.location']
         conditions = [field + " LIKE ? ESCAPE '!'" for field in fields]
         parameters.extend([pattern] * len(fields))
         conditions += [

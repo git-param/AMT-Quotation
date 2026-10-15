@@ -253,7 +253,7 @@ class LineTests(unittest.TestCase):
             ).fetchone()[0]
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [11, 12, 13])
+        self.assertEqual(migrate_database(path), list(range(11, len(MIGRATIONS) + 1)))
         connection = sqlite3.connect(path)
         try:
             self.assertEqual(connection.execute(
@@ -394,7 +394,7 @@ class LineTests(unittest.TestCase):
                 )
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [12, 13])
+        self.assertEqual(migrate_database(path), list(range(12, len(MIGRATIONS) + 1)))
         connection = sqlite3.connect(path)
         try:
             self.assertIsNone(connection.execute(

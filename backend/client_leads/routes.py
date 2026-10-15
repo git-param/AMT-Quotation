@@ -86,7 +86,9 @@ def lead_query(user):
         'src.is_active AS enquiry_source_active, '
         '(SELECT COUNT(*) FROM client_enquiries e WHERE e.client_id = l.id '
         'AND e.deleted_at IS NULL) '
-        'AS enquiry_count FROM client_leads l '
+        'AS enquiry_count, (SELECT COUNT(*) FROM client_orders o WHERE o.client_id = l.id) '
+        'AS order_count, (SELECT COUNT(*) FROM client_orders o WHERE o.client_id = l.id '
+        "AND o.status = 'draft') AS pending_order_count FROM client_leads l "
         'JOIN users u ON u.id = l.created_by '
         'LEFT JOIN enquiry_sources src ON src.id = l.enquiry_source_id '
         'WHERE (' + predicate + ')'
@@ -111,6 +113,7 @@ def read_leads(user, lead_id=None):
         connection.close()
 
 
+@bp.route('/clients-orders')
 @bp.route('/leads')
 @authenticated_required
 def lead_page():

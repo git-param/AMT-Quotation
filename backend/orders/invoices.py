@@ -5,17 +5,17 @@ survive without executing VBA or requiring Excel on the application server.
 """
 
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 import json
 import os
 from pathlib import Path
 import re
+import textwrap
 from uuid import uuid4
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile, BadZipFile
-from zoneinfo import ZoneInfo
 
 from flask import jsonify, request, send_file
 
@@ -29,6 +29,26 @@ NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
 Q = '{' + NS + '}'
 ET.register_namespace('', NS)
 CENT = Decimal('0.01')
+
+
+def company_payment_terms(raw, sheet):
+    """Use the configured template's terms when the simplified form omits them."""
+    cell = sheet.find('.//' + Q + 'c[@r="F8"]')
+    if cell is None:
+        raise ValueError('Company template payment terms are missing.')
+    value = cell.find(Q + 'v')
+    if cell.get('t') == 's' and value is not None:
+        with ZipFile(BytesIO(raw)) as workbook:
+            strings = ET.fromstring(workbook.read('xl/sharedStrings.xml'))
+            content = ''.join(strings.findall(Q + 'si')[int(value.text)].itertext())
+    elif cell.get('t') == 'inlineStr':
+        content = ''.join(cell.find(Q + 'is').itertext())
+    else:
+        content = ''
+    match = re.fullmatch(r'Payment Terms\s*:\s*(.+)', content.strip(), flags=re.I)
+    if not match or len(match[1]) > 2000:
+        raise ValueError('Configure payment terms in the company PI template.')
+    return match[1].strip()
 
 
 def money(value):
@@ -201,8 +221,9 @@ def render(raw, sheet, first, state, totals, reference, issued, prepared_by):
     def address_text(value):
         return '\n'.join(str(v) for v in value.values() if v)
     def party_text(value):
-        return '\n'.join(str(value.get(k, '')) for k in
-                         ('name', 'pic', 'email', 'phone', 'gst_number') if value.get(k))
+        contacts = '\n'.join(str(value.get(k, '')) for k in
+                             ('name', 'pic', 'email', 'phone', 'gst_number') if value.get(k))
+        return '\n'.join(filter(None, [contacts, address_text(value.get('address', {}))]))
     for ref, value in {
         'H4': reference, 'H5': issued, 'H6': order['po_reference'],
         'F7': 'Prepared By: ' + prepared_by,
@@ -212,12 +233,34 @@ def render(raw, sheet, first, state, totals, reference, issued, prepared_by):
         'I10': 'Dispatch By: ' + order['dispatch_method'],
         'A12': dest['consignee']['name'], 'A13': address_text(dest['shipping_address']),
         'A17': dest['shipping_address']['country'],
-        'F12': party_text(dest['buyer']) + '\n' + address_text(dest['billing_address'])
-               if dest['buyer'].get('name') else '(Same as consignee)',
+        'F12': (party_text(dest['buyer']) or dest['consignee']['name'])
+               + '\n' + address_text(dest['billing_address'])
+               if dest['buyer'].get('name') or dest['billing_address'] else '(Same as consignee)',
         ('F18' if totals['currency'] == 'USD' else 'F19'):
             party_text(dest['notify_party']) or '(Same as consignee)',
     }.items():
         put(ref, value)
+    # Freeform buyer/notify blocks must appear exactly as edited, including
+    # unique commercial lines. Historical structured parties retain old layout.
+    if 'buyer_text' in dest:
+        put('F12', dest['buyer_text'] or '(Same as consignee)')
+    if 'notify_text' in dest:
+        put('F18' if totals['currency'] == 'USD' else 'F19',
+            dest['notify_text'] or '(Same as consignee)')
+    if 'consignee_text' in dest:
+        # Contact/country labels remain in their established template cells.
+        # Grow merged party areas vertically so multiline text remains visible.
+        for start, end, content in ((12, 16, dest.get('buyer_text', '')),
+                (18 if totals['currency'] == 'USD' else 19,
+                 20 if totals['currency'] == 'USD' else 21, dest.get('notify_text', '')),
+                (13, 16, dest['shipping_address'].get('line1', ''))):
+            line_count = sum(max(1, (len(line) + 39) // 40) for line in content.splitlines())
+            height = min(409, max(19, (line_count * 15 + end - start) // (end - start + 1)))
+            for number in range(start, end + 1):
+                row = data.find(Q + f'row[@r="{number}"]')
+                if row is not None:
+                    row.set('ht', str(max(float(row.get('ht', 19)), height)))
+                    row.set('customHeight', '1')
     offset = 0 if totals['currency'] == 'USD' else 1
     if offset:
         put('A18', 'GST No: ' + dest['consignee'].get('gst_number', ''))
@@ -233,6 +276,10 @@ def render(raw, sheet, first, state, totals, reference, issued, prepared_by):
             if col == 'B' and line:
                 value = line['sku'] + ' / ' + value
             put(col + str(first + index), value, bool(line) and col in ('A', 'G', 'I', 'J'))
+        if line:
+            row = data.find(Q + f'row[@r="{first + index}"]')
+            row.set('ht', str(min(409, max(32, 15 * (1 + len(line['description']) // 32)))))
+            row.set('customHeight', '1')
     if totals['currency'] == 'USD':
         values = {31: totals['subtotal'], 32: totals['shipping'], 33: totals['grand_total']}
         words_row = 33
@@ -244,9 +291,29 @@ def render(raw, sheet, first, state, totals, reference, issued, prepared_by):
     for row, value in values.items():
         put('J' + str(row + extra), value, True)
     put('C' + str(words_row + extra), totals['amount_in_words'])
-    # Include order instructions/notes after the original terms, within print area.
-    note_row = 47 + extra
-    put('A' + str(note_row), '\n'.join(filter(None, [dest['instructions'], order['notes']])))
+    # Keep the template's payment clause consistent with the issued order header.
+    put('A' + str((36 if totals['currency'] == 'USD' else 37) + extra),
+        '2. PAYMENT ' + order['payment_terms'])
+    # Add wrapped notes below the complete original terms, expanding the print
+    # area rather than truncating long notes in one merged cell.
+    note_row = (52 if totals['currency'] == 'USD' else 51) + extra
+    note_style = sheet.find('.//' + Q + 'c[@r="A' + str(46 + extra) + '"]')
+    merges = sheet.find(Q + 'mergeCells')
+    for paragraph in filter(None, [dest['instructions'], order['notes']]):
+        for line in paragraph.splitlines():
+            for chunk in textwrap.wrap(line, width=110) or ['']:
+                ref = 'A' + str(note_row)
+                put(ref, chunk)
+                if note_style is not None and note_style.get('s'):
+                    sheet.find('.//' + Q + f'c[@r="{ref}"]').set('s', note_style.get('s'))
+                row = data.find(Q + f'row[@r="{note_row}"]')
+                row.set('ht', '32')
+                row.set('customHeight', '1')
+                if merges is not None:
+                    ET.SubElement(merges, Q + 'mergeCell', ref=f'A{note_row}:K{note_row}')
+                note_row += 1
+    if merges is not None:
+        merges.set('count', str(len(merges)))
     # ElementTree drops namespace declarations used only by Ignorable tokens.
     # Removing the advisory attribute avoids undeclared-prefix repair in Excel.
     ignorable = '{http://schemas.openxmlformats.org/markup-compatibility/2006}Ignorable'
@@ -277,7 +344,8 @@ def render(raw, sheet, first, state, totals, reference, issued, prepared_by):
                         node.text = shift(node.text)
                     if node.get('name') == '_xlnm.Print_Area':
                         # Keep helper country columns outside printed pages.
-                        node.text = re.sub(r'\$[A-Z]+\$\d+$', '$J$' + str(note_row + 2), node.text)
+                        node.text = re.sub(r'(\$[A-Z]+\$)(\d+)$', lambda match:
+                            match[1] + str(max(int(match[2]), note_row)), node.text)
                 content = ET.tostring(book, encoding='utf-8', xml_declaration=True)
             elif item.filename in ('[Content_Types].xml', 'xl/_rels/workbook.xml.rels'):
                 root = ET.fromstring(content)
@@ -316,16 +384,23 @@ def generate_invoice(order_id):
         if not state['delivery']:
             raise ValueError('Complete the order delivery details before generating a PI.')
         client = connection.execute('SELECT * FROM client_leads WHERE id = ?', (order['client_id'],)).fetchone()
-        delivery(connection, client, {}, state['delivery'])
-        for key in ('payment_terms', 'delivery_terms', 'destination', 'delivery_time', 'dispatch_method'):
+        validated_delivery, _, _ = delivery(connection, client, {}, state['delivery'],
+                                             destination=order['destination'])
+        state['delivery'].update(validated_delivery)
+        for key in ('delivery_terms', 'destination', 'delivery_time', 'dispatch_method'):
             if not order[key]:
                 raise ValueError('Complete ' + key.replace('_', ' ') + ' before generating a PI.')
         raw, sheet, first, tax = template(data['currency'])
+        payment_source = 'order'
+        if not state['order']['payment_terms']:
+            state['order']['payment_terms'] = company_payment_terms(raw, sheet)
+            payment_source = 'company_template'
         totals = calculate(state, data['currency'], data.get('usd_inr_rate'), tax)
         reference = 'AMT/PI/' + uuid4().hex[:16].upper()
-        issued = datetime.now(ZoneInfo('Asia/Kolkata')).date().isoformat()
+        issued = datetime.now(timezone(timedelta(hours=5, minutes=30))).date().isoformat()
         workbook = render(raw, sheet, first, state, totals, reference, issued, user['username'])
-        snapshot = {'state': state, 'totals': totals, 'reference': reference, 'date': issued}
+        snapshot = {'state': state, 'totals': totals, 'reference': reference, 'date': issued,
+                    'payment_terms_source': payment_source}
         cursor = connection.execute('INSERT INTO order_invoices '
             '(order_id, reference, currency, snapshot_json, workbook, created_by) '
             'VALUES (?, ?, ?, ?, ?, ?)',

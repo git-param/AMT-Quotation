@@ -1,11 +1,10 @@
+let profileVersion=0;
 let currentPage = 1;
 let totalPages = 0;
 let loadVersion = 0;
 let editingId = null;
 let readOnly = false;
-let separateShipping = null;
-const scalarFields = ['name', 'company', 'email', 'phone', 'notes', 'business_details', 'status'];
-const addressFields = ['line1', 'line2', 'city', 'state', 'postal_code', 'country'];
+const scalarFields = ['name', 'company', 'email', 'phone', 'notes', 'location'];
 const byId = id => document.getElementById(id);
 function clientActionButton(action, name, style = '') {
   const icons = {
@@ -46,7 +45,7 @@ async function api(path, options = {}) {
 async function load() {
   const version = ++loadVersion;
   const params = new URLSearchParams({page: currentPage, page_size: byId('pageSize').value});
-  const fields = {q:'search', status:'filterStatus', active:'filterActive', ownership:'filterOwnership', creator:'filterCreator', access:'filterAccess', source:'filterSource', sort:'sort', direction:'direction'};
+  const fields = {q:'search', active:'filterActive', ownership:'filterOwnership', creator:'filterCreator', access:'filterAccess', source:'filterSource', sort:'sort', direction:'direction'};
   Object.entries(fields).forEach(([key,id]) => params.set(key, byId(id).value));
   const data = await api('/api/leads?' + params);
   if (version !== loadVersion) return;
@@ -61,48 +60,26 @@ async function load() {
   byId('leads').replaceChildren();
   data.leads.forEach(lead => {
     const row = document.createElement('tr');
-    const date = new Date(lead.created_at);
-    [lead.name, lead.company, lead.email, lead.phone, lead.creator_name, date.toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}), lead.notes].forEach(value => {
-      const cell = document.createElement('td'); cell.textContent = value || '-'; cell.title = value || ''; row.append(cell);
+    [[lead.name,lead.company].filter(Boolean).join('\n'),[lead.email,lead.phone].filter(Boolean).join('\n'),lead.creator_name].forEach((value,index)=>{
+      const cell=document.createElement('td');cell.textContent=value||'-';cell.dataset.label=['Client / company','Contact','Owner'][index];row.append(cell);
     });
-    const enquiryCell = document.createElement('td');
-    const enquiryLink = document.createElement('a'); enquiryLink.className = 'enquiry-count';
-    enquiryLink.href = `/enquiries?client_id=${lead.id}`; enquiryLink.textContent = `${lead.enquiry_count} ${lead.enquiry_count === 1 ? 'enquiry' : 'enquiries'}`;
-    enquiryCell.append(enquiryLink); row.append(enquiryCell);
-    const status = document.createElement('td');
-    status.textContent = `${lead.status} / ${lead.is_active ? 'Active' : 'Inactive'}`; row.append(status);
-    const access = document.createElement('td');
+    const ordersCell=document.createElement('td');ordersCell.dataset.label='Orders / pending';
+    const ordersLink=document.createElement('button');ordersLink.type='button';ordersLink.className='btn-sm';
+    ordersLink.textContent=`${lead.order_count} orders / ${lead.pending_order_count} pending`;
+    ordersLink.onclick=()=>openDetails(lead.id).catch(error=>message(error.message,true));
+    ordersCell.append(ordersLink);row.append(ordersCell);
+    const status = document.createElement('td');status.dataset.label='Availability';
+    status.textContent = lead.is_active ? 'Active' : 'Inactive'; row.append(status);
+    const access = document.createElement('td');access.dataset.label='Access';
     const badge = document.createElement('span'); badge.className = 'badge ' + (lead.is_shared ? 'badge-ok' : 'badge-warn');
     badge.textContent = lead.is_shared ? `Shared / ${lead.shared_access_level}${lead.shared_access_level === 'VIEW' && lead.can_edit ? ' (independent edit)' : ''}` : (lead.can_edit ? 'Editable' : 'Read only');
     access.append(badge); row.append(access);
-    const actions = document.createElement('td'); actions.className = 'client-actions';
+    const actions = document.createElement('td'); actions.className = 'client-actions';actions.dataset.label='Actions';
     const detailsButton = clientActionButton('details', lead.name);
     detailsButton.onclick = () => openDetails(lead.id).catch(error => message(error.message, true)); actions.append(detailsButton);
     if (lead.can_edit) {
       const button = clientActionButton('edit', lead.name);
-      button.onclick = async () => {
-        try {
-          const current = (await api(`/api/leads/${lead.id}`)).lead;
-          resetForm(); readOnly = !current.can_edit;
-          editingId = current.id;
-          scalarFields.forEach(field => { byId(field).value = current[field]; });
-          setSource(current);
-          byId('emails').value = current.emails.join('\n');
-          byId('phones').value = current.phones.join('\n');
-          current.contact_persons.forEach(addContact);
-          ['billing', 'shipping'].forEach(kind => addressFields.forEach(field => { byId(`${kind}_${field}`).value = current[`${kind}_address`][field] || ''; }));
-          byId('leadForm').querySelectorAll('input, select, textarea, #addContact, .remove-contact').forEach(control => { control.disabled = readOnly; });
-          byId('sameAsBilling').checked = Boolean(current.billing_address.line1) && addressFields.every(field => (current.billing_address[field] || '') === (current.shipping_address[field] || ''));
-          syncShipping();
-          openForm();
-          byId('save').hidden = readOnly;
-          byId('formTitle').textContent = readOnly ? 'Client details' : 'Edit client lead';
-          byId('save').textContent = 'Save changes';
-          byId('cancelEdit').hidden = false;
-          byId('name').focus();
-          byId('leadForm').scrollIntoView({behavior: 'smooth', block: 'center'});
-        } catch (error) { message(error.message, true); }
-      };
+      button.onclick = () => editClient(lead.id);
       actions.append(button);
     }
     if (lead.can_manage_client) {
@@ -124,14 +101,34 @@ async function load() {
   });
   if (!data.leads.length) {
     const row = document.createElement('tr'); const cell = document.createElement('td');
-    cell.colSpan = 11; cell.className = 'source-empty'; cell.textContent = 'No leads yet. Click Add Lead to create your first client.';
+    cell.colSpan = 7; cell.className = 'source-empty'; cell.textContent = 'No clients match these filters. Add a client or adjust your search.';
     row.append(cell); byId('leads').append(row);
   }
 }
+async function editClient(id) {
+        try {
+          const current = (await api(`/api/leads/${id}`)).lead;
+          resetForm(); readOnly = !current.can_edit;
+          editingId = current.id;
+          scalarFields.forEach(field => { byId(field).value = current[field]; });
+          setSource(current);
+          byId('emails').value = current.emails.join('\n');
+          byId('phones').value = current.phones.join('\n');
+          current.contact_persons.forEach(addContact);
+          byId('leadForm').querySelectorAll('input, select, textarea, #addContact, .remove-contact').forEach(control => { control.disabled = readOnly; });
+          openForm();
+          byId('save').hidden = readOnly;
+          byId('formTitle').textContent = readOnly ? 'Client details' : 'Edit client';
+          byId('save').textContent = 'Save changes';
+          byId('cancelEdit').hidden = false;
+          byId('name').focus();
+          byId('leadForm').scrollIntoView({behavior: 'smooth', block: 'center'});
+        } catch (error) { message(error.message, true); }
+}
 async function deleteClient(client) {
-  if (!window.confirm(`Delete client ${client.name}? Its enquiries and SKU lines will be hidden; all history will be retained.`)) return;
+  if (!window.confirm(`Delete client ${client.name}? Its orders and invoices will be hidden; all history will be retained.`)) return;
   await api(`/api/leads/${client.id}`, {method:'DELETE'});
-  resetForm();closeForm();byId('clientDetail').hidden=true;
+  resetForm();closeForm();byId('clientDetail').hidden=true;byId('directoryPanel').hidden=false;
   await loadOptions();await load();message('Client deleted. History retained.');
 }
 byId('refresh').onclick = () => load().catch(error => message(error.message, true));
@@ -139,8 +136,8 @@ byId('leadForm').onsubmit = async event => {
   event.preventDefault(); byId('save').disabled = true;
   try {
     const wasEditing = editingId !== null;
-    await api(wasEditing ? `/api/leads/${editingId}` : '/api/leads', {method: wasEditing ? 'PUT' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(formDetails())});
-    resetForm(); closeForm(); byId('clientDetail').hidden = true; await loadOptions(); await load(); message(wasEditing ? 'Client lead updated.' : 'Client lead created.');
+    const saved = await api(wasEditing ? `/api/leads/${editingId}` : '/api/leads', {method: wasEditing ? 'PUT' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(formDetails())});
+    resetForm(); closeForm(); byId('clientDetail').hidden = true; await loadOptions(); await load(); message(wasEditing ? 'Client updated.' : 'Client created.');await openDetails(saved.lead.id);
   } catch (error) { message(error.message, true); }
   finally { byId('save').disabled = false; }
 };
@@ -150,12 +147,12 @@ byId('leadForm').onsubmit = async event => {
 })();
 
 function resetForm() {
-  editingId = null; readOnly = false; separateShipping = null; byId('leadForm').reset();
+  editingId = null; readOnly = false; byId('leadForm').reset();
   byId('contacts').replaceChildren();
   byId('leadForm').querySelectorAll('input, select, textarea, button').forEach(control => { control.disabled = false; });
   byId('save').hidden = false;
-  byId('formTitle').textContent = 'Add a client lead';
-  byId('save').textContent = 'Create lead'; byId('cancelEdit').hidden = true;
+  byId('formTitle').textContent = 'Add a client';
+  byId('save').textContent = 'Create client'; byId('cancelEdit').hidden = true;
 }
 byId('cancelEdit').onclick = () => { resetForm(); closeForm(); };
 byId('addLead').onclick = () => { resetForm(); openForm(); byId('name').focus(); };
@@ -175,11 +172,9 @@ function addContact(person = {}) {
 }
 byId('addContact').onclick = () => addContact();
 function formDetails() {
-  syncShipping();
   const details = Object.fromEntries(scalarFields.map(field => [field, byId(field).value]));
   ['emails', 'phones'].forEach(field => { details[field] = byId(field).value.split(/\n/).map(value => value.trim()).filter(Boolean); });
   details.contact_persons = [...byId('contacts').children].map(row => Object.fromEntries([...row.querySelectorAll('input')].map(input => [input.dataset.field, input.value])));
-  ['billing', 'shipping'].forEach(kind => { details[`${kind}_address`] = Object.fromEntries(addressFields.map(field => [field, byId(`${kind}_${field}`).value.trim()]).filter(([,value]) => value)); });
   details.enquiry_source_id = byId('enquiry_source_id').value ? Number(byId('enquiry_source_id').value) : null;
   return details;
 }
@@ -195,25 +190,6 @@ function closeForm() {
   byId('addLead').setAttribute('aria-expanded', 'false');
   byId('addLead').focus();
 }
-function syncShipping() {
-  const same = byId('sameAsBilling').checked;
-  addressFields.forEach(field => {
-    const shipping = byId(`shipping_${field}`);
-    if (same) shipping.value = byId(`billing_${field}`).value;
-    shipping.disabled = readOnly || same;
-  });
-}
-byId('sameAsBilling').onchange = () => {
-  if (byId('sameAsBilling').checked) {
-    separateShipping = Object.fromEntries(addressFields.map(field => [field, byId(`shipping_${field}`).value]));
-  } else if (separateShipping) {
-    addressFields.forEach(field => { byId(`shipping_${field}`).value = separateShipping[field]; });
-    separateShipping = null;
-  }
-  syncShipping();
-};
-addressFields.forEach(field => { byId(`billing_${field}`).addEventListener('input', syncShipping); });
-
 async function loadOptions() {
   const data = await api('/api/leads/options');
   const creator = byId('filterCreator').value;
@@ -232,16 +208,19 @@ function setSource(client) {
   select.value = client.enquiry_source_id || '';
 }
 async function openDetails(id) {
-  const data = await api(`/api/leads/${id}`); const client = data.lead;
+  const version=++profileVersion;
+  const data = await api(`/api/leads/${id}`);if(version!==profileVersion)return; const client = data.lead;
+  history.replaceState(null,'',`/clients-orders?client_id=${id}`);
   byId('detailTitle').textContent = client.name;
   byId('detailAvatar').textContent = client.name.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase();
   byId('detailSubtitle').textContent = client.company || 'Client profile';
   byId('detailBadges').replaceChildren();
   const accessLabel = client.is_shared ? `Shared ${client.shared_access_level} / ${client.can_edit ? 'Editable' : 'Read only'}` : client.can_edit ? 'Editable' : 'Read only';
-  for (const [label, style] of [[client.status, 'client-status'], [client.is_active ? 'Active' : 'Inactive', client.is_active ? 'client-active' : 'client-inactive'], [accessLabel, 'client-access']]) {
+  for (const [label, style] of [[client.is_active ? 'Active' : 'Inactive', client.is_active ? 'client-active' : 'client-inactive'], [accessLabel, 'client-access']]) {
     const badge=document.createElement('span');badge.className=style;badge.textContent=label;byId('detailBadges').append(badge);
   }
   byId('detailActions').replaceChildren();
+  if(client.can_edit){const edit=clientActionButton('edit',client.name);edit.onclick=()=>editClient(client.id);byId('detailActions').append(edit);}
   if(client.can_delete){const remove=clientActionButton('delete',client.name,'btn-del');remove.onclick=()=>deleteClient(client).catch(error=>message(error.message,true));byId('detailActions').append(remove);}
   byId('detailBody').replaceChildren();
   const section = (label, value) => {
@@ -251,38 +230,18 @@ async function openDetails(id) {
     if (label === 'Notes') block.classList.add('detail-notes');
     block.append(heading,text); byId('detailBody').append(block);
   };
-  const formatAddress = address => [address.line1,address.line2,[address.city,address.state,address.postal_code].filter(Boolean).join(', '),address.country].filter(Boolean).join('\n');
-  section('Company information', [client.company,client.business_details].filter(Boolean).join('\n'));
+  section('Company information', client.company);
   section('Contacts', [...new Set([client.email,client.phone,...client.emails,...client.phones,...client.contact_persons.map(c => [c.name,c.email,c.phone].filter(Boolean).join(' / '))].filter(Boolean))].join('\n'));
-  section('Reusable billing address',formatAddress(client.billing_address));
-  section('Default shipping address',formatAddress(client.shipping_address));
+  section('Location',client.location);
   section('Notes',client.notes);
   section('Owner and creation',`${client.creator_name}\nCreated ${new Date(client.created_at).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'})}`);
   section('Enquiry source',client.enquiry_source_name ? `${client.enquiry_source_name}${client.enquiry_source_active ? '' : ' (inactive)'}` : 'Not specified');
-  byId('addressHistory').replaceChildren();
-  data.address_history.forEach(snapshot => {
-    const line = document.createElement('p'); line.textContent = `${new Date(snapshot.recorded_at).toLocaleString()} / ${snapshot.actor_name || 'Migration baseline'}\nBilling: ${formatAddress(snapshot.billing_address) || '-'}\nDefault shipping: ${formatAddress(snapshot.default_shipping_address) || '-'}`; byId('addressHistory').append(line);
-  });
-  const enquiries = await api('/api/enquiries?' + new URLSearchParams({client_id:id,page_size:10}));
-  const enquirySection = document.createElement('section'); enquirySection.className = 'client-enquiries';
-  const enquiryHeader = document.createElement('div'); enquiryHeader.className = 'enquiry-header';
-  const heading = document.createElement('h3'); heading.textContent = `Enquiries (${enquiries.total})`; enquiryHeader.append(heading);
-  const all = document.createElement('a'); all.className = 'btn-sm enquiry-link'; all.href = `/enquiries?client_id=${id}`; all.textContent = 'View all enquiries'; enquiryHeader.append(all);
-  if (client.can_edit && client.is_active) { const add = document.createElement('a'); add.className = 'btn-sm btn-add'; add.href = `/enquiries?client_id=${id}&new=1`; add.textContent = 'Add Enquiry'; enquiryHeader.append(add); }
-  enquirySection.append(enquiryHeader);
-  enquiries.enquiries.forEach(e => {
-    const card = document.createElement('a'); card.className = 'enquiry-card';
-    card.href = `/enquiries?client_id=${id}&enquiry_id=${e.id}`;
-    const title = document.createElement('strong'); title.textContent = e.subject;
-    const meta = document.createElement('span'); meta.textContent = `#${e.reference} / ${e.enquiry_date} / ${e.status.replaceAll('_', ' ')}`;
-    const arrow = document.createElement('span'); arrow.className = 'enquiry-card-action'; arrow.textContent = 'View details';
-    card.append(title,meta,arrow); enquirySection.append(card);
-  });
-  if (!enquiries.total) { const empty = document.createElement('p'); empty.textContent = 'No enquiries for this client yet.'; enquirySection.append(empty); }
-  byId('detailBody').append(enquirySection);
+  await window.renderRelatedOrders(byId('detailBody'),{client_id:id},client.can_edit&&client.is_active);
+  if(version!==profileVersion)return;
+  byId('directoryPanel').hidden=true;
   byId('clientDetail').hidden = false; byId('clientDetail').scrollIntoView({behavior:'smooth',block:'start'});
 }
-byId('closeDetail').onclick = () => { byId('clientDetail').hidden = true; };
+byId('closeDetail').onclick = byId('backDirectory').onclick = () => { profileVersion++;byId('clientDetail').hidden = true;byId('directoryPanel').hidden=false;history.replaceState(null,'','/clients-orders'); };
 byId('discoveryForm').onsubmit = event => { event.preventDefault(); currentPage = 1; load().catch(error => message(error.message,true)); };
 byId('clearFilters').onclick = () => { byId('discoveryForm').reset(); currentPage = 1; load().catch(error => message(error.message,true)); };
 byId('previousPage').onclick = () => { if (currentPage > 1) { currentPage--; load().catch(error => message(error.message,true)); } };

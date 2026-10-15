@@ -1,5 +1,11 @@
 # AMT Quotation
 
+The active CRM workflow is now **Clients & Orders** at `/clients-orders`: search
+clients, manage their profiles, save independent pending orders, and generate
+USD/INR proforma invoices. Company seller/bank details remain in server-configured
+PI templates. See [workspace setup, API, migrations and verification](docs/clients_orders_workspace.md).
+The module notes below also describe historical functionality retained for compatibility.
+
 ## Project structure
 
 ```text

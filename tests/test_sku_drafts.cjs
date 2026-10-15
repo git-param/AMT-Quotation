@@ -18,7 +18,7 @@ class Element {
   querySelectorAll() { return []; }
 }
 
-function setup(scope, fetch, currency = 'USD') {
+function setup(scope, fetch, currency = 'USD', commercial = false) {
   const context = {
     window: {}, document: {createElement: tag => new Element(tag)}, fetch,
   };
@@ -26,7 +26,7 @@ function setup(scope, fetch, currency = 'USD') {
   const file = path.join(__dirname, '../frontend/enquiries/sku-drafts.js');
   vm.runInContext(fs.readFileSync(file, 'utf8'), context);
   const host = new Element('div');
-  const drafts = context.window.createSkuDraftEditor(host, scope, () => currency);
+  const drafts = context.window.createSkuDraftEditor(host, scope, () => currency, null, commercial);
   const lookup = host.children[1];
   const input = lookup.children[1];
   input.value = '1258\n4657';
@@ -124,6 +124,19 @@ test('quotation table retains editable deal details and selected items', async (
   assert.throws(() => editor.drafts.values(), /Select at least one/);
   all.checked = true;all.onchange();
   assert.equal(editor.drafts.values().length, 1);
+});
+
+test('order lookup retains HSN, condition and units after refreshing catalog details', async () => {
+  const line={sku:'1258',description:'Part',quantity:'1',unit_price:'10.00',currency:'USD',condition:'Used',catalog_prices:{}};
+  const editor=setup(()=>({client_id:7}),async()=>({ok:true,json:async()=>({drafts:[{...line}]})}),'USD',true);
+  await editor.button.onclick();
+  const fields=editor.host.children[3].children[1];
+  for(const [index,value] of [[4,'85371090'],[5,'Refurbished'],[6,'Units']]){
+    const control=fields.children[index].children[0];control.value=value;control.oninput();
+  }
+  await editor.button.onclick();
+  const saved=editor.drafts.values()[0];
+  assert.equal(saved.hsn_code,'85371090');assert.equal(saved.item_condition,'Refurbished');assert.equal(saved.uom,'Units');
 });
 
 test('repeated lookup merges identical SKUs and preserves user edits', async () => {

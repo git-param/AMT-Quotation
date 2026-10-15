@@ -3,18 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Client Leads | AMT</title>
+    <title>Clients &amp; Orders | AMT</title>
     <link rel="stylesheet" href="/static/manager_dashboard/manager.css" />
     <link rel="stylesheet" href="/static/enquiry_sources/sources.css" />
     <link rel="stylesheet" href="/static/client_leads/leads.css" />
-  </head>
+  <link rel="stylesheet" href="/static/orders/related.css"><link rel="stylesheet" href="/static/common/sidebar.css"><script src="/static/common/sidebar.js" defer></script></head>
   <body>
     <header class="hdr">
       <div>
-        <div class="hdr-logo">Client Leads</div>
-        <div class="hdr-sub">Your client contacts</div>
+        <div class="hdr-logo">Clients &amp; Orders</div>
+        <div class="hdr-sub">Client relationships, orders and proforma invoices</div>
       </div>
-      <nav><a class="back-link" href="/enquiries">Enquiries</a>
+      <nav>
         <span id="hdrUser"></span
         ><a
           class="back-link"
@@ -32,17 +32,17 @@
       <div id="content" hidden>
         <div class="page-intro">
           <div>
-            <span class="eyebrow">CLIENT LEADS</span>
-            <h1>Start your next conversation</h1>
-            <p>Create a lead and keep the contact details in one place.</p>
+            <span class="eyebrow">CLIENTS &amp; ORDERS</span>
+            <h1>Your clients. Every order. One workspace.</h1>
+            <p>Find a client to manage their profile, pending orders and generated invoices.</p>
           </div>
-          <button class="btn-sm btn-add" id="addLead" type="button" aria-controls="leadEditor" aria-expanded="false">+ Add Lead</button>
+          <button class="btn-sm btn-add" id="addLead" type="button" aria-controls="leadEditor" aria-expanded="false">+ Add Client</button>
         </div>
         <section class="panel source-editor" id="leadEditor" hidden>
           <div class="editor-heading">
             <div>
-              <h2 id="formTitle">Add a client lead</h2>
-              <p>New leads are assigned to you automatically.</p>
+              <h2 id="formTitle">Add a client</h2>
+              <p>New clients are assigned to you automatically.</p>
             </div>
           </div>
           <form id="leadForm">
@@ -72,23 +72,7 @@
                   rows="3"
                 ></textarea>
               </div>
-              <div class="form-field">
-                <label for="status">Client status</label
-                ><select id="status" name="status">
-                  <option value="lead">Lead</option>
-                  <option value="prospect">Prospect</option>
-                  <option value="customer">Customer</option>
-                </select>
-              </div>
-              <div class="form-field lead-notes">
-                <label for="business_details">Business details</label
-                ><textarea
-                  id="business_details"
-                  name="business_details"
-                  maxlength="2000"
-                  rows="3"
-                ></textarea>
-              </div>
+              <div class="form-field lead-notes"><label for="location">Location</label><textarea id="location" maxlength="2000" rows="3" placeholder="Address, city and country"></textarea></div>
               <div class="form-field">
                 <label for="emails"
                   >Additional email addresses (one per line)</label
@@ -107,126 +91,46 @@
                   Add contact person
                 </button>
               </fieldset>
-              <fieldset>
-                <legend>Billing address</legend>
-                <div class="address-fields">
-                  <div class="form-field">
-                    <label for="billing_line1">Address line 1</label
-                    ><input id="billing_line1" maxlength="200" />
-                  </div>
-                  <div class="form-field">
-                    <label for="billing_line2">Address line 2</label
-                    ><input id="billing_line2" maxlength="200" />
-                  </div>
-                  <div class="form-field">
-                    <label for="billing_city">City</label
-                    ><input id="billing_city" maxlength="200" />
-                  </div>
-                  <div class="form-field">
-                    <label for="billing_state">State / region</label
-                    ><input id="billing_state" maxlength="200" />
-                  </div>
-                  <div class="form-field">
-                    <label for="billing_postal_code">Postal code</label
-                    ><input id="billing_postal_code" maxlength="200" />
-                  </div>
-                  <div class="form-field">
-                    <label for="billing_country">Country</label
-                    ><input id="billing_country" maxlength="200" />
-                  </div>
-                </div>
-                <small
-                  >When provided, address line 1 and country are
-                  required.</small
-                >
-              </fieldset>
-              <fieldset>
-                <legend>Default shipping address</legend>
-                <label class="same-address"><input id="sameAsBilling" type="checkbox"> Default shipping address same as billing</label>
-                <div class="address-fields">
-                  <div class="form-field">
-                    <label for="shipping_line1">Address line 1</label
-                    ><input id="shipping_line1" maxlength="200" />
-                  </div>
-                  <div class="form-field">
-                    <label for="shipping_line2">Address line 2</label
-                    ><input id="shipping_line2" maxlength="200" />
-                  </div>
-                  <div class="form-field">
-                    <label for="shipping_city">City</label
-                    ><input id="shipping_city" maxlength="200" />
-                  </div>
-                  <div class="form-field">
-                    <label for="shipping_state">State / region</label
-                    ><input id="shipping_state" maxlength="200" />
-                  </div>
-                  <div class="form-field">
-                    <label for="shipping_postal_code">Postal code</label
-                    ><input id="shipping_postal_code" maxlength="200" />
-                  </div>
-                  <div class="form-field">
-                    <label for="shipping_country">Country</label
-                    ><input id="shipping_country" maxlength="200" />
-                  </div>
-                </div>
-                <small
-                  >When provided, address line 1 and country are
-                  required.</small
-                >
-              </fieldset>
             </div>
             <button class="btn-sm btn-add" id="save" type="submit">
-              Create lead
+              Create client
             </button>
             <button class="btn-sm" id="cancelEdit" type="button" hidden>
               Cancel
             </button>
           </form>
         </section>
-        <section class="panel">
+        <section class="panel" id="directoryPanel">
           <div class="source-toolbar">
             <div>
-              <h2>Your accessible leads</h2>
+              <h2>Client directory</h2>
               <p id="summary"></p>
             </div>
             <button class="btn-sm" id="refresh">Refresh</button>
           </div>
           <form id="discoveryForm" class="discovery-controls">
             <div class="form-field"><label for="search">Search clients</label><input id="search" placeholder="Company, contact, email or phone" maxlength="200"></div>
-            <div class="form-field"><label for="filterStatus">Status</label><select id="filterStatus"><option value="all">All statuses</option><option value="lead">Lead</option><option value="prospect">Prospect</option><option value="customer">Customer</option></select></div>
             <div class="form-field"><label for="filterActive">Availability</label><select id="filterActive"><option value="all">All clients</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
             <div class="form-field"><label for="filterOwnership">Ownership</label><select id="filterOwnership"><option value="all">All accessible</option><option value="own">My clients</option><option value="others">Other owners</option></select></div>
+            <details class="advanced-filters"><summary>More filters &amp; sorting</summary><div class="discovery-advanced">
             <div class="form-field"><label for="filterCreator">Creator / owner</label><select id="filterCreator"><option value="">All accessible creators</option></select></div>
             <div class="form-field"><label for="filterAccess">Shared access</label><select id="filterAccess"><option value="all">All access</option><option value="shared">Shared with me</option><option value="VIEW">VIEW shares</option><option value="EDIT">EDIT shares</option></select></div>
             <div class="form-field"><label for="filterSource">Enquiry source</label><select id="filterSource"><option value="">All sources</option></select></div>
-            <div class="form-field"><label for="sort">Sort</label><select id="sort"><option value="created">Created</option><option value="company">Company</option><option value="name">Client name</option><option value="status">Status</option></select></div>
+            <div class="form-field"><label for="sort">Sort</label><select id="sort"><option value="created">Created</option><option value="company">Company</option><option value="name">Client name</option></select></div>
             <div class="form-field"><label for="direction">Direction</label><select id="direction"><option value="desc">Descending</option><option value="asc">Ascending</option></select></div>
+            </div></details>
             <button class="btn-sm btn-add" type="submit">Search / Apply</button><button class="btn-sm" id="clearFilters" type="button">Clear</button>
           </form>
           <div class="source-table">
             <table class="tbl">
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Company</th>
-                  <th>Email</th>
-                  <th>Phone</th>
-                  <th>Created by</th>
-                  <th>Created</th>
-                  <th>Notes</th>
-                  <th>Enquiries</th>
-                  <th>Status</th>
-                  <th>Access</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
+              <thead><tr><th>Client / company</th><th>Contact</th><th>Owner</th><th>Orders / pending</th><th>Availability</th><th>Access</th><th>Actions</th></tr></thead>
               <tbody id="leads"></tbody>
             </table>
           </div>
           <div class="pagination"><button class="btn-sm" id="previousPage" type="button">Previous</button><span id="pageInfo" aria-live="polite"></span><button class="btn-sm" id="nextPage" type="button">Next</button><label>Rows <select id="pageSize"><option>25</option><option>50</option><option>100</option></select></label></div>
         </section>
         <section id="clientDetail" class="panel" hidden aria-labelledby="detailTitle">
-          <div class="client-detail-header">
+          <button class="btn-sm" id="backDirectory" type="button">Back to client directory</button><div class="client-detail-header">
             <div class="client-avatar" id="detailAvatar" aria-hidden="true"></div>
             <div class="client-detail-heading">
               <span class="eyebrow">CLIENT DETAILS</span>
@@ -238,11 +142,9 @@
             <button class="btn-sm" id="closeDetail" type="button">Close</button>
           </div>
           <div id="detailBody" class="detail-grid"></div>
-          <details class="client-address-history"><summary>Saved address history</summary><div id="addressHistory"></div></details>
-          <p class="history-note">Billing and default shipping addresses are reusable. Each future order can use a saved address or its own delivery address.</p>
         </section>
       </div>
     </main>
-    <script src="/static/client_leads/leads.js"></script>
+    <script src="/static/orders/related.js"></script><script src="/static/client_leads/leads.js"></script>
   </body>
 </html>

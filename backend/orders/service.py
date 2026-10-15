@@ -9,6 +9,7 @@ from backend.client_leads.details import address, email, phone, text
 from backend.client_leads.routes import delete_scope, edit_scope, visibility
 from backend.enquiries.lines import number, serialize, validated as validate_line
 from backend.enquiries.routes import read_enquiry
+from backend.orders.parties import TEXT_FIELDS, text_delivery
 
 STATUSES = ('draft', 'confirmed', 'processing', 'dispatched', 'completed',
             'cancelled')
@@ -89,10 +90,12 @@ def header(data, existing=None):
 
 def party(value, required=False):
     """Reuse CRM contact validators for separate order-only parties."""
-    fields = {'name', 'email', 'phone', 'pic', 'gst_number'}
+    fields = {'name', 'email', 'phone', 'pic', 'gst_number', 'address'}
     if not isinstance(value, dict) or set(value) - fields:
         raise ValueError('Invalid party details.')
-    result = {key: text(value.get(key, ''), 200, key) for key in fields}
+    result = {key: text(value.get(key, ''), 200, key) for key in fields - {'address'}}
+    if 'address' in value:
+        result['address'] = address(value['address'])
     result['email'] = email(value.get('email', ''))
     result['phone'] = phone(value.get('phone', ''))
     if (required or any(result.values())) and not result['name']:
@@ -100,14 +103,20 @@ def party(value, required=False):
     return result
 
 
-def delivery(connection, client, data, old=None, draft=False):
+def delivery(connection, client, data, old=None, draft=False, destination=''):
     """Copy a selected saved address or accept a private order address."""
     fields = {'billing_address', 'shipping_address', 'consignee', 'buyer',
               'notify_party', 'instructions', 'saved_address_id',
-              'saved_address_kind'}
+              'saved_address_kind', *TEXT_FIELDS}
     if not isinstance(data, dict) or set(data) - fields:
         raise ValueError('Invalid delivery fields.')
     old = old or {}
+    if any(key in data for key in TEXT_FIELDS) or (
+            any(key in old for key in TEXT_FIELDS)
+            and not set(data) - {'instructions'}):
+        if set(data) - {*TEXT_FIELDS, 'instructions'}:
+            raise ValueError('Use party text blocks or structured delivery fields, not both.')
+        return text_delivery(data, old, destination, draft)
     saved_id = data.get('saved_address_id', old.get('saved_address_id'))
     kind = data.get('saved_address_kind', old.get('saved_address_kind'))
     if 'shipping_address' in data:
@@ -190,8 +199,13 @@ def details(connection, order):
     legacy_review = []
     if order['reference'] == 'LEGACY-ENQ-' + str(order['enquiry_id']):
         legacy_review = [serialize(row) for row in connection.execute(
-            'SELECT * FROM enquiry_sku_lines WHERE enquiry_id = ? '
-            'AND is_active = 1 AND quantity_milli % 1000 != 0', (order['enquiry_id'],))]
+            'SELECT s.* FROM enquiry_sku_lines s WHERE s.enquiry_id = ? '
+            'AND s.is_active = 1 AND s.quantity_milli % 1000 != 0 '
+            'AND NOT EXISTS (SELECT 1 FROM order_legacy_line_reviews r '
+            'JOIN order_sku_lines replacement ON replacement.id = r.replacement_line_id '
+            'WHERE r.order_id = ? AND r.source_line_id = s.id '
+            'AND replacement.order_id = ? AND replacement.is_active = 1)',
+            (order['enquiry_id'], order['id'], order['id']))]
     return {'order': result, 'lines': lines, 'invoices': invoices,
             'legacy_lines_requiring_review': legacy_review,
             'subtotals': {key: format(value, '.2f')
