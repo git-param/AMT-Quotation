@@ -110,7 +110,6 @@ def pdf(doc):
         alignment=2 if 'amount' in kind else 1 if kind in ('title','head','center') else 0
         style=ParagraphStyle('cell',fontName=bold if is_bold else regular,fontSize=size,
             leading=size+2,alignment=alignment,textColor=colors.red if kind=='warning' else colors.black)
-        if cell.get('sku'):text=cell['sku']+'\n'+text
         if 'uom' in cell:text+=' '+cell['uom']
         if 'amount' in kind and not cell.get('free'):text=symbol+' '+text
         content=escape(text).replace('\n','<br/>')
@@ -228,7 +227,6 @@ def xlsx(doc):
             chunks=[]
             for cell in row:
                 value=cell.get('display_text',cell['text'])
-                if cell.get('sku'):value=cell['sku']+'\n'+value
                 if 'uom' in cell:value+=' '+cell['uom']
                 chars=max(4,int(sum(model['widths'][cell['col']:cell['col']+cell['span']])*.9))
                 wrapped=[part for line in value.split('\n') for part in (textwrap.wrap(line,chars) or [''])]

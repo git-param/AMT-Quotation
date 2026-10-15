@@ -317,6 +317,9 @@ function appendInvoice(invoice,id){
 const invoicePreview=window.createPiPreview(el('piPreview'),api,json,async result=>{
   appendInvoice({...result,currency:el('piCurrency').value,workbook_format:'xlsx',has_pdf:true},current.order.id);
   message(`PI ${result.reference} generated. Excel and PDF are ready.`);
+},doc=>{
+  if(current)current.order.pi_reference=doc.reference;
+  el('pi_reference').value=doc.reference;
 });
 el('piForm').onsubmit=async event=>{
   event.preventDefault();

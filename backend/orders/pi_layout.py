@@ -77,7 +77,7 @@ def layout(doc):
     for index,line in enumerate(total['lines']):
         prefix=f'lines.{index}.'
         items.append([c(0,1,index+1,'center'),
-            editable(1,3,'',line['description'],prefix+'description',multiline=True,sku=line['sku'],sku_field=prefix+'sku'),
+            editable(1,3,'',line['description'],prefix+'description',multiline=True),
             editable(4,1,'',line['hsn_code'],prefix+'hsn_code','center',readonly=bool(doc.get('shared_hsn_code'))),
             editable(5,1,'',line['item_condition'],prefix+'item_condition','center'),
             editable(6,2,'',line['quantity'],prefix+'quantity','center',uom=line['uom'],uom_field=prefix+'uom',type='number'),

@@ -77,7 +77,7 @@ test('party blocks are prefilled from editable client data without removed order
   const fixture=setup();await settle();await fixture.context.createOrder();
   const block=fixture.element('consignee_text').value;
   assert.match(block,/Company/);assert.match(block,/Saved shipping/);assert.match(block,/Tel: \+12345678901/);assert.match(block,/Email: pic@example.com/);
-  assert.equal(fixture.element('buyer_text').value,block);assert.equal(fixture.element('notify_text').value,block);
+  assert.equal(fixture.element('buyer_text').value,fixture.context.window.orderLocations.addressOnly(block));assert.equal(fixture.element('notify_text').value,fixture.context.window.orderLocations.addressOnly(block));
   fixture.element('consignee_text').value=block+'\nOrder-only instruction';fixture.element('consignee_text').oninput();
   await fixture.element('orderForm').onsubmit({preventDefault(){}});
   const request=fixture.requests.find(item=>item.url==='/api/orders'&&item.options.method==='POST');
@@ -86,7 +86,7 @@ test('party blocks are prefilled from editable client data without removed order
   for(const key of ['status','payment_terms','pi_date','enquiry_id','notes'])assert.equal(body[key],undefined);
   assert.equal(body.pi_reference,'');assert.equal(body.delivery.instructions,undefined);
   assert.match(body.delivery.consignee_text,/Order-only instruction/);
-  assert.equal(body.delivery.buyer_text,body.delivery.consignee_text);assert.equal(body.delivery.shipping_address,undefined);
+  assert.equal(body.delivery.buyer_text,fixture.context.window.orderLocations.addressOnly(body.delivery.consignee_text));assert.equal(body.delivery.shipping_address,undefined);
 });
 
 test('new orders keep multiline address and contact sections together with delivery defaults',async()=>{
@@ -104,7 +104,7 @@ test('new orders keep multiline address and contact sections together with deliv
   const saved=JSON.parse(fixture.requests.find(item=>item.url==='/api/orders'&&item.options.method==='POST').options.body);
   assert.equal(saved.pi_reference,'SALES/001');
   assert.match(saved.delivery.consignee_text,/^Updated company\nNew street\nCity, state 12345\n\nINDIA/);
-  assert.equal(saved.delivery.buyer_text,saved.delivery.consignee_text);
+  assert.equal(saved.delivery.buyer_text,fixture.context.window.orderLocations.addressOnly(saved.delivery.consignee_text));
 });
 
 test('buyer and notify stay editable and can independently follow or diverge from consignee',async()=>{
@@ -114,9 +114,9 @@ test('buyer and notify stay editable and can independently follow or diverge fro
   assert.equal(fixture.element('buyer_same').checked,false);
   fixture.element('consignee_text').value=original+'\nConsignee revision';fixture.element('consignee_text').oninput();
   assert.match(fixture.element('buyer_text').value,/Buyer-specific registration/);
-  assert.equal(fixture.element('notify_text').value,fixture.element('consignee_text').value);
+  assert.equal(fixture.element('notify_text').value,fixture.context.window.orderLocations.addressOnly(fixture.element('consignee_text').value));
   fixture.element('buyer_same').checked=true;fixture.element('buyer_same').onchange();
-  assert.equal(fixture.element('buyer_text').value,fixture.element('consignee_text').value);
+  assert.equal(fixture.element('buyer_text').value,fixture.context.window.orderLocations.addressOnly(fixture.element('consignee_text').value));
 });
 
 test('country suggestions sync the consignee and show buyer GST only for India',async()=>{

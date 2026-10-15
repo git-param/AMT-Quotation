@@ -141,7 +141,6 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
             if(cell.bottom_contacts)td.classList.add('pi-consignee-cell');
             partyField(td,cell.value,cell.field);
           } else if (cell.field) {
-            if (cell.sku_field) field(td, "SKU", cell.sku, cell.sku_field);
             const amount = cell.style.includes("amount") && !cell.free;
             const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.free ? 'Free' : cell.value, cell.field, cell.multiline, cell.free ? 'text' : cell.type || "text");
             if (cell.readonly) { input.readOnly = true; input.title = 'Shared HSN code managed in Configuration'; }

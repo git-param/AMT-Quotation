@@ -89,15 +89,46 @@ class NativePiTests(unittest.TestCase):
         with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
             self.assertIn('SALES/2026/001',book.read('xl/sharedStrings.xml').decode())
 
+    def test_preview_pi_number_edits_update_order_and_issue_matching_exports(self):
+        preview=self.preview()
+        saved=self.client.put(self.base+'/preview/'+preview['preview_id'],json={'order':{'pi_reference':'SALES/EDITED/001'}})
+        self.assertEqual(saved.status_code,200,saved.json)
+        self.assertEqual(saved.json['document']['reference'],'SALES/EDITED/001')
+        self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['order']['pi_reference'],'SALES/EDITED/001')
+        self.assertEqual(self.client.put(self.base+'/preview/'+preview['preview_id'],json={'order':{'pi_reference':''}}).status_code,400)
+        issued=self.issue(saved.json)
+        self.assertEqual(issued.status_code,201,issued.json)
+        self.assertEqual(issued.json['reference'],'SALES/EDITED/001')
+
+    def test_copied_contacts_stay_in_consignee_and_manual_preview_contacts_survive(self):
+        from backend.orders.locations import address_only
+        block='Client company\nStreet address\nCountry: USA\nTel: +919876543210\nPIC: Person\nEmail: client@example.com'
+        self.client.put(f'/api/orders/{self.order_id}',json={'delivery':{
+            'consignee_text':block,'buyer_text':block,'notify_text':block}})
+        preview=self.preview(currency='INR',usd_inr_rate='80')
+        doc=preview['document']
+        self.assertIn('Tel:',doc['delivery']['consignee_text'])
+        for key in ('buyer_text','notify_text'):
+            self.assertEqual(doc['delivery'][key],address_only(block))
+            self.assertNotIn('PIC:',doc['delivery'][key])
+        fields=[cell['field'] for section in preview['layout']['sections'] for row in section['rows'] for cell in row]
+        self.assertIn('buyer_gst_number',fields)
+        saved=self.client.put(self.base+'/preview/'+preview['preview_id'],json={'delivery':{
+            'buyer_text':doc['delivery']['buyer_text']+'\nTel: +919999999999\nPIC: Buyer\nEmail: buyer@example.com'}})
+        self.assertEqual(saved.status_code,200,saved.json)
+        self.assertIn('Email: buyer@example.com',saved.json['document']['delivery']['buyer_text'])
+
     def test_party_address_and_contacts_have_export_spacing(self):
         preview=self.preview()
         parties=next(section for section in preview['layout']['sections'] if section['name']=='parties')
         cells=[cell for row in parties['rows'] for cell in row if cell.get('party')]
         self.assertEqual(len(cells),3)
         consignee=next(cell for cell in cells if cell['field']=='delivery.consignee_text')
-        self.assertIn('Consignee\nOrder destination\n\nUSA',consignee['text'])
+        self.assertEqual(consignee['text'],'Consignee\nOrder destination')
+        self.assertEqual(parties['rows'][-1][0]['text'],'USA')
+        self.assertTrue(parties['rows'][-1][0]['bottom_aligned'])
         with ZipFile(BytesIO(pi_exports.xlsx(preview['document']))) as book:
-            self.assertIn('Consignee\nOrder destination\n\nUSA',book.read('xl/sharedStrings.xml').decode())
+            self.assertIn('Consignee\nOrder destination',book.read('xl/sharedStrings.xml').decode())
 
     def test_edits_recalculate_in_selected_currency_and_keep_source_order_unchanged(self):
         self.assertEqual(self.client.post(self.base+'/preview',json={'currency':'INR'}).status_code,400)
@@ -279,13 +310,14 @@ class NativePiTests(unittest.TestCase):
         cells=[cell for section in saved.json['layout']['sections'] for row in section['rows'] for cell in row]
         shipping=next(cell for cell in cells if cell['field']=='shipping_charges')
         self.assertEqual(shipping['display_text'],'Free')
-        self.assertEqual(next(cell for cell in cells if cell['field']=='prepared_phone')['label'],'Tel: ')
+        self.assertEqual(next(cell for cell in cells if cell['field']=='prepared_phone')['aria'],'Tel')
         issued=self.issue(saved.json)
         self.assertEqual(issued.status_code,201,issued.json)
         with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
             strings=book.read('xl/sharedStrings.xml').decode()
             self.assertIn('Free',strings)
-            self.assertIn('Tel: +919725218537',strings)
+            self.assertIn('Tel:',strings)
+            self.assertIn('+919725218537',strings)
 
     def test_company_grid_keeps_bold_borders_fonts_and_warning_highlight(self):
         preview=self.preview()
