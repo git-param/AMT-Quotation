@@ -30,9 +30,9 @@ def layout(doc):
         editable(5,6,'Proforma Invoice Date: ',doc['date'],'date',type='date'),
         editable(5,6,'Purchase Order: ',order['po_reference'],'order.po_reference'),
         c(5,6,'Prepared By: '+doc['prepared_by']),
-        editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold'),
+        editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_bottom=True),
         editable(5,3,'Delivery Terms: ',order['delivery_terms'],'order.delivery_terms')]
-    header=[[c(0,11,'PROFORMA INVOICE','title')]]
+    header=[[c(0,11,'PROFORMA INVOICE','title',line_bottom=True)]]
     for index in range(7):
         left=c(0,5,'SUPPLIER/SELLER','bold') if index==0 else c(0,5,seller[index-1] if index<=len(seller) else '')
         if index<5:right=[metadata[index]]
@@ -46,7 +46,7 @@ def layout(doc):
         [c(0,5,'CONSIGNEE','bold'),c(5,6,'BUYER Details','bold')],
         [editable(0,5,'',doc['delivery']['consignee_text'],'delivery.consignee_text',multiline=True,editor_rows=3),
          editable(5,6,'',doc['delivery']['buyer_text'],'delivery.buyer_text',multiline=True)],
-        [c(0,5,'',placeholder=True),c(5,6,'Notify Details','bold')],
+        [c(0,5,'',placeholder=True),c(5,6,'Notify Details','bold',line_top=True)],
         [c(0,5,'',placeholder=True),editable(5,6,'',doc['delivery']['notify_text'],'delivery.notify_text',multiline=True)]]
     item_header=[c(start,span,label,'head') for start,span,label in
         [(0,1,'Sno'),(1,3,'Description'),(4,1,'HSN Code'),(5,1,'Condition'),
@@ -75,14 +75,14 @@ def layout(doc):
         left=bank[index] if index<len(bank) else c(0,8)
         start=count-len(summaries)
         if index>=start:
-            amount,label=summaries[index-start];right=[c(8,1,label,'center'),amount]
+            amount,label=summaries[index-start];right=[c(8,1,label,'center',line_top=True),{**amount,'line_top':True}]
         else:right=[c(8,1),c(9,2)]
         bank_rows.append([left,*right])
     bank_rows.append([c(0,2,'Amount In Word','bold'),c(2,6,total['amount_in_words'],'bold'),
                       c(8,1,'Grand Total','bold'),c(9,2,total['grand_total'],'bold_amount',numeric=True)])
     clauses=[[c(0,11,'Terms & Conditions:-','bold')]]
     for value in terms(doc).splitlines():
-        final=bool(re.match(r'^\s*\d+[.)]\s*THE FINAL TAX INVOICE',value,re.I))
+        final=bool(re.match(r'^\s*\d+[.)]\s*THE FINAL TAX (?:INVOICE|INVOCIE)',value,re.I))
         clauses.append([c(0,11,value,'final_term' if final else 'terms')])
     for label,value,path in [('Delivery instructions',doc['delivery']['instructions'],'delivery.instructions'),
                               ('Order notes',order['notes'],'order.notes')]:

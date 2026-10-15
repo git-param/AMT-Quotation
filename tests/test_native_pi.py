@@ -154,5 +154,28 @@ class NativePiTests(unittest.TestCase):
         self.assertIn('2. PAYMENT Agreed advance',output)
         self.assertIn('4. SHIPMENT: DISPATCH WITHIN 24 HOURS OF PAYMENT CONFIRMATION',output)
 
+    def test_company_grid_keeps_bold_borders_fonts_and_warning_highlight(self):
+        preview=self.preview()
+        model=preview['layout']
+        self.assertEqual(len(model['widths']),11)
+        header=next(s for s in model['sections'] if s['name']=='header')['rows']
+        self.assertTrue(header[0][0]['line_bottom'])
+        self.assertTrue(any(c.get('line_bottom') and c['field']=='order.payment_terms' for row in header for c in row))
+        parties=next(s for s in model['sections'] if s['name']=='parties')['rows']
+        self.assertEqual([(c['col'],c['span']) for c in parties[0]],[(0,5),(5,6)])
+        self.assertTrue(parties[2][1]['line_top'])
+        bank=next(s for s in model['sections'] if s['name']=='bank')['rows']
+        self.assertTrue(any(c['style']=='warning' for row in bank for c in row))
+        self.assertEqual(bank[-1][-1]['style'],'bold_amount')
+        with ZipFile(BytesIO(pi_exports.xlsx(preview['document']))) as book:
+            styles=book.read('xl/styles.xml').decode()
+            self.assertIn('Cambria',styles)
+            self.assertIn('FFFFFF00',styles)
+            self.assertIn('FFFF0000',styles)
+            self.assertIn('style="medium"',styles)
+            self.assertNotIn('FFD0D0D0',styles)
+            self.assertNotIn('_xlnm.Print_Titles',book.read('xl/workbook.xml').decode())
+            self.assertTrue(ET.fromstring(book.read('xl/drawings/drawing1.xml')).findall('.//{*}srcRect'))
+
 
 if __name__=='__main__':unittest.main()

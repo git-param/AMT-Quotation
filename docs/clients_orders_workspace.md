@@ -110,10 +110,21 @@ Native renderers use `assets/PI-img/header.png`, `address.png`,
 `payment_options.png` and `signature.png`. Assets and company settings are frozen
 in each snapshot. No reference workbook, Excel installation, VBA, country lists
 or helper worksheets are needed for native generation. PDF uses A4 margins,
-repeated branding, and page numbers; long content and up to 50 lines paginate.
+a single branding/title box and page numbers; long content and up to 50 lines paginate.
 XLSX is an ordinary macro-free workbook with embedded images, a defined print
 area and wrapped commercial content. Seller, company bank information, taxes,
 shipping, total, amount in words and existing commercial clauses are retained.
+
+`backend/orders/pi_layout.py` defines the original A:K company invoice layout
+for the editable preview and both native exports: Cambria typography, supplier
+beside PI/commercial details, consignee beside stacked buyer/notify blocks,
+bank information beside totals, bold headings/bank rows, the red-on-yellow
+bank-charge warning, and the highlighted final INR clause. Borders use bold
+black section/column boundaries; light worksheet row lines are omitted. The
+image and invoice title share one header box without a divider above the title.
+Dividers below the title/payment terms, above notify details and around shipping
+totals match the marked layout. Continuation pages do not repeat the branding
+header. Payment/signature images follow the terms above the address strip.
 
 Company seller/bank/payment/tax/terms configuration lives in the singleton
 `company_pi_settings` table. It is company-owned, never a client/order input.

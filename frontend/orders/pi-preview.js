@@ -45,262 +45,90 @@ window.createPiPreview = function (host, api, json, onIssued) {
     parent.append(img);
   }
   function collect() {
-    const doc = state.document,
-      data = {
-        date: doc.date,
-        order: {},
-        delivery: {},
-        shipping_charges: doc.totals.shipping,
-        lines: doc.totals.lines.map((line) =>
-          Object.fromEntries(
-            [
-              "id",
-              "sku",
-              "description",
-              "hsn_code",
-              "item_condition",
-              "uom",
-              "quantity",
-              "unit_price",
-            ].map((k) => [k, line[k]]),
-          ),
-        ),
-      };
-    for (const { input, path } of inputs) {
-      const parts = path.split(".");
-      let target = data;
-      for (const part of parts.slice(0, -1)) target = target[part];
-      target[parts.at(-1)] = input.value;
-    }
+    const doc = state.document;
+    const data = {date:doc.date,order:{},delivery:{},shipping_charges:doc.totals.shipping,
+      lines:doc.totals.lines.map(line=>Object.fromEntries(["id","sku","description","hsn_code","item_condition","uom","quantity","unit_price"].map(key=>[key,line[key]])))};
+    for(const {input,path} of inputs){const keys=path.split('.');let target=data;for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)]=input.value;}
     return data;
   }
-  async function save() {
-    state = await api(
-      state.base + "/" + state.preview_id,
-      json("PUT", collect()),
-    ).then((result) => ({ ...result, base: state.base }));
+  async function save(){
+    const base=state.base;
+    state={...await api(base+'/'+state.preview_id,json('PUT',collect())),base};
     render();
   }
-  async function run(callback) {
-    if (busy) return;
-    busy = true;
-    toolbar.querySelectorAll("button").forEach((b) => (b.disabled = true));
-    try {
-      await callback();
-    } catch (error) {
-      status.textContent = error.message;
-      status.classList.add("error");
-      status.focus();
-    } finally {
-      busy = false;
-      toolbar.querySelectorAll("button").forEach((b) => (b.disabled = false));
-    }
+  async function run(callback){
+    if(busy)return;busy=true;
+    toolbar.querySelectorAll('button').forEach(button=>button.disabled=true);
+    try{await callback();}catch(error){status.textContent=error.message;status.classList.add('error');status.focus();}
+    finally{busy=false;toolbar.querySelectorAll('button').forEach(button=>button.disabled=false);}
   }
-  function button(label, callback, primary = false) {
-    const b = node("button", label, "btn-sm" + (primary ? " btn-add" : ""));
-    b.type = "button";
-    b.onclick = () => run(callback);
-    toolbar.append(b);
-    return b;
+  function button(label,callback,primary=false){
+    const control=node('button',label,'btn-sm'+(primary?' btn-add':''));control.type='button';
+    control.onclick=()=>run(callback);toolbar.append(control);
   }
-  function render() {
-    host.replaceChildren();
-    host.hidden = false;
-    inputs = [];
-    toolbar = node("div", undefined, "pi-preview-toolbar");
-    host.append(toolbar);
-    button("Close preview", async () => {
-      host.hidden = true;
-    });
-    if (!issued) {
-      button("Update preview", save);
-      button("Edit invoice", async () => { printFrame.hidden = true; paper.hidden = false; });
-      button("PDF print preview", async () => {
-        await save();
-        paper.hidden = true;
-        printFrame.hidden = false;
-        printFrame.src = state.pdf_url + "?v=" + Date.now();
-      });
+  function render(){
+    host.replaceChildren();host.hidden=false;inputs=[];
+    toolbar=node('div',undefined,'pi-preview-toolbar');host.append(toolbar);
+    button('Close preview',async()=>{host.hidden=true;});
+    if(!issued){
+      button('Update preview',save);
+      button('Edit invoice',async()=>{printFrame.hidden=true;paper.hidden=false;});
+      button('PDF print preview',async()=>{await save();paper.hidden=true;printFrame.hidden=false;printFrame.src=state.pdf_url+'?v='+Date.now();});
     }
-    for (const format of ["xlsx", "pdf"])
-      button(
-        "Generate " + format.toUpperCase(),
-        async () => {
-          if (!issued) {
-            await save();
-            issued = await api(
-              state.base.replace("/preview", "/issue"),
-              json("POST", { preview_id: state.preview_id }),
-            );
-            await onIssued(issued);
-            render();
-          }
-          const a = node("a");
-          a.href = issued[format + "_url"];
-          a.download = "";
-          host.append(a);
-          a.click();
-          a.remove();
-        },
-        true,
-      );
-    status = node(
-      "p",
-      issued
-        ? "PI " +
-            issued.reference +
-            " issued. Both downloads use this saved invoice."
-        : "Edit fields directly below, then review the PDF print preview. Changes apply to this PI only.",
-      "pi-preview-status",
-    );
-    status.role = "status";
-    status.tabIndex = -1;
-    host.append(status);
-    const scroller = node("div", undefined, "pi-paper-scroll");
-    paper = node("article", undefined, "pi-paper");
-    scroller.append(paper);
-    host.append(scroller);
-    printFrame = node("iframe");
-    printFrame.title = "Exact PI PDF print preview";
-    printFrame.className = "pi-print-frame";
-    printFrame.hidden = true;
-    host.append(printFrame);
-    const doc = state.document,
-      order = doc.order,
-      total = doc.totals;
-    image(paper, "header.png");
-    paper.append(node("h2", "PROFORMA INVOICE"));
-    const overview = node("div", undefined, "pi-overview");
-    overview.append(
-      node("div", doc.company.seller.join("\n"), "pi-preformatted"),
-    );
-    const identity = node("div");
-    identity.append(
-      node("strong", doc.reference),
-      node(
-        "p",
-        "Currency: " + doc.currency + " · Prepared by: " + doc.prepared_by,
-      ),
-    );
-    field(identity, "PI date", doc.date, "date", false, "date");
-    field(identity, "PO reference", order.po_reference, "order.po_reference");
-    overview.append(identity);
-    paper.append(overview);
-    const commercial = node("div", undefined, "pi-commercial");
-    for (const [key, label] of [
-      ["payment_terms", "Payment terms"],
-      ["delivery_terms", "Delivery terms"],
-      ["destination", "Destination"],
-      ["delivery_time", "Delivery time"],
-      ["dispatch_method", "Dispatch"],
-    ])
-      field(commercial, label, order[key], "order." + key);
-    paper.append(commercial);
-    const parties = node("div", undefined, "pi-preview-parties");
-    for (const [key, label] of [
-      ["consignee_text", "Consignee"],
-      ["buyer_text", "Buyer details"],
-      ["notify_text", "Notify details"],
-    ])
-      field(parties, label, doc.delivery[key], "delivery." + key, true);
-    paper.append(parties);
-    const table = node("table", undefined, "pi-preview-lines"),
-      head = node("thead"),
-      hr = node("tr");
-    for (const label of [
-      "Item / Description",
-      "HSN / Condition",
-      "Qty / UOM",
-      "Rate (" + doc.currency + ")",
-      "Amount",
-    ])
-      hr.append(node("th", label));
-    head.append(hr);
-    table.append(head);
-    const body = node("tbody");
-    total.lines.forEach((line, index) => {
-      const row = node("tr");
-      for (const group of [
-        [
-          ["sku", "SKU"],
-          ["description", "Description"],
-        ],
-        [
-          ["hsn_code", "HSN code"],
-          ["item_condition", "Condition"],
-        ],
-        [
-          ["quantity", "Quantity"],
-          ["uom", "UOM"],
-        ],
-        [["unit_price", "Unit price"]],
-      ]) {
-        const td = node("td");
-        for (const [key, label] of group)
-          field(
-            td,
-            label,
-            line[key],
-            `lines.${index}.${key}`,
-            ["description"].includes(key),
-            ["quantity", "unit_price"].includes(key) ? "number" : "text",
-          );
-        row.append(td);
+    for(const format of ['xlsx','pdf'])button('Generate '+format.toUpperCase(),async()=>{
+      if(!issued){await save();issued=await api(state.base.replace('/preview','/issue'),json('POST',{preview_id:state.preview_id}));await onIssued(issued);render();}
+      const link=node('a');link.href=issued[format+'_url'];link.download='';host.append(link);link.click();link.remove();
+    },true);
+    status=node('p',issued?'PI '+issued.reference+' issued. Both downloads use this saved invoice.':'Edit fields directly below, then review the PDF print preview. Changes apply to this PI only.','pi-preview-status');
+    status.role='status';status.tabIndex=-1;host.append(status);
+    const scroll=node('div',undefined,'pi-paper-scroll');paper=node('article',undefined,'pi-paper');scroll.append(paper);host.append(scroll);
+    printFrame=node('iframe');printFrame.title='Exact PI PDF print preview';printFrame.className='pi-print-frame';printFrame.hidden=true;host.append(printFrame);
+    renderGrid();
+  }
+  function renderGrid() {
+    const doc = state.document;
+    const symbol = doc.currency === "INR" ? "₹" : "$";
+    const headerBox = node("div", undefined, "pi-header-box");
+    const branding = node("div", undefined, "pi-branding");
+    image(branding, "header.png");headerBox.append(branding);paper.append(headerBox);
+    for (const section of state.layout.sections) {
+      const table = node("table", undefined, "pi-company-grid pi-grid-" + section.name + (section.name === "bank" ? " pi-preview-totals" : ""));
+      const columns = node("colgroup");
+      const width = state.layout.widths.reduce((a, b) => a + b, 0);
+      for (const size of state.layout.widths) { const col = node("col"); col.style.width = (100 * size / width) + "%"; columns.append(col); }
+      table.append(columns);
+      const body = node("tbody");
+      for (const row of section.rows) {
+        const tr = node("tr");
+        for (const cell of row) {
+          if (section.name === "parties" && cell.placeholder) continue;
+          const td = node("td", undefined, "pi-cell-" + (cell.style || "normal")); td.colSpan = cell.span;
+          if (cell.line_top) td.classList.add("pi-border-top");
+          if (cell.line_bottom) td.classList.add("pi-border-bottom");
+          if (cell.editor_rows) td.rowSpan = cell.editor_rows;
+          if (cell.field) {
+            if (cell.sku_field) field(td, "SKU", cell.sku, cell.sku_field);
+            const amount = cell.style.includes("amount");
+            const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.value, cell.field, cell.multiline, cell.type || "text");
+            if (!cell.label && !amount) td.lastChild.classList.add("pi-unlabelled");
+            if (cell.editor_rows) input.rows = 12;
+            else if (cell.multiline) input.rows = cell.field.startsWith("delivery.") ? 5 : 2;
+            if (cell.uom_field) {field(td, "UOM", cell.uom, cell.uom_field);td.classList.add("pi-quantity-cell");}
+          } else td.append(node("div", (cell.style.includes("amount") ? symbol + " " : "") + cell.text, "pi-cell-text"));
+          tr.append(td);
+        }
+        body.append(tr);
       }
-      row.append(node("td", line.line_total, "pi-line-amount"));
-      body.append(row);
-    });
-    table.append(body);
-    paper.append(table);
-    const totals = node("div", undefined, "pi-preview-totals");
-    for (const [label, key] of [
-      ["Subtotal", "subtotal"],
-      ["GST", "tax"],
-      ["Grand total (" + doc.currency + ")", "grand_total"],
-    ]) {
-      if (key === "tax" && total.tax === "0.00") continue;
-      totals.append(node("div", label), node("strong", total[key]));
+      table.append(body);(section.name === "header" ? headerBox : paper).append(table);
     }
-    field(
-      totals,
-      "Shipping (" + doc.currency + ")",
-      total.shipping,
-      "shipping_charges",
-      false,
-      "number",
-    );
-    paper.append(
-      totals,
-      node("p", "Amount in words: " + total.amount_in_words, "pi-amount-words"),
-    );
-    paper.append(
-      node("h3", "Bank details"),
-      node("div", doc.company.bank.join("\n"), "pi-preformatted"),
-      node("p", doc.company.bank_charges || ""),
-    );
-    paper.append(
-      node("h3", "Terms & conditions"),
-      node(
-        "div",
-        doc.company.terms[doc.currency]
-          .map((t) => t.replace(/^(\s*\d+[.)]\s*)?PAYMENT\b.*/i, (_, prefix) => (prefix || "") + "PAYMENT " + order.payment_terms))
-          .join("\n"),
-        "pi-preformatted",
-      ),
-    );
-    field(
-      paper,
-      "Delivery instructions",
-      doc.delivery.instructions,
-      "delivery.instructions",
-      true,
-    );
-    field(paper, "Order notes", order.notes, "order.notes", true);
+    for (const [label, key, path] of [["Delivery instructions", "instructions", "delivery.instructions"], ["Order notes", "notes", "order.notes"]]) {
+      const value = key === "notes" ? doc.order.notes : doc.delivery.instructions;
+      if (!value) field(paper, label, "", path, true);
+    }
     const signatures = node("div", undefined, "pi-signatures");
-    image(signatures, "payment_options.png");
-    image(signatures, "signature.png");
-    paper.append(signatures);
-    image(paper, "address.png");
+    image(signatures, "payment_options.png");image(signatures, "signature.png");
+    const footerBox=node("div",undefined,"pi-footer-box");footerBox.append(signatures);
+    image(footerBox, "address.png");paper.append(footerBox);
     if (issued) for (const { input } of inputs) input.disabled = true;
   }
   return {
