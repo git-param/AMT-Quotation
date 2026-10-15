@@ -11,6 +11,7 @@ from backend.client_leads.details import text,phone
 from backend.enquiries.lines import number, serialize
 from backend.orders.company import get_profile
 from backend.orders.parties import text_delivery
+from backend.orders.locations import country_block, gst_number, with_gst
 from backend.orders.service import header, order_line
 
 ASSETS = ('header.png', 'address.png', 'payment_options.png', 'signature.png')
@@ -40,31 +41,21 @@ def party_block(party, address):
           ('email','Email: '),('gst_number','GST: ')) if party.get(key)]]))
 
 
-def inr_locations(doc):
-    """Use the domestic country in both PI locations for INR invoices."""
-    if doc['currency'] != 'INR':
-        return doc
+def sync_locations(doc):
+    """The selected order country owns both highlighted PI locations."""
     source_delivery = doc['source_state'].get('delivery') or {}
-    countries = {'india', str(doc['order'].get('destination', '')).strip().casefold(),
-                 str((source_delivery.get('shipping_address') or {}).get('country', '')).strip().casefold(),
-                 str(doc['source_state']['order'].get('destination', '')).strip().casefold()}
-    lines = doc['delivery']['consignee_text'].splitlines()
-    result = []
-    inserted = False
-    for index, line in enumerate(lines):
-        if index > 0 and (re.match(r'^\s*Country\s*:', line, re.I)
-                          or (line.strip() and line.strip().casefold() in countries)):
-            if not inserted:
-                result.append('INDIA')
-                inserted = True
-        else:
-            result.append(line)
-    if not inserted:
-        contact = next((index for index, line in enumerate(result) if index > 0 and
-            re.match(r'^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:', line, re.I)), len(result))
-        result.insert(contact, 'INDIA')
-    doc['delivery']['consignee_text'] = '\n'.join(result)
-    doc['order']['destination'] = 'INDIA'
+    country = doc['order']['destination'].strip().upper()
+    if not country:
+        explicit = re.search(r'^\s*Country\s*:\s*(.+)$',doc['delivery']['consignee_text'],re.I|re.M)
+        country = (explicit[1].strip() if explicit else
+            (source_delivery.get('shipping_address') or {}).get('country','')).upper()
+    if not country and doc['currency'] == 'INR':
+        country = 'INDIA'
+    previous = [(source_delivery.get('shipping_address') or {}).get('country'),
+                doc['source_state']['order'].get('destination')]
+    doc['delivery']['consignee_text'] = country_block(doc['delivery']['consignee_text'], country, previous)
+    doc['order']['destination'] = country
+    doc['buyer_gst_number'] = gst_number(doc['delivery']['buyer_text'])
     return doc
 
 
@@ -99,7 +90,7 @@ def prepare(state, user, currency, rate):
             assets[name] = base64.b64encode(path.read_bytes()).decode('ascii')
         except OSError as error:
             raise ValueError('Company PI image is missing: '+name) from error
-    return inr_locations({'schema_version':2,'reference':'AMT/PI/'+uuid4().hex[:16].upper(),
+    return sync_locations({'schema_version':2,'reference':'AMT/PI/'+uuid4().hex[:16].upper(),
         'date':datetime.now(timezone(timedelta(hours=5,minutes=30))).date().isoformat(),
         'prepared_by':user['username'],'prepared_phone':company_phone(company),'currency':currency,'order':order,
         'delivery':{'consignee_text':consignee,'buyer_text':buyer,'notify_text':notify,
@@ -111,7 +102,7 @@ def prepare(state, user, currency, rate):
 
 def edit(document, edits):
     from backend.orders.invoices import calculate
-    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','terms'}:
+    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','terms','buyer_gst_number'}:
         raise ValueError('Invalid PI preview fields. Company details and invoice identity cannot be edited.')
     doc = deepcopy(document)
     if 'terms' in edits:
@@ -138,6 +129,9 @@ def edit(document, edits):
             raise ValueError('Invalid PI party fields.')
         snapshot,_,_ = text_delivery(edits['delivery'],doc['delivery'],doc['order']['destination'],True)
         doc['delivery'] = {key:snapshot[key] for key in ('consignee_text','buyer_text','notify_text','instructions')}
+    if 'buyer_gst_number' in edits:
+        number_value = text(edits['buyer_gst_number'],200,'buyer GST number')
+        doc['delivery']['buyer_text'] = with_gst(doc['delivery']['buyer_text'], number_value)
     lines = doc['totals']['lines']
     if 'lines' in edits:
         values = edits['lines']
@@ -163,7 +157,7 @@ def edit(document, edits):
                       'shipping_charges':format(Decimal(shipping_minor)/100,'.2f')},
              'lines':[{**line,'currency':doc['currency']} for line in lines]}
     doc['totals'] = calculate(state,doc['currency'],None,Decimal(doc['totals']['tax_rate']))
-    return inr_locations(doc)
+    return sync_locations(doc)
 
 
 def validate_ready(doc):

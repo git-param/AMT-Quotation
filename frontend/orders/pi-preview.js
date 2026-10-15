@@ -22,6 +22,15 @@ window.createPiPreview = function (host, api, json, onIssued) {
     input.value = value ?? "";
     input.dataset.piField = path;
     input.setAttribute("aria-label", label);
+    if (path === 'order.destination') {
+      input.setAttribute('list', 'orderCountries');
+      input.setAttribute('autocomplete', 'off');
+      input.onchange = () => {
+        input.value = input.value.trim().toUpperCase();
+        const consignee = inputs.find(item => item.path === 'delivery.consignee_text');
+        if (consignee) consignee.input.value = window.orderLocations.countryBlock(consignee.input.value, input.value, [state.document.order.destination]);
+      };
+    }
     if (multiline) input.rows = path.startsWith("delivery.") ? 9 : 3;
     if (type === "number") {
       input.min = "0";

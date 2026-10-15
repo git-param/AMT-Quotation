@@ -53,7 +53,8 @@ function setup(search = '?client_id=9') {
       requests.push({url,options});
       if(denied)return {ok:false,status:403,json:async()=>({error:'Client access is read-only.'})};
       let response;
-      if(url.startsWith('/api/orders?'))response=listing;
+      if(url==='/static/common/countries.json')response=JSON.parse(fs.readFileSync(path.join(__dirname,'../frontend/common/countries.json'),'utf8'));
+      else if(url.startsWith('/api/orders?'))response=listing;
       else if(url==='/api/orders' && options.method==='POST')response=data;
       else if(url==='/api/orders/7')response=data;
       else if(url==='/api/orders/7/line-commercial-details'){const body=JSON.parse(options.body);for(const item of body.lines)Object.assign(data.lines.find(line=>line.id===item.id),item);response=data;}
@@ -66,6 +67,7 @@ function setup(search = '?client_id=9') {
     },
   };
   vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/common/order-locations.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/orders/orders.js'),'utf8'),context);
   return {context,element,requests,data,listing,deny(){denied=true;}};
 }
@@ -96,6 +98,29 @@ test('buyer and notify stay editable and can independently follow or diverge fro
   assert.equal(fixture.element('notify_text').value,fixture.element('consignee_text').value);
   fixture.element('buyer_same').checked=true;fixture.element('buyer_same').onchange();
   assert.equal(fixture.element('buyer_text').value,fixture.element('consignee_text').value);
+});
+
+test('country suggestions sync the consignee and show buyer GST only for India',async()=>{
+  const fixture=setup();await settle();await fixture.context.createOrder();
+  const options=fixture.element('orderCountries').children.map(option=>option.value);
+  assert.ok(options.includes('USA'));assert.ok(options.includes('INDIA'));
+  assert.equal(new Set(options).size,options.length);
+  assert.equal(fixture.element('buyerGstField').hidden,false);
+  fixture.element('buyerGst').value='24AAGMO289C1ZP';fixture.element('buyerGst').oninput();
+  assert.match(fixture.element('buyer_text').value,/GST No\.: 24AAGMO289C1ZP/);
+  assert.equal(fixture.element('buyer_same').checked,false);
+  fixture.element('destination').value='usa';fixture.element('destination').onchange();
+  assert.equal(fixture.element('buyerGstField').hidden,true);
+  assert.equal(fixture.element('destination').value,'USA');
+  assert.match(fixture.element('consignee_text').value,/\nUSA\n/);
+  assert.doesNotMatch(fixture.element('consignee_text').value,/Country: India/);
+  fixture.element('destination').value='india';fixture.element('destination').onchange();
+  assert.equal(fixture.element('buyerGstField').hidden,false);
+  assert.equal(fixture.element('buyerGst').value,'24AAGMO289C1ZP');
+  await fixture.element('orderForm').onsubmit({preventDefault(){}});
+  const saved=JSON.parse(fixture.requests.find(item=>item.url==='/api/orders'&&item.options.method==='POST').options.body);
+  assert.equal(saved.destination,'INDIA');
+  assert.match(saved.delivery.buyer_text,/GST No\.: 24AAGMO289C1ZP/);
 });
 
 test('VIEW order detail hides editing and management controls',async()=>{

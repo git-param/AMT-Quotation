@@ -41,11 +41,25 @@ function formatPartyBlock(party={},address={}){
   return lines.join('\n');
 }
 function syncConsignee(){for(const prefix of ['buyer','notify'])if(el(prefix+'_same').checked)el(prefix+'_text').value=el('consignee_text').value;}
-for(const prefix of ['buyer','notify']){
-  el(prefix+'_text').oninput=()=>{el(prefix+'_same').checked=el(prefix+'_text').value===el('consignee_text').value;};
-  el(prefix+'_same').onchange=()=>{if(el(prefix+'_same').checked)el(prefix+'_text').value=el('consignee_text').value;};
+function refreshBuyerGst(){
+  el('buyerGstField').hidden=el('destination').value.trim().toUpperCase()!=='INDIA';
+  el('buyerGst').value=window.orderLocations.gstNumber(el('buyer_text').value);
 }
-el('consignee_text').oninput=syncConsignee;
+el('destination').oninput=()=>{el('buyerGstField').hidden=el('destination').value.trim().toUpperCase()!=='INDIA';};
+el('destination').onchange=()=>{
+  el('destination').value=el('destination').value.trim().toUpperCase();
+  el('consignee_text').value=window.orderLocations.countryBlock(el('consignee_text').value,el('destination').value);
+  syncConsignee();refreshBuyerGst();
+};
+el('buyerGst').oninput=()=>{
+  el('buyer_text').value=window.orderLocations.withGst(el('buyer_text').value,el('buyerGst').value);
+  el('buyer_same').checked=el('buyer_text').value===el('consignee_text').value;
+};
+for(const prefix of ['buyer','notify']){
+  el(prefix+'_text').oninput=()=>{el(prefix+'_same').checked=el(prefix+'_text').value===el('consignee_text').value;refreshBuyerGst();};
+  el(prefix+'_same').onchange=()=>{if(el(prefix+'_same').checked)el(prefix+'_text').value=el('consignee_text').value;refreshBuyerGst();};
+}
+el('consignee_text').oninput=()=>{syncConsignee();refreshBuyerGst();};
 const initialDrafts=window.createSkuDraftEditor(el('initialDrafts'),()=>({client_id:Number(clientScope)}),()=>el('currency').value,null,true);
 const lineDrafts=window.createSkuDraftEditor(el('lineDrafts'),()=>({client_id:current.order.client_id}),()=>current.order.currency,async lines=>{
   await api(`/api/orders/${current.order.id}/lines/bulk`,json('POST',{lines}));await showDetails(current.order.id);
@@ -137,6 +151,7 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
   }
   el('instructions').value=delivery?.instructions||'';
   if(!delivery)el('destination').value=saved.country||'';
+  refreshBuyerGst();
   return true;
 }
 async function createOrder() {
@@ -163,6 +178,9 @@ el('orderForm').onsubmit=async event=>{
   event.preventDefault();el('save').disabled=true;
   try {
     if(!clientData)throw new Error('Choose a client before saving.');
+    el('destination').value=el('destination').value.trim().toUpperCase();
+    el('consignee_text').value=window.orderLocations.countryBlock(el('consignee_text').value,el('destination').value);
+    syncConsignee();
     const data=Object.fromEntries(headerFields.map(key=>[key,el(key).value]));
     data.delivery={consignee_text:el('consignee_text').value,buyer_text:el('buyer_text').value,
       notify_text:el('notify_text').value,instructions:el('instructions').value};

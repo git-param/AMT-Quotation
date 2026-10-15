@@ -5,6 +5,7 @@ is a layout definition only; it never opens a workbook or changes PI amounts.
 """
 from decimal import Decimal
 import re
+from backend.orders.locations import gst_number, without_gst
 
 WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
           15.7109375,8.7109375,8,16,8.7109375,8.140625]
@@ -50,12 +51,17 @@ def layout(doc):
         header.append([left,*right])
     # Additional configured seller lines are retained, rather than discarded.
     for value in seller[6:]:header.append([c(0,5,value),c(5,6)])
+    domestic = order['destination'].strip().upper() == 'INDIA'
+    buyer_text = without_gst(doc['delivery']['buyer_text']) if domestic else doc['delivery']['buyer_text']
     parties=[
         [c(0,5,'CONSIGNEE','bold'),c(5,6,'BUYER Details','bold')],
-        [editable(0,5,'',doc['delivery']['consignee_text'],'delivery.consignee_text',multiline=True,editor_rows=3),
-         editable(5,6,'',doc['delivery']['buyer_text'],'delivery.buyer_text',multiline=True)],
+        [editable(0,5,'',doc['delivery']['consignee_text'],'delivery.consignee_text',multiline=True,editor_rows=4 if domestic else 3),
+         editable(5,6,'',buyer_text,'delivery.buyer_text',multiline=True)],
         [c(0,5,'',placeholder=True),c(5,6,'Notify Details','bold',line_top=True)],
         [c(0,5,'',placeholder=True),editable(5,6,'',doc['delivery']['notify_text'],'delivery.notify_text',multiline=True)]]
+    if domestic:
+        parties.insert(2,[c(0,5,'',placeholder=True),editable(5,6,'GST No.: ',
+            doc.get('buyer_gst_number',gst_number(doc['delivery']['buyer_text'])),'buyer_gst_number')])
     item_header=[c(start,span,label,'head') for start,span,label in
         [(0,1,'Sno'),(1,3,'Description'),(4,1,'HSN Code'),(5,1,'Condition'),
          (6,2,'QTY'),(8,1,'Rate / PCs'),(9,2,'Total Amount')]]

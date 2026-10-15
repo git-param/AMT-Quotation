@@ -7,7 +7,7 @@ from backend.client_leads.details import email, phone, text
 TEXT_FIELDS = ('consignee_text', 'buyer_text', 'notify_text')
 LABELS = {'tel': 'phone', 'telephone': 'phone', 'phone': 'phone',
           'email': 'email', 'e-mail': 'email', 'pic': 'pic',
-          'gst': 'gst_number', 'gst no': 'gst_number', 'gst number': 'gst_number',
+          'gst': 'gst_number', 'gst no': 'gst_number', 'gst no.': 'gst_number', 'gst number': 'gst_number',
           'gstin': 'gst_number',
           'country': 'country', 'location': 'location', 'address': 'location'}
 
