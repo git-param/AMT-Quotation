@@ -32,6 +32,13 @@ function action(label,callback,danger=false){
   button.onclick=()=>callback().catch(error=>message(error.message,true));return button;
 }
 function cell(row,value){const td=document.createElement('td');td.textContent=value??'';row.append(td);return td;}
+async function deleteOrder(order){
+  if(!window.confirm(`Are you sure you want to delete order ${order.reference}? The order will be removed from active lists. Its history and who deleted it will be retained.`))return;
+  await api(`/api/orders/${order.id}`,{method:'DELETE'});
+  detailVersion++;formVersion++;current=null;invoicePreview.reset();el('detail').hidden=true;el('editor').hidden=true;
+  await load();message(`Order ${order.reference} deleted. Deletion recorded in the order deletion log.`);
+  if(params.get('embedded')==='1')window.parent.postMessage({type:'amt-order-close'},location.origin);
+}
 function addressText(address){return addressFields.map(key=>address?.[key]).filter(Boolean).join('\n')||'Not provided';}
 function formatPartyBlock(party={},address={}){
   const lines=[party.name,...addressFields.filter(key=>key!=='country').map(key=>address?.[key])].filter(Boolean);
@@ -41,43 +48,44 @@ function formatPartyBlock(party={},address={}){
   return lines.join('\n');
 }
 function showPartyFields(prefix){
+  if(prefix!=='consignee'){el(prefix+'_primary').value=el(prefix+'_text').value;return;}
   const [primary,secondary]=window.orderLocations.partyParts(el(prefix+'_text').value,el('destination').value);
   el(prefix+'_primary').value=primary;el(prefix+'_details').value=secondary;
 }
 function syncConsignee(){for(const prefix of ['buyer','notify'])if(el(prefix+'_same').checked){el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value);showPartyFields(prefix);}}
 for(const prefix of ['consignee','buyer','notify']){
   const changed=()=>{
-    el(prefix+'_text').value=window.orderLocations.joinParty(el(prefix+'_primary').value,el(prefix+'_details').value);
+    el(prefix+'_text').value=prefix==='consignee'?window.orderLocations.joinParty(el(prefix+'_primary').value,el(prefix+'_details').value):el(prefix+'_primary').value;
     el(prefix+'_text').oninput();
   };
-  el(prefix+'_primary').oninput=changed;el(prefix+'_details').oninput=changed;
+  el(prefix+'_primary').oninput=changed;if(prefix==='consignee')el(prefix+'_details').oninput=changed;
 }
-function refreshBuyerGst(){
-  el('buyerGstField').hidden=el('destination').value.trim().toUpperCase()!=='INDIA';
-  el('buyerGst').value=window.orderLocations.gstNumber(el('buyer_text').value);
+function refreshConsigneeGst(){
+  el('consigneeGstField').hidden=el('destination').value.trim().toUpperCase()!=='INDIA';
+  el('consigneeGst').value=window.orderLocations.gstNumber(el('consignee_text').value);
 }
-el('destination').oninput=()=>{el('buyerGstField').hidden=el('destination').value.trim().toUpperCase()!=='INDIA';};
+function setIndiaCurrency(){if(el('destination').value.trim().toUpperCase()==='INDIA'&&el('currency').value!=='INR'){el('currency').value='INR';initialDrafts.currencyChanged();}}
+el('destination').oninput=()=>{setIndiaCurrency();el('consigneeGstField').hidden=el('destination').value.trim().toUpperCase()!=='INDIA';};
 el('destination').onchange=()=>{
-  el('destination').value=el('destination').value.trim().toUpperCase();
+  el('destination').value=el('destination').value.trim().toUpperCase();setIndiaCurrency();
   el('consignee_text').value=window.orderLocations.countryBlock(el('consignee_text').value,el('destination').value);
   showPartyFields('consignee');
-  syncConsignee();refreshBuyerGst();
+  syncConsignee();refreshConsigneeGst();
 };
-el('buyerGst').oninput=()=>{
-  el('buyer_text').value=window.orderLocations.withGst(el('buyer_text').value,el('buyerGst').value);
-  showPartyFields('buyer');
-  el('buyer_same').checked=el('buyer_text').value===window.orderLocations.addressOnly(el('consignee_text').value);
+el('consigneeGst').oninput=()=>{
+  el('consignee_text').value=window.orderLocations.withGst(el('consignee_text').value,el('consigneeGst').value);
+  showPartyFields('consignee');syncConsignee();
 };
 for(const prefix of ['buyer','notify']){
-  el(prefix+'_text').oninput=()=>{el(prefix+'_same').checked=el(prefix+'_text').value===window.orderLocations.addressOnly(el('consignee_text').value);refreshBuyerGst();};
-  el(prefix+'_same').onchange=()=>{if(el(prefix+'_same').checked)el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value);showPartyFields(prefix);refreshBuyerGst();};
+  el(prefix+'_text').oninput=()=>{el(prefix+'_same').checked=el(prefix+'_text').value===window.orderLocations.addressOnly(el('consignee_text').value);refreshConsigneeGst();};
+  el(prefix+'_same').onchange=()=>{if(el(prefix+'_same').checked)el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value);showPartyFields(prefix);refreshConsigneeGst();};
 }
-el('consignee_text').oninput=()=>{syncConsignee();refreshBuyerGst();};
+el('consignee_text').oninput=()=>{syncConsignee();refreshConsigneeGst();};
 const initialDrafts=window.createSkuDraftEditor(el('initialDrafts'),()=>({client_id:Number(clientScope)}),()=>el('currency').value,null,true);
 const lineDrafts=window.createSkuDraftEditor(el('lineDrafts'),()=>({client_id:current.order.client_id}),()=>current.order.currency,async lines=>{
   await api(`/api/orders/${current.order.id}/lines/bulk`,json('POST',{lines}));await showDetails(current.order.id);
 },true);
-el('currency').onchange=()=>initialDrafts.currencyChanged();
+el('currency').onchange=()=>{setIndiaCurrency();initialDrafts.currencyChanged();};
 
 
 function selectOrderTab(name){
@@ -135,6 +143,7 @@ async function load() {
     [order.client_name,order.enquiry_reference,order.order_date,order.status,order.currency,order.creator_name].forEach(value=>cell(row,value));
     const actions=cell(row,'');actions.append(action('Details',()=>showDetails(order.id)));
     if(order.can_edit)actions.append(action('Edit',()=>editOrder(order.id)));
+    if(order.can_delete_order)actions.append(action('Delete',()=>deleteOrder(order),true));
     el('orders').append(row);
   });
   if(!data.orders.length){const row=document.createElement('tr');const td=cell(row,'No orders match your filters.');td.colSpan=8;el('orders').append(row);}
@@ -165,7 +174,7 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
   }
   for(const prefix of ['consignee','buyer','notify'])showPartyFields(prefix);
   if(!delivery)el('destination').value=saved.country||'';
-  refreshBuyerGst();
+  setIndiaCurrency();refreshConsigneeGst();
   return true;
 }
 async function createOrder() {
@@ -195,7 +204,7 @@ el('orderForm').onsubmit=async event=>{
   event.preventDefault();el('save').disabled=true;
   try {
     if(!clientData)throw new Error('Choose a client before saving.');
-    el('destination').value=el('destination').value.trim().toUpperCase();
+    el('destination').value=el('destination').value.trim().toUpperCase();setIndiaCurrency();
     el('consignee_text').value=window.orderLocations.countryBlock(el('consignee_text').value,el('destination').value);
     syncConsignee();
     const data=Object.fromEntries(headerFields.map(key=>[key,el(key).value]));
@@ -244,6 +253,8 @@ async function showDetails(id) {
   el('detailTitle').textContent=order.reference;
   el('detailAccess').textContent=`${order.status} / ${order.currency} / ${order.can_edit?'Editable':'Read only'}`;
   el('editOrder').hidden=!order.can_edit;el('addLine').hidden=!order.can_edit;
+  el('deleteOrder').hidden=!order.can_delete_order;
+  el('deleteOrder').onclick=()=>deleteOrder(order).catch(error=>message(error.message,true));
   el('recordLinks').replaceChildren();
   for(const [label,url] of [[`Client: ${order.client_name}`,`/clients-orders?client_id=${order.client_id}`]]){const link=document.createElement('a');link.textContent=label;link.href=url;el('recordLinks').append(link);}
   el('detailBody').replaceChildren();

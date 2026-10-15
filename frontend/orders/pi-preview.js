@@ -8,6 +8,8 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     printFrame,
     status,
     toolbar;
+  let printUrl=null;
+  function clearPrintUrl(){if(printUrl){URL.revokeObjectURL(printUrl);printUrl=null;}}
   const node = (tag, text, className) => {
     const n = document.createElement(tag);
     if (text !== undefined) n.textContent = text;
@@ -16,6 +18,11 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
   };
   function valueOf(item) {
     return item.primaryInput ? window.orderLocations.joinParty(item.primaryInput.value,item.input.value) : item.input.value;
+  }
+  function fitText(input) {
+    input.rows=Math.max(1,input.value.split('\n').length);
+    input.style.height='auto';
+    if(input.scrollHeight)input.style.height=input.scrollHeight+'px';
   }
   function field(parent, label, value, path, multiline = false, type = "text") {
     const wrap = node("label", undefined, "pi-field");
@@ -44,6 +51,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       input.step = path.endsWith("quantity") ? "1" : "0.01";
     }
     input.oninput = () => {
+      if(multiline)fitText(input);
       status.textContent =
         "Unsaved preview changes. Update preview to review calculated totals and the printed page.";
       printFrame.hidden = true;
@@ -56,12 +64,15 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
   }
   function partyField(parent, value, path) {
     const group=node('div',undefined,'pi-party-editor');parent.append(group);
+    if(path!=='delivery.consignee_text'){
+      const input=field(group,path==='delivery.buyer_text'?'Buyer details':'Notify details',value,path,true);
+      fitText(input);return input;
+    }
     const [primary,secondary]=window.orderLocations.partyParts(value,state.document.order.destination);
     const primaryInput=field(group,'Company / address details',primary,path+'.primary',true);inputs.pop();
-    primaryInput.rows=4;
     const input=field(group,'Country / GST / contact details',secondary,path,true);
     inputs.at(-1).primaryInput=primaryInput;
-    input.rows=5;
+    fitText(primaryInput);fitText(input);
     return input;
   }
   function image(parent, name) {
@@ -101,7 +112,13 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     if(!issued){
       button('Update preview',save);
       button('Edit invoice',async()=>{printFrame.hidden=true;paper.hidden=false;});
-      button('PDF print preview',async()=>{await save();paper.hidden=true;printFrame.hidden=false;printFrame.src=state.pdf_url+'?v='+Date.now();});
+      button('PDF print preview',async()=>{
+        const response=await fetch(state.base+'/'+state.preview_id+'/print',json('POST',collect()));
+        if(!response.ok){const error=await response.json();throw new Error(error.error||'Unable to open print preview.');}
+        const blob=await response.blob();clearPrintUrl();printUrl=URL.createObjectURL(blob);
+        paper.hidden=true;printFrame.hidden=false;printFrame.src=printUrl;
+        status.textContent='Print preview of current edits. Use Update preview to save changes.';
+      });
     }
     for(const format of ['xlsx','pdf'])button('Generate '+format.toUpperCase(),async()=>{
       if(!issued){await save();issued=await api(state.base.replace('/preview','/issue'),json('POST',{preview_id:state.preview_id}));await onIssued(issued);render();}
@@ -160,16 +177,19 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     image(signatures, "payment_options.png");image(signatures, "signature.png");
     const footerBox=node("div",undefined,"pi-footer-box");footerBox.append(signatures);
     image(footerBox, "address.png");paper.append(footerBox);
+    for(const textarea of host.querySelectorAll('textarea'))fitText(textarea);
     if (issued) for (const { input, primaryInput } of inputs) {input.disabled = true;if(primaryInput)primaryInput.disabled=true;}
   }
   return {
     open(data, base) {
+      clearPrintUrl();
       state = { ...data, base };
       issued = null;
       render();
       host.scrollIntoView({ behavior: "smooth", block: "start" });
     },
     reset() {
+      clearPrintUrl();
       host.hidden = true;
       host.replaceChildren();
       state = null;

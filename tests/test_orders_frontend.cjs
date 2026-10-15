@@ -54,6 +54,7 @@ function setup(search = '?client_id=9') {
       if(denied)return {ok:false,status:403,json:async()=>({error:'Client access is read-only.'})};
       let response;
       if(url==='/static/common/countries.json')response=JSON.parse(fs.readFileSync(path.join(__dirname,'../frontend/common/countries.json'),'utf8'));
+      else if(url.startsWith('/api/orders/deletions?'))response={deletions:[{reference:'ORD-000007',actor_name:'Owner',deleted_at:'2026-10-15T12:00:00Z'}]};
       else if(url.startsWith('/api/orders?'))response=listing;
       else if(url==='/api/orders' && options.method==='POST')response=data;
       else if(url==='/api/orders/7')response=data;
@@ -99,7 +100,7 @@ test('new orders keep multiline address and contact sections together with deliv
   fixture.element('pi_reference').value='SALES/001';
   fixture.element('consignee_primary').value='Updated company\nNew street\nCity, state 12345';fixture.element('consignee_primary').oninput();
   fixture.element('consignee_details').value='INDIA\nTel: +12345678901';fixture.element('consignee_details').oninput();
-  assert.equal(fixture.element('buyer_primary').value,'Updated company\nNew street\nCity, state 12345');
+  assert.match(fixture.element('buyer_primary').value,/Updated company\nNew street\nCity, state 12345/);
   await fixture.element('orderForm').onsubmit({preventDefault(){}});
   const saved=JSON.parse(fixture.requests.find(item=>item.url==='/api/orders'&&item.options.method==='POST').options.body);
   assert.equal(saved.pi_reference,'SALES/001');
@@ -119,27 +120,31 @@ test('buyer and notify stay editable and can independently follow or diverge fro
   assert.equal(fixture.element('buyer_text').value,fixture.context.window.orderLocations.addressOnly(fixture.element('consignee_text').value));
 });
 
-test('country suggestions sync the consignee and show buyer GST only for India',async()=>{
+test('country suggestions sync the consignee and set INR and show consignee GST only for India',async()=>{
   const fixture=setup();await settle();await fixture.context.createOrder();
   const options=fixture.element('orderCountries').children.map(option=>option.value);
   assert.ok(options.includes('USA'));assert.ok(options.includes('INDIA'));
   assert.equal(new Set(options).size,options.length);
-  assert.equal(fixture.element('buyerGstField').hidden,false);
-  fixture.element('buyerGst').value='24AAGMO289C1ZP';fixture.element('buyerGst').oninput();
-  assert.match(fixture.element('buyer_text').value,/GST No\.: 24AAGMO289C1ZP/);
-  assert.equal(fixture.element('buyer_same').checked,false);
+  assert.equal(fixture.element('consigneeGstField').hidden,false);
+  fixture.element('consigneeGst').value='24AAGMO289C1ZP';fixture.element('consigneeGst').oninput();
+  assert.match(fixture.element('consignee_text').value,/GST No\.: 24AAGMO289C1ZP/);
+  assert.doesNotMatch(fixture.element('buyer_text').value,/GST No/);
+  assert.equal(fixture.element('currency').value,'INR');
+  assert.equal(fixture.element('buyer_same').checked,true);
   fixture.element('destination').value='usa';fixture.element('destination').onchange();
-  assert.equal(fixture.element('buyerGstField').hidden,true);
+  assert.equal(fixture.element('consigneeGstField').hidden,true);
   assert.equal(fixture.element('destination').value,'USA');
   assert.match(fixture.element('consignee_text').value,/\nUSA\n/);
   assert.doesNotMatch(fixture.element('consignee_text').value,/Country: India/);
   fixture.element('destination').value='india';fixture.element('destination').onchange();
-  assert.equal(fixture.element('buyerGstField').hidden,false);
-  assert.equal(fixture.element('buyerGst').value,'24AAGMO289C1ZP');
+  assert.equal(fixture.element('consigneeGstField').hidden,false);
+  assert.equal(fixture.element('consigneeGst').value,'24AAGMO289C1ZP');
   await fixture.element('orderForm').onsubmit({preventDefault(){}});
   const saved=JSON.parse(fixture.requests.find(item=>item.url==='/api/orders'&&item.options.method==='POST').options.body);
   assert.equal(saved.destination,'INDIA');
-  assert.match(saved.delivery.buyer_text,/GST No\.: 24AAGMO289C1ZP/);
+  assert.match(saved.delivery.consignee_text,/GST No\.: 24AAGMO289C1ZP/);
+  assert.doesNotMatch(saved.delivery.buyer_text,/GST No/);
+  assert.equal(saved.currency,'INR');
 });
 
 test('VIEW order detail hides editing and management controls',async()=>{
@@ -208,4 +213,35 @@ test('VIEW access keeps commercial fields read only',async()=>{
   await fixture.context.showDetails(7);
   assert.equal(fixture.element('saveItemDetails').hidden,true);
   assert.equal(fixture.element('lineRows').children[0].children[4].children.length,0);
+});
+
+test('order deletion requires confirmation and hides the deleted detail',async()=>{
+  const fixture=setup();await settle();fixture.data.order.can_delete_order=true;
+  await fixture.context.showDetails(7);
+  assert.equal(fixture.element('deleteOrder').hidden,false);
+  const prompts=[];
+  fixture.context.window.confirm=text=>{prompts.push(text);return false;};
+  await fixture.element('deleteOrder').onclick();
+  assert.equal(fixture.requests.filter(request=>request.options.method==='DELETE').length,0);
+  assert.match(prompts[0],/ORD-000007/);
+  fixture.context.window.confirm=()=>true;
+  await fixture.element('deleteOrder').onclick();
+  assert.equal(fixture.requests.filter(request=>request.url==='/api/orders/7'&&request.options.method==='DELETE').length,1);
+  assert.equal(fixture.element('detail').hidden,true);
+});
+
+test('order cards confirm deletion and expose actor and timestamp in the log',async()=>{
+  const fixture=setup();await settle();fixture.data.order.can_delete_order=true;
+  fixture.listing.orders=[fixture.data.order];fixture.listing.total=1;fixture.listing.pages=1;
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/orders/related.js'),'utf8'),fixture.context);
+  const host=new Element();await fixture.context.window.renderRelatedOrders(host,{client_id:9},true);
+  const section=host.children[0];const entry=section.children[2].children[1].children[0];
+  const remove=entry.children[1];assert.equal(remove.children[0].tag,'svg');
+  fixture.context.window.confirm=()=>false;await remove.onclick();
+  assert.equal(fixture.requests.filter(item=>item.options.method==='DELETE').length,0);
+  fixture.context.window.confirm=()=>true;await remove.onclick();
+  assert.equal(fixture.requests.filter(item=>item.url==='/api/orders/7'&&item.options.method==='DELETE').length,1);
+  const log=section.children.at(-1);log.open=true;await log.ontoggle();
+  assert.match(log.children[1].children[0].textContent,/ORD-000007 — deleted by Owner/);
+  assert.ok(fixture.requests.some(item=>item.url==='/api/orders/deletions?client_id=9'));
 });

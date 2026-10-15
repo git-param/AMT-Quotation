@@ -5,7 +5,7 @@ is a layout definition only; it never opens a workbook or changes PI amounts.
 """
 from decimal import Decimal
 import re
-from backend.orders.locations import gst_number, without_gst, party_parts
+from backend.orders.locations import party_parts
 
 WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
           15.7109375,8.7109375,8,16,8.7109375,8.140625]
@@ -33,39 +33,35 @@ def layout(doc):
                  multiline=True,party=True,**extra)
     order,total=doc['order'],doc['totals']
     seller=list(doc['company']['seller'])
+    date_parts=re.fullmatch(r'(\d{4})-(\d{2})-(\d{2})',doc['date'])
+    date_display='/'.join((date_parts[3],date_parts[2],date_parts[1])) if date_parts else doc['date']
     metadata=[
         [c(5,2,'Proforma Invoice No:'),editable(7,4,'',doc['reference'],'order.pi_reference','bold',aria='Proforma Invoice No.')],
-        [c(5,2,'Proforma Invoice Date:'),editable(7,4,'',doc['date'],'date',type='date',aria='Proforma Invoice Date')],
+        [c(5,2,'Proforma Invoice Date:'),editable(7,4,'',doc['date'],'date',type='date',aria='Proforma Invoice Date',display_text=date_display)],
         [c(5,2,'Purchase Order:'),editable(7,4,'',order['po_reference'],'order.po_reference',aria='Purchase Order')],
-        [c(5,3,'Prepared By: '+doc['prepared_by']),c(8,1,'Tel:'),editable(9,2,'',doc.get('prepared_phone',''),'prepared_phone',type='tel',aria='Tel')],
-        [editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_bottom=True)],
-        [editable(5,3,'Delivery Terms: ',order['delivery_terms'],'order.delivery_terms')]]
+        [c(5,2,'Prepared By: '+doc['prepared_by']),editable(7,4,'Tel: ',doc.get('prepared_phone',''),'prepared_phone',type='tel',aria='Tel')],
+        [editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_top=True)],
+        [editable(5,2,'Delivery Terms: ',order['delivery_terms'],'order.delivery_terms')]]
     header=[[c(0,11,'PROFORMA INVOICE','title',line_bottom=True)]]
     for index in range(7):
         left=c(0,5,'SUPPLIER/SELLER','bold') if index==0 else c(0,5,seller[index-1] if index<=len(seller) else '')
         if index<5:right=metadata[index]
-        elif index==5:right=[*metadata[5],editable(8,3,'',order['destination'],'order.destination',aria='Destination')]
+        elif index==5:right=[*metadata[5],editable(7,4,'',order['destination'],'order.destination',aria='Destination')]
         else:right=[editable(5,3,'Delivery Time: ',order['delivery_time'],'order.delivery_time'),
                     editable(8,3,'Dispatch By: ',order['dispatch_method'],'order.dispatch_method')]
-        if index<4:
-            for offset,cell in enumerate(right):
-                cell['open_left'] = offset>0
-                cell['open_right'] = offset<len(right)-1
-                cell['header_metadata'] = True
+        for offset,cell in enumerate(right):
+            cell['open_left'] = offset>0
+            cell['open_right'] = offset<len(right)-1
+            if index<4:cell['header_metadata'] = True
         header.append([left,*right])
     # Additional configured seller lines are retained, rather than discarded.
     for value in seller[6:]:header.append([c(0,5,value),c(5,6)])
-    domestic = doc['currency']=='INR' or order['destination'].strip().upper() == 'INDIA'
-    buyer_text = without_gst(doc['delivery']['buyer_text']) if domestic else doc['delivery']['buyer_text']
     parties=[
         [c(0,5,'CONSIGNEE','bold'),c(5,6,'BUYER Details','bold')],
-        [party_cell(0,5,doc['delivery']['consignee_text'],'delivery.consignee_text',editor_rows=4 if domestic else 3),
-         party_cell(5,6,buyer_text,'delivery.buyer_text')],
+        [party_cell(0,5,doc['delivery']['consignee_text'],'delivery.consignee_text',editor_rows=3),
+         party_cell(5,6,doc['delivery']['buyer_text'],'delivery.buyer_text')],
         [c(0,5,'',placeholder=True),c(5,6,'Notify Details','bold',line_top=True)],
         [c(0,5,'',placeholder=True),party_cell(5,6,doc['delivery']['notify_text'],'delivery.notify_text')]]
-    if domestic:
-        parties.insert(2,[c(0,5,'',placeholder=True),editable(5,6,'GST No.: ',
-            doc.get('buyer_gst_number',gst_number(doc['delivery']['buyer_text'])),'buyer_gst_number')])
     primary,secondary=party_parts(doc['delivery']['consignee_text'])
     parties[1][0]['text']=primary
     parties[1][0]['bottom_contacts']=True

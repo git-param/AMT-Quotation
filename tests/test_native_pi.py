@@ -89,6 +89,36 @@ class NativePiTests(unittest.TestCase):
         with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
             self.assertIn('SALES/2026/001',book.read('xl/sharedStrings.xml').decode())
 
+    def test_print_preview_renders_unfinished_fields_without_saving_or_validation(self):
+        preview=self.preview()
+        changes=self.edits(preview['document'])
+        changes.update(date='',prepared_phone='unfinished phone',order={'pi_reference':'','delivery_terms':''},
+            delivery={'consignee_text':'','buyer_text':'Buyer\nEmail: unfinished','notify_text':'Notify\nTel: unfinished'})
+        changes['lines'][0]['quantity']=''
+        result=self.client.post(self.base+'/preview/'+preview['preview_id']+'/print',json=changes)
+        self.assertEqual(result.status_code,200)
+        self.assertTrue(result.data.startswith(b'%PDF-'))
+        connection=database.get_db()
+        try:
+            row=connection.execute('SELECT document_json FROM invoice_previews WHERE id=?',(preview['preview_id'],)).fetchone()
+            self.assertEqual(json.loads(row[0]),preview['document'])
+        finally:connection.close()
+        self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['order']['pi_reference'],'AMT/1234')
+        self.as_user('tl2')
+        self.assertEqual(self.client.post(self.base+'/preview/'+preview['preview_id']+'/print',json={}).status_code,404)
+
+    def test_deleted_order_retains_issued_files_but_blocks_download_and_preview_access(self):
+        preview=self.preview();issued=self.issue(preview)
+        self.assertEqual(issued.status_code,201,issued.json)
+        self.assertEqual(self.client.delete(f'/api/orders/{self.order_id}').status_code,200)
+        self.assertEqual(self.client.get(issued.json['pdf_url']).status_code,404)
+        self.assertEqual(self.client.get(preview['pdf_url']).status_code,404)
+        self.assertEqual(self.client.post(self.base+'/preview',json={'currency':'USD'}).status_code,404)
+        connection=database.get_db()
+        try:
+            self.assertTrue(connection.execute('SELECT pdf FROM order_invoices WHERE order_id=?',(self.order_id,)).fetchone()[0])
+        finally:connection.close()
+
     def test_preview_pi_number_edits_update_order_and_issue_matching_exports(self):
         preview=self.preview()
         saved=self.client.put(self.base+'/preview/'+preview['preview_id'],json={'order':{'pi_reference':'SALES/EDITED/001'}})
@@ -112,7 +142,7 @@ class NativePiTests(unittest.TestCase):
             self.assertEqual(doc['delivery'][key],address_only(block))
             self.assertNotIn('PIC:',doc['delivery'][key])
         fields=[cell['field'] for section in preview['layout']['sections'] for row in section['rows'] for cell in row]
-        self.assertIn('buyer_gst_number',fields)
+        self.assertNotIn('buyer_gst_number',fields)
         saved=self.client.put(self.base+'/preview/'+preview['preview_id'],json={'delivery':{
             'buyer_text':doc['delivery']['buyer_text']+'\nTel: +919999999999\nPIC: Buyer\nEmail: buyer@example.com'}})
         self.assertEqual(saved.status_code,200,saved.json)
@@ -250,30 +280,31 @@ class NativePiTests(unittest.TestCase):
             self.assertIn('INDIA',book.read('xl/sharedStrings.xml').decode())
         self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['order']['destination'],'USA')
 
-    def test_india_buyer_gst_is_editable_and_exported_once(self):
+    def test_india_consignee_gst_is_editable_and_exported_once(self):
         preview=self.preview()
         url=self.base+'/preview/'+preview['preview_id']
-        saved=self.client.put(url,json={'order':{'destination':'INDIA'},'buyer_gst_number':'24AAGMO289C1ZP'})
+        saved=self.client.put(url,json={'order':{'destination':'INDIA'},'consignee_gst_number':'24AAGMO289C1ZP'})
         self.assertEqual(saved.status_code,200,saved.json)
         doc=saved.json['document']
-        self.assertEqual(doc['buyer_gst_number'],'24AAGMO289C1ZP')
-        self.assertIn('GST No.: 24AAGMO289C1ZP',doc['delivery']['buyer_text'])
+        self.assertEqual(doc['consignee_gst_number'],'24AAGMO289C1ZP')
+        self.assertIn('GST No.: 24AAGMO289C1ZP',doc['delivery']['consignee_text'])
         cells=[cell for section in saved.json['layout']['sections'] for row in section['rows'] for cell in row]
-        self.assertEqual(next(cell for cell in cells if cell['field']=='buyer_gst_number')['value'],'24AAGMO289C1ZP')
+        self.assertIn('GST No.: 24AAGMO289C1ZP',next(cell for cell in cells if cell['field']=='delivery.consignee_text')['value'])
         self.assertNotIn('GST No.',next(cell for cell in cells if cell['field']=='delivery.buyer_text')['text'])
-        self.assertEqual(self.client.put(url,json={'buyer_gst_number':[]} ).status_code,400)
+        self.assertEqual(self.client.put(url,json={'consignee_gst_number':[]} ).status_code,400)
         issued=self.issue(saved.json)
         self.assertEqual(issued.status_code,201,issued.json)
         with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
             self.assertIn('GST No.: 24AAGMO289C1ZP',book.read('xl/sharedStrings.xml').decode())
 
-    def test_buyer_gst_from_order_details_prefills_india_preview(self):
+    def test_consignee_gst_from_order_details_prefills_india_preview(self):
         saved=self.client.put(f'/api/orders/{self.order_id}',json={
-            'destination':'INDIA','delivery':{'buyer_text':'Indian buyer\nBuyer street\nGST No.: 24ABC123'}})
+            'destination':'INDIA','delivery':{'consignee_text':'Indian consignee\nConsignee street\nGST No.: 24ABC123'}})
         self.assertEqual(saved.status_code,200,saved.json)
-        self.assertEqual(saved.json['delivery']['buyer']['gst_number'],'24ABC123')
-        preview=self.preview()
-        self.assertEqual(preview['document']['buyer_gst_number'],'24ABC123')
+        self.assertEqual(saved.json['delivery']['consignee']['gst_number'],'24ABC123')
+        self.assertEqual(saved.json['order']['currency'],'INR')
+        preview=self.preview(currency='INR',usd_inr_rate='80')
+        self.assertEqual(preview['document']['consignee_gst_number'],'24ABC123')
         self.assertIn('INDIA',preview['document']['delivery']['consignee_text'].splitlines())
 
     def test_shared_hsn_applies_to_every_line_and_is_snapshotted(self):
@@ -325,7 +356,16 @@ class NativePiTests(unittest.TestCase):
         self.assertEqual(len(model['widths']),11)
         header=next(s for s in model['sections'] if s['name']=='header')['rows']
         self.assertTrue(header[0][0]['line_bottom'])
-        self.assertTrue(any(c.get('line_bottom') and c['field']=='order.payment_terms' for row in header for c in row))
+        payment=next(c for row in header for c in row if c['field']=='order.payment_terms')
+        self.assertTrue(payment['line_top'])
+        self.assertFalse(payment.get('line_bottom',False))
+        for row in header[1:]:
+            right=[c for c in row if c['col']>=5]
+            for cell in right[1:]:self.assertTrue(cell['open_left'])
+            for cell in right[:-1]:self.assertTrue(cell['open_right'])
+        with patch('reportlab.pdfgen.canvas.Canvas.drawRightString') as page_footer:
+            pi_exports.pdf(preview['document'])
+            page_footer.assert_not_called()
         parties=next(s for s in model['sections'] if s['name']=='parties')['rows']
         self.assertEqual([(c['col'],c['span']) for c in parties[0]],[(0,5),(5,6)])
         self.assertTrue(parties[2][1]['line_top'])

@@ -74,14 +74,9 @@ def pdf(doc):
         data=asset(doc,name)
         with PILImage.open(data) as im:h=w*im.height/im.width
         data.seek(0);return Image(data,width=w,height=h)
-    header=image('header.png',usable);footer=image('address.png',usable)
+    header=image('header.png',usable)
     header_height=min(header.drawHeight,70)
-    def page(canvas,document):
-        canvas.saveState()
-        canvas.setFont(regular,6);canvas.drawRightString(width-margin,9,f'{doc["reference"]} | Page {document.page}')
-        canvas.restoreState()
     def first_page(canvas,document):
-        page(canvas,document)
         canvas.saveState()
         clip=canvas.beginPath();clip.rect(margin,height-margin-header_height,usable,header_height)
         canvas.clipPath(clip,stroke=0)
@@ -100,7 +95,7 @@ def pdf(doc):
                      leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0)
     document.addPageTemplates([
         PageTemplate(id='First',frames=frame(height-margin-header_height-2,'first'),onPage=first_page,autoNextPageTemplate='Later'),
-        PageTemplate(id='Later',frames=frame(height-margin,'later'),onPage=page)])
+        PageTemplate(id='Later',frames=frame(height-margin,'later'))])
     story=[]
     symbol='₹' if doc['currency']=='INR' else '$'
     def paragraph(cell):
@@ -152,9 +147,9 @@ def pdf(doc):
                 if cell.get('line_bottom'):commands.append(('LINEBELOW',(col,index),(col+span-1,index),.8,colors.black))
                 _,h=content.wrap(sum(columns[col:col+span])-6,10000)
                 min_height=max(min_height,h+3)
-                if cell.get('header_metadata'):min_height=max(min_height,h+7)
-            if section['name']=='parties' and index==1:min_height=max(min_height,62)
-            if section['name']=='parties' and index==3:min_height=max(min_height,46)
+                if cell.get('header_metadata'):min_height=max(min_height,h+3)
+            if section['name']=='parties' and index==1:min_height=max(min_height,30)
+            if section['name']=='parties' and index==3:min_height=max(min_height,30)
             if section['name']=='items' and index>0:min_height=max(min_height,19)
             rows.append(row);heights.append(min_height)
         table=LongTable(rows,colWidths=columns,rowHeights=heights,
@@ -232,7 +227,7 @@ def xlsx(doc):
                 wrapped=[part for line in value.split('\n') for part in (textwrap.wrap(line,chars) or [''])]
                 chunks.append([wrapped[offset:offset+20] for offset in range(0,len(wrapped),20)])
             for chunk_index in range(max(map(len,chunks))):
-                height=18
+                height=16 if section['name']=='header' else 18
                 for cell,parts in zip(row,chunks):
                     lines=parts[chunk_index] if chunk_index<len(parts) else ['']
                     value='\n'.join(lines);col=cell['col'];end=col+cell['span']-1
@@ -254,9 +249,9 @@ def xlsx(doc):
                         else:sheet.write_string(row_index,col,symbol+' '+cell['text'],fmt)
                     else:sheet.write_string(row_index,col,value,fmt)
                     height=max(height,len(lines)*(13 if cell['style'] in ('terms','final_term') else 16))
-                    if cell.get('header_metadata'):height=max(height,len(lines)*16+5)
-                if section['name']=='parties' and index==1:height=max(height,90)
-                if section['name']=='parties' and index==3:height=max(height,65)
+                    if cell.get('header_metadata'):height=max(height,len(lines)*16+2)
+                if section['name']=='parties' and index==1:height=max(height,45)
+                if section['name']=='parties' and index==3:height=max(height,40)
                 if section['name']=='header' and index==0:height=max(height,30)
                 sheet.set_row(row_index,min(409,height));row_index+=1
     image('payment_options.png',row_index,0,440,90);image('signature.png',row_index,5,440,90)

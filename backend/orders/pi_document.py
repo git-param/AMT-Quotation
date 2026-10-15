@@ -54,7 +54,7 @@ def sync_locations(doc):
                 doc['source_state']['order'].get('destination')]
     doc['delivery']['consignee_text'] = country_block(doc['delivery']['consignee_text'], country, previous)
     doc['order']['destination'] = country
-    doc['buyer_gst_number'] = gst_number(doc['delivery']['buyer_text'])
+    doc['consignee_gst_number'] = gst_number(doc['delivery']['consignee_text'])
     return doc
 
 
@@ -106,7 +106,7 @@ def prepare(state, user, currency, rate):
 
 def edit(document, edits):
     from backend.orders.invoices import calculate
-    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','terms','buyer_gst_number'}:
+    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','terms','consignee_gst_number'}:
         raise ValueError('Invalid PI preview fields. Company details and invoice identity cannot be edited.')
     doc = deepcopy(document)
     if 'terms' in edits:
@@ -136,9 +136,9 @@ def edit(document, edits):
             raise ValueError('Invalid PI party fields.')
         snapshot,_,_ = text_delivery(edits['delivery'],doc['delivery'],doc['order']['destination'],True)
         doc['delivery'] = {key:snapshot[key] for key in ('consignee_text','buyer_text','notify_text','instructions')}
-    if 'buyer_gst_number' in edits:
-        number_value = text(edits['buyer_gst_number'],200,'buyer GST number')
-        doc['delivery']['buyer_text'] = with_gst(doc['delivery']['buyer_text'], number_value)
+    if 'consignee_gst_number' in edits:
+        number_value = text(edits['consignee_gst_number'],200,'consignee GST number')
+        doc['delivery']['consignee_text'] = with_gst(doc['delivery']['consignee_text'], number_value)
     lines = doc['totals']['lines']
     if 'lines' in edits:
         values = edits['lines']
@@ -164,6 +164,46 @@ def edit(document, edits):
                       'shipping_charges':format(Decimal(shipping_minor)/100,'.2f')},
              'lines':[{**line,'currency':doc['currency']} for line in lines]}
     doc['totals'] = calculate(state,doc['currency'],None,Decimal(doc['totals']['tax_rate']))
+    return sync_locations(doc)
+
+
+def print_document(document, edits):
+    """Render in-progress text without saving or applying issuance validation."""
+    doc = deepcopy(document)
+    # Calculate valid numeric changes independently of unfinished contact text.
+    numeric = {}
+    if isinstance(edits.get('lines'),list):
+        originals = {line['id']:line for line in doc['totals']['lines']}
+        numeric['lines'] = []
+        for line in edits['lines']:
+            if not isinstance(line,dict) or type(line.get('id')) is not int or line['id'] not in originals:
+                continue
+            original = originals[line['id']]
+            numeric['lines'].append({key:line.get(key,original[key]) if key in ('quantity','unit_price') else original[key]
+                for key in LINE_FIELDS})
+    if 'shipping_charges' in edits:numeric['shipping_charges']=edits['shipping_charges']
+    try:
+        doc = edit(doc,numeric)
+    except ValueError:
+        # Unfinished numeric inputs can still be printed using the last totals.
+        pass
+    for key in ('date','prepared_phone','terms'):
+        if isinstance(edits.get(key),str):doc[key]=edits[key][:20000]
+    if isinstance(edits.get('order'),dict):
+        for key in ORDER_FIELDS:
+            if isinstance(edits['order'].get(key),str):doc['order'][key]=edits['order'][key][:5000]
+        doc['reference']=doc['order']['pi_reference']
+    if isinstance(edits.get('delivery'),dict):
+        for key in ('consignee_text','buyer_text','notify_text','instructions'):
+            if isinstance(edits['delivery'].get(key),str):doc['delivery'][key]=edits['delivery'][key][:20000]
+    if isinstance(edits.get('consignee_gst_number'),str):
+        doc['delivery']['consignee_text']=with_gst(doc['delivery']['consignee_text'],edits['consignee_gst_number'][:200])
+    if isinstance(edits.get('lines'),list):
+        changes={line.get('id'):line for line in edits['lines'] if isinstance(line,dict) and type(line.get('id')) is int}
+        for line in doc['totals']['lines']:
+            for key in ('description','hsn_code','item_condition','uom'):
+                value=changes.get(line['id'],{}).get(key)
+                if isinstance(value,str):line[key]=value[:20000]
     return sync_locations(doc)
 
 

@@ -115,31 +115,26 @@
                                 placeholder="Company or recipient details&#10;Street address&#10;City, state, postal code"></textarea><label
                                 for="consignee_details">Country / GST / contact details</label><textarea
                                 id="consignee_details" rows="5" maxlength="3800"
-                                placeholder="Country:&#10;GST No.:&#10;Tel:&#10;PIC:&#10;Email:"></textarea></div>
+                                placeholder="Country:&#10;GST No.:&#10;Tel:&#10;PIC:&#10;Email:"></textarea><div id="consigneeGstField" class="form-field" hidden><label for="consigneeGst">GST No.</label><input
+                                id="consigneeGst" maxlength="200" autocomplete="off" placeholder="Consignee GST number"></div></div>
+
                         <small>Prefilled from the client. Edit both text sections for this order.</small>
                     </fieldset>
                     <fieldset>
                         <legend>Buyer Details</legend><label class="same-party"><input id="buyer_same" type="checkbox"
                                 checked> Same as consignee</label><textarea id="buyer_text" hidden></textarea>
                         <div class="party-editor"><label for="buyer_primary">Company / address details</label><textarea
-                                id="buyer_primary" rows="4" maxlength="3800"
-                                placeholder="Company or recipient details&#10;Street address&#10;City, state, postal code"></textarea><label
-                                for="buyer_details">Country / GST / contact details</label><textarea id="buyer_details"
-                                rows="5" maxlength="3800"
-                                placeholder="Country:&#10;GST No.:&#10;Tel:&#10;PIC:&#10;Email:"></textarea></div>
+                                id="buyer_primary" rows="6" maxlength="3800"
+                                placeholder="Company or recipient details&#10;Street address&#10;City, state, postal code"></textarea></div>
                         <small>Edit this box to add buyer-specific details.</small>
-                        <div id="buyerGstField" class="form-field" hidden><label for="buyerGst">GST No.</label><input
-                                id="buyerGst" maxlength="200" autocomplete="off" placeholder="Buyer GST number"></div>
+
                     </fieldset>
                     <fieldset>
                         <legend>Notify Details</legend><label class="same-party"><input id="notify_same" type="checkbox"
                                 checked> Same as consignee</label><textarea id="notify_text" hidden></textarea>
                         <div class="party-editor"><label for="notify_primary">Company / address details</label><textarea
-                                id="notify_primary" rows="4" maxlength="3800"
-                                placeholder="Company or recipient details&#10;Street address&#10;City, state, postal code"></textarea><label
-                                for="notify_details">Country / GST / contact details</label>
-                                <textarea id="notify_details" rows="5" maxlength="3800" placeholder="Country:&#10;GST No.:&#10;Tel:&#10;PIC:&#10;Email:">
-                                </textarea>
+                                id="notify_primary" rows="6" maxlength="3800"
+                                placeholder="Company or recipient details&#10;Street address&#10;City, state, postal code"></textarea>
                             </div>
                         <small>Edit this box to add notify-specific details.</small>
                     </fieldset>
@@ -161,7 +156,7 @@
                     <h2 id="detailTitle"></h2>
                     <p id="detailAccess"></p>
                 </div>
-                <div><button id="editOrder" class="btn-sm" type="button">Edit order</button><button id="closeDetail"
+                <div><button id="deleteOrder" class="btn-sm btn-del" type="button" hidden>Delete order</button><button id="editOrder" class="btn-sm" type="button">Edit order</button><button id="closeDetail"
                         class="btn-sm" type="button">Close</button></div>
             </div>
             <nav id="recordLinks" class="picker" aria-label="Related records"></nav>

@@ -7,7 +7,7 @@ from backend.config import FRONTEND_DIR
 COUNTRIES = frozenset(json.loads((FRONTEND_DIR / 'common' / 'countries.json').read_text(encoding='utf-8')))
 GST_LINE = re.compile(r'^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?)\s*:\s*(.*)$', re.I)
 CONTACT_LINE = re.compile(r'^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:', re.I)
-COPIED_CONTACT = re.compile(r'^\s*(?:Tel|Telephone|Phone|PIC|E-?mail)\s*:', re.I)
+COPIED_CONTACT = re.compile(r'^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:', re.I)
 
 
 def address_only(value):

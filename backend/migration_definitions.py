@@ -527,6 +527,12 @@ CONFIGURATION_SCHEMA = (
     "('admin','settings.manage'),('manager','settings.manage'),('sales_tl','settings.manage')",
 )
 
+ORDER_DELETION_SCHEMA = (
+    'ALTER TABLE client_orders ADD COLUMN deleted_at TEXT',
+    'ALTER TABLE client_orders ADD COLUMN deleted_by INTEGER REFERENCES users(id) ON DELETE RESTRICT',
+    'CREATE INDEX idx_orders_not_deleted ON client_orders(client_id,deleted_at,id)',
+)
+
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
@@ -547,4 +553,5 @@ MIGRATIONS = (
     (17, 'client_location', CLIENT_LOCATION_SCHEMA),
     (18, 'native_pi_previews_exports', NATIVE_PI_SCHEMA),
     (19, 'shared_hsn_configuration', CONFIGURATION_SCHEMA),
+    (20, 'order_soft_deletion', ORDER_DELETION_SCHEMA),
 )

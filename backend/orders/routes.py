@@ -110,6 +110,48 @@ def order_detail(order_id):
         connection.close()
 
 
+@bp.route('/api/orders/<int:order_id>',methods=['DELETE'])
+@authenticated_required
+def delete_order(order_id):
+    connection=get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        user=get_current_user()
+        order=read_order(connection,user,order_id)
+        if not order:return jsonify(error='Order not found.'),404
+        if not order['can_delete_order']:return jsonify(error='Order deletion is not permitted.'),403
+        snapshot=details(connection,order)
+        connection.execute("UPDATE client_orders SET deleted_by=?,deleted_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+            (user['id'],user['id'],order_id))
+        deleted_at=connection.execute('SELECT deleted_at FROM client_orders WHERE id=?',(order_id,)).fetchone()[0]
+        connection.execute('INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
+            "VALUES(?,?,'order_delete','order',?,?)",(user['id'],user['username'],str(order_id),json.dumps({
+                'reference':order['reference'],'client_id':order['client_id'],'deleted_at':deleted_at,'snapshot':snapshot})))
+        connection.commit()
+        return jsonify(message='Order deleted. History and deletion log retained.')
+    finally:connection.rollback();connection.close()
+
+
+@bp.route('/api/orders/deletions')
+@authenticated_required
+def deletion_log():
+    query,parameters=order_query(get_current_user(),include_deleted=True)
+    try:
+        for key in ('client_id','enquiry_id'):
+            if request.args.get(key):
+                query+=' AND o.'+key+'=?'
+                parameters.append(integer(request.args[key],key))
+    except ValueError as error:return jsonify(error=str(error)),400
+    connection=get_db()
+    try:
+        rows=connection.execute("SELECT a.id,a.entity_id AS order_id,a.actor_name,a.created_at,"
+            "json_extract(a.details,'$.reference') AS reference,json_extract(a.details,'$.deleted_at') AS deleted_at "
+            "FROM audit_logs a WHERE a.action='order_delete' AND a.entity_type='order' AND EXISTS ("
+            'SELECT 1 FROM ('+query+') visible WHERE CAST(visible.id AS TEXT)=a.entity_id) ORDER BY a.id DESC LIMIT 100',parameters).fetchall()
+        return jsonify(deletions=[dict(row) for row in rows])
+    finally:connection.close()
+
+
 @bp.route('/api/orders', methods=['POST'])
 @bp.route('/api/orders/<int:order_id>', methods=['PUT'])
 @authenticated_required

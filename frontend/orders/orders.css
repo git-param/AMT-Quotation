@@ -80,15 +80,18 @@ body.embedded{margin:0;background:#f5f7fb}body.embedded .wrap{padding:18px 24px 
 .pi-company-grid{width:100%;border-collapse:collapse;table-layout:fixed;border:1.5px solid #000;margin:0;color:#000;font:12px/1.3 Cambria,Cochin,Georgia,serif}
 .pi-company-grid td{border-left:1.5px solid #000;border-right:1.5px solid #000;border-top:0;border-bottom:0;padding:2px 3px;vertical-align:top;overflow-wrap:anywhere;min-width:0}
 .pi-cell-text{white-space:pre-wrap;min-height:15px}
-.pi-party-editor{display:flex;flex-direction:column;gap:12px;padding:5px 3px}
+.pi-party-editor{display:flex;flex-direction:column;gap:5px;padding:3px}
 .pi-company-grid td.pi-consignee-cell{height:1px}
-.pi-consignee-cell .pi-party-editor{height:100%;min-height:360px;box-sizing:border-box}
+.pi-consignee-cell .pi-party-editor{height:100%;box-sizing:border-box}
 .pi-consignee-cell .pi-party-editor>.pi-field:last-child{margin-top:auto}
 .order-party-texts fieldset:first-child .party-editor{flex:1}
 .order-party-texts fieldset:first-child .party-editor label[for="consignee_details"]{margin-top:auto}
 .pi-paper .pi-company-grid .pi-party-editor .pi-field>span{display:block;font-size:10px;color:#526173;margin-bottom:4px}
 .pi-paper .pi-company-grid .pi-party-editor textarea{font-weight:normal}
-.pi-paper .pi-grid-header td{padding-top:4px;padding-bottom:4px}
+.pi-paper .pi-grid-header td{padding-top:1px;padding-bottom:1px;line-height:1.2}
+.pi-paper .pi-grid-header .pi-field input{height:auto;min-height:0;line-height:1.2}
+.pi-optional-contacts{border:0;padding:0;font-size:10px;color:#526173}
+.pi-optional-contacts summary{cursor:pointer}
 .pi-paper .pi-grid-header td.pi-open-left{border-left:0}
 .pi-paper .pi-grid-header td.pi-open-right{border-right:0}
 .pi-paper .pi-grid-header input[readonly]{color:#52647a}

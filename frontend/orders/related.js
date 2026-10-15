@@ -42,12 +42,42 @@ window.renderRelatedOrders = async (host, scope, canCreate) => {
         const ref=document.createElement('strong');ref.textContent=order.reference;
         const meta=document.createElement('span');meta.textContent=`${order.order_date} / ${order.status} / ${order.currency}`;
         const pi=document.createElement('span');pi.textContent=order.pi_reference?`PI: ${order.pi_reference}`:'PI not generated';
-        card.append(ref,meta,pi);cards.append(card);
+        card.append(ref,meta,pi);
+        if(order.can_delete_order){
+          const entry=document.createElement('div');entry.className='order-card-entry';
+          const remove=document.createElement('button');remove.type='button';remove.className='btn-sm btn-del order-card-delete';remove.title='Delete order';remove.setAttribute('aria-label','Delete order '+order.reference);
+          const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');
+          for(const [key,value] of Object.entries({viewBox:'0 0 24 24',fill:'none',stroke:'currentColor','stroke-width':'1.8','stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true'}))icon.setAttribute(key,value);
+          const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d','M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7');icon.append(path);remove.append(icon);
+          remove.onclick=async()=>{
+            if(!window.confirm(`Are you sure you want to delete order ${order.reference}? Its history and deletion log will be retained.`))return;
+            remove.disabled=true;
+            try{
+              const response=await fetch('/api/orders/'+order.id,{method:'DELETE'});const result=await response.json();
+              if(!response.ok)throw new Error(result.error||'Unable to delete order.');
+              await refresh();
+            }catch(error){status.textContent=error.message;remove.disabled=false;}
+          };
+          entry.append(card,remove);cards.append(entry);
+        }else cards.append(card);
       }
       if(!data.orders.length){const empty=document.createElement('p');empty.textContent=pending?'No pending drafts.':'No existing orders yet.';cards.append(empty);}
     }
     const safeLoad=()=>load().catch(error=>{status.textContent=error.message;});
     previous.onclick=()=>{page--;safeLoad();};next.onclick=()=>{page++;safeLoad();};loaders.push(safeLoad);
   }
-  refresh=()=>Promise.all(loaders.map(load=>load()));await refresh();
+  const log=document.createElement('details');log.className='order-deletion-log';
+  const summary=document.createElement('summary');summary.textContent='Order deletion log';
+  const history=document.createElement('div');history.setAttribute('aria-live','polite');log.append(summary,history);section.append(log);
+  log.ontoggle=async()=>{
+    if(!log.open)return;
+    history.replaceChildren();
+    try{
+      const response=await fetch('/api/orders/deletions?'+new URLSearchParams(scope));const data=await response.json();
+      if(!response.ok)throw new Error(data.error||'Unable to load deletion log.');
+      for(const row of data.deletions){const item=document.createElement('p');item.textContent=`${row.reference} — deleted by ${row.actor_name} — ${new Date(row.deleted_at).toLocaleString()}`;history.append(item);}
+      if(!data.deletions.length)history.textContent='No orders have been deleted.';
+    }catch(error){history.textContent=error.message;}
+  };
+  refresh=async()=>{await Promise.all(loaders.map(load=>load()));if(log.open)await log.ontoggle();};await refresh();
 };

@@ -4,7 +4,7 @@
   const gstLine = /^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$/i;
   const contactLine = /^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:/i;
   function addressOnly(value) {
-    return value.split('\n').filter((line,index)=>!index||!/^\s*(?:Tel|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line)).join('\n').trimEnd();
+    return value.split('\n').filter((line,index)=>!index||!/^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line)).join('\n').trimEnd();
   }
   function partyParts(value, country = '') {
     const lines = value.split('\n');

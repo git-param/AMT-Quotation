@@ -42,7 +42,7 @@ def order_line(data, existing=None):
     return values
 
 
-def order_query(user):
+def order_query(user, include_deleted=False):
     """Use original client ownership and current grants for every order."""
     scope, parameters = visibility(user)
     edit, edit_parameters = edit_scope(user)
@@ -52,13 +52,15 @@ def order_query(user):
         'e.reference AS enquiry_reference, '
         'e.deleted_at AS enquiry_deleted_at, '
         'u.username AS owner_name, oc.username AS creator_name, '
-        '(' + edit + ') AS can_edit, (' + deletion + ') AS can_delete '
+        '(' + edit + ') AS can_edit, (' + deletion + ') AS can_delete, '
+        '((' + deletion + ') OR o.created_by=? OR l.created_by=?) AS can_delete_order '
         'FROM client_orders o JOIN client_leads l ON l.id = o.client_id '
         'JOIN users u ON u.id = l.created_by '
         'JOIN users oc ON oc.id = o.created_by '
         'LEFT JOIN client_enquiries e ON e.id = o.enquiry_id WHERE (' + scope + ')'
     )
-    return query, edit_parameters + delete_parameters + parameters
+    if not include_deleted:query += ' AND o.deleted_at IS NULL'
+    return query, edit_parameters + delete_parameters + delete_parameters + [user['id'],user['id']] + parameters
 
 
 def read_order(connection, user, order_id):
@@ -80,6 +82,7 @@ def header(data, existing=None):
         Decimal(old.get('shipping_minor', 0)) / 100, '.2f')), 2,
         Decimal('999999999.99'))
     values['status'] = values['status'] or 'draft'
+    if values['destination'].strip().upper()=='INDIA':values['currency']='INR'
     if values['status'] not in STATUSES:
         raise ValueError('Choose a valid order status.')
     if values['currency'] not in ('USD', 'INR'):
