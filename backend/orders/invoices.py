@@ -84,8 +84,11 @@ def amount_words(value, currency):
 def template(currency):
     defaults = {'USD': 'Updated PI Format USD - 180626 2.xlsm',
                 'INR': 'Updated PI Format INR 1 2 2.xlsm'}
-    path = Path(os.environ.get('PI_TEMPLATE_' + currency,
-                              str(Path.home() / 'Downloads' / defaults[currency])))
+    downloads = Path.home() / 'Downloads'
+    default = downloads / defaults[currency]
+    if not default.is_file():
+        default = downloads / ('pi-' + currency + '.xlsm')
+    path = Path(os.environ.get('PI_TEMPLATE_' + currency, str(default)))
     try:
         raw = path.read_bytes()
         with ZipFile(BytesIO(raw)) as workbook:
@@ -380,7 +383,11 @@ def generate_invoice(order_id):
         if not state['lines'] or state['legacy_lines_requiring_review']:
             raise ValueError('Complete and review all order SKU lines before generating a PI.')
         if any(not line.get('hsn_code') or not line.get('item_condition') for line in state['lines']):
-            raise ValueError('HSN code and item condition are required on every PI line.')
+            missing = state['pi_line_requirements']
+            return jsonify(error='Complete HSN code and item condition for: '
+                           + ', '.join(line['sku'] for line in missing)
+                           + '. Save item details, then generate the PI.',
+                           code='pi_lines_incomplete', missing_lines=missing), 400
         if not state['delivery']:
             raise ValueError('Complete the order delivery details before generating a PI.')
         client = connection.execute('SELECT * FROM client_leads WHERE id = ?', (order['client_id'],)).fetchone()

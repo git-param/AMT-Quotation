@@ -20,6 +20,13 @@ FIELDS = {'order_date': 10, 'pi_date': 10, 'po_reference': 100,
           'shipping_charges': 30}
 
 
+def pi_line_requirements(lines):
+    """Expose missing commercial fields before the user attempts PI issuance."""
+    return [{'id': line['id'], 'sku': line['sku'],
+             'fields': [key for key in ('hsn_code', 'item_condition') if not line.get(key)]}
+            for line in lines if not line.get('hsn_code') or not line.get('item_condition')]
+
+
 def order_line(data, existing=None):
     """Extend established decimal line validation with commercial fields."""
     extra = {'hsn_code': 20, 'item_condition': 100, 'uom': 30}
@@ -207,6 +214,7 @@ def details(connection, order):
             'AND replacement.order_id = ? AND replacement.is_active = 1)',
             (order['enquiry_id'], order['id'], order['id']))]
     return {'order': result, 'lines': lines, 'invoices': invoices,
+            'pi_line_requirements': pi_line_requirements(lines),
             'legacy_lines_requiring_review': legacy_review,
             'subtotals': {key: format(value, '.2f')
                           for key, value in totals.items()},

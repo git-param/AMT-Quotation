@@ -44,6 +44,27 @@ consignee name and location/country. Mixed text and structured input is rejected
 the historical structured delivery API remains supported. Every edit appends a
 new immutable delivery version, and generated PIs keep their issued content.
 
+## Completing item details before PI generation
+
+The order workspace now uses Items & PI, Order details, and History tabs. The
+centered dialog has a fixed close header and a single scrolling document; small
+screens use item cards with visible HSN/condition inputs.
+
+The Items & PI tab identifies missing HSN codes and item conditions before
+issuance. Review the highlighted fields, enter the correct values, and select
+**Save item details**. Generate PI stays disabled while required item details are
+missing or edits are unsaved. Classification values are never guessed from an
+example template. Drafts and historical records remain editable under their
+existing client permissions.
+
+`PUT /api/orders/{id}/line-commercial-details` accepts `lines` containing unique
+`id`, `hsn_code` and `item_condition` values. Up to 50 active lines are updated
+atomically with current EDIT authorization and one complete revision. Prices,
+quantities, currencies, source links, and ownership are unchanged. Cross-order,
+removed, duplicate or invalid line IDs roll back the complete request. Order
+responses expose `pi_line_requirements`; attempted issuance with incomplete item
+fields returns `code: pi_lines_incomplete` and a `missing_lines` list.
+
 ## Order API
 
 `POST /api/orders` now accepts `client_id` without `enquiry_id`. The old
@@ -77,7 +98,8 @@ PI_TEMPLATE_INR=C:/company-templates/pi-inr.xlsm
 
 When unset, the local defaults are the existing `Updated PI Format USD - 180626
 2.xlsm` and `Updated PI Format INR 1 2 2.xlsm` files in the server account's
-Downloads directory. Keep those files accessible to the application account.
+Downloads directory. The shorter existing filenames `pi-USD.xlsm` and `pi-INR.xlsm`
+are also supported when the original filenames are absent. Keep those files accessible to the application account.
 Use the original company formats documented in [PI fields](pi_order_fields.md).
 Unexpected layouts and missing company/bank configuration fail before issuance.
 There is no per-client or per-order bank-details input. Do not commit company

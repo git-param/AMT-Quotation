@@ -4,13 +4,21 @@ window.renderRelatedOrders = async (host, scope, canCreate) => {
   const toolbar=document.createElement('div');toolbar.className='source-toolbar';
   const title=document.createElement('h3');title.textContent='Orders & Proforma Invoices';toolbar.append(title);section.append(toolbar);host.append(section);
   const dialog=document.createElement('dialog');dialog.className='order-dialog';dialog.setAttribute('aria-label','Client order workspace');
-  const close=document.createElement('button');close.type='button';close.className='btn-sm';close.textContent='Close order workspace';
-  const frame=document.createElement('iframe');frame.title='Client order workspace';dialog.append(close,frame);section.append(dialog);
+  const header=document.createElement('div');header.className='order-dialog-header';
+  const heading=document.createElement('div');
+  const name=document.createElement('strong');name.textContent='Order workspace';
+  const hint=document.createElement('span');hint.textContent='Order details, items and proforma invoices';heading.append(name,hint);
+  const close=document.createElement('button');close.type='button';close.className='btn-sm';close.textContent='Close';close.setAttribute('aria-label','Close order workspace');
+  header.append(heading,close);
+  const frame=document.createElement('iframe');frame.title='Client order workspace';dialog.append(header,frame);section.append(dialog);
   let refresh=()=>{};
-  function open(extra){frame.src='/orders?'+new URLSearchParams({...scope,embedded:1,...extra});dialog.showModal();}
+  const onMessage=event=>{if(event.origin===location.origin&&event.source===frame.contentWindow&&event.data?.type==='amt-order-close')dialog.close();};
+  function open(extra){
+    frame.src='/orders?'+new URLSearchParams({...scope,embedded:1,...extra});
+    window.addEventListener('message',onMessage);document.body.classList.add('order-modal-open');dialog.showModal();
+  }
   close.onclick=()=>dialog.close();
-  window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===frame.contentWindow&&event.data?.type==='amt-order-close')dialog.close();});
-  dialog.onclose=()=>{frame.src='about:blank';refresh();};
+  dialog.onclose=()=>{window.removeEventListener('message',onMessage);document.body.classList.remove('order-modal-open');frame.src='about:blank';refresh();};
   if(canCreate){const add=document.createElement('button');add.type='button';add.className='btn-sm btn-add';add.textContent='+ Add order';add.onclick=()=>open({new:1});toolbar.append(add);}
   const loaders=[];
   for(const pending of [true,false]){

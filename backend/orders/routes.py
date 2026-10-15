@@ -324,6 +324,53 @@ def order_lines(order_id, line_id=None):
         connection.close()
 
 
+@bp.route('/api/orders/<int:order_id>/line-commercial-details', methods=['PUT'])
+@authenticated_required
+def save_commercial_details(order_id):
+    """Save explicitly reviewed PI fields atomically without changing prices."""
+    connection = get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        user = get_current_user()
+        if not user:
+            return jsonify(error='Not logged in'), 401
+        order = read_order(connection, user, order_id)
+        if not order:
+            return jsonify(error='Order not found.'), 404
+        if not order['can_edit']:
+            return jsonify(error='Client access is read-only.'), 403
+        data = request.get_json(silent=True)
+        if (not isinstance(data, dict) or set(data) != {'lines'}
+                or not isinstance(data['lines'], list) or not 1 <= len(data['lines']) <= 50):
+            raise ValueError('Provide commercial details for 1 to 50 SKU lines.')
+        seen = set()
+        for item in data['lines']:
+            if (not isinstance(item, dict) or set(item) != {'id', 'hsn_code', 'item_condition'}
+                    or type(item['id']) is not int
+                    or not 1 <= item['id'] <= 9223372036854775807 or item['id'] in seen):
+                raise ValueError('Provide unique line IDs, HSN codes and item conditions.')
+            seen.add(item['id'])
+            row = connection.execute('SELECT * FROM order_sku_lines '
+                'WHERE order_id = ? AND id = ? AND is_active = 1', (order_id, item['id'])).fetchone()
+            if not row:
+                raise ValueError('One or more active SKU lines are unavailable in this order.')
+            values = order_line({key: item[key] for key in ('hsn_code', 'item_condition')}, row)
+            connection.execute('UPDATE order_sku_lines SET hsn_code = ?, item_condition = ?, '
+                "updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?",
+                (values['hsn_code'], values['item_condition'], user['id'], row['id']))
+        connection.execute('UPDATE client_orders SET updated_by = ?, '
+            "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?", (user['id'], order_id))
+        record_revision(connection, order_id, user, 'line_edit')
+        result = details(connection, read_order(connection, user, order_id))
+        connection.commit()
+        return jsonify(result)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    finally:
+        connection.rollback()
+        connection.close()
+
+
 @bp.route('/api/orders/<int:order_id>/legacy-enquiry')
 @authenticated_required
 def historical_enquiry(order_id):

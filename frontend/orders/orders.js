@@ -9,10 +9,14 @@ let page=1, pages=0;
 let current=null, editing=null, editingLine=null, clientData=null;
 let detailVersion=0;
 let formVersion=0;
+let commercialInputs=[],savingCommercial=false;
 function message(text,error=false){el('message').textContent=text;el('message').className=error?'error':'';}
 async function api(url,options={}) {
   const response=await fetch(url,options);const data=await response.json();
-  if(!response.ok){if([401,403,404].includes(response.status)){el('editor').hidden=true;el('detail').hidden=true;}throw new Error(data.error||'Unable to complete request.');}
+  if(!response.ok){
+    if([401,403,404].includes(response.status)){el('editor').hidden=true;el('detail').hidden=true;}
+    const error=new Error(data.error||'Unable to complete request.');error.details=data;throw error;
+  }
   return data;
 }
 const json = (method,data) => ({method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
@@ -47,6 +51,48 @@ const lineDrafts=window.createSkuDraftEditor(el('lineDrafts'),()=>({client_id:cu
   await api(`/api/orders/${current.order.id}/lines/bulk`,json('POST',{lines}));await showDetails(current.order.id);
 },true);
 el('currency').onchange=()=>initialDrafts.currencyChanged();
+
+
+function selectOrderTab(name){
+  for(const [key,button]of [['items','tabItems'],['details','tabDetails'],['history','tabHistory']]){
+    el(key+'Tab').hidden=key!==name;el(button).setAttribute('aria-selected',String(key===name));el(button).tabIndex=key===name?0:-1;
+  }
+}
+for(const [name,id]of [['items','tabItems'],['details','tabDetails'],['history','tabHistory']]){
+  el(id).onclick=()=>selectOrderTab(name);
+  el(id).onkeydown=event=>{
+    const names=['items','details','history'];const index=names.indexOf(name);
+    if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
+      event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?2:(index+(event.key==='ArrowRight'?1:2))%3;
+      selectOrderTab(names[next]);el(['tabItems','tabDetails','tabHistory'][next]).focus();
+    }
+  };
+}
+function commercialDirty(){return commercialInputs.some(item=>item.hsn.value.trim()!==item.originalHsn||item.condition.value.trim()!==item.originalCondition);}
+function updatePiReadiness(){
+  if(!current)return;
+  const missing=current.lines.filter(line=>!line.hsn_code||!line.item_condition);
+  const dirty=commercialDirty(),empty=!current.lines.length,legacy=Boolean(current.legacy_lines_requiring_review?.length);
+  el('generatePi').disabled=dirty||missing.length>0||empty||legacy||savingCommercial;
+  el('saveItemDetails').hidden=!current.order.can_edit;el('saveItemDetails').disabled=!dirty||savingCommercial;
+  el('completeItemDetails').hidden=!current.order.can_edit||!missing.length;
+  el('piReadiness').className='pi-readiness'+(dirty||missing.length||empty||legacy?' needs-attention':' is-ready');
+  el('readinessTitle').textContent=dirty?'Save your item changes':empty?'Add items to this order':missing.length?`${missing.length} item${missing.length===1?' needs':'s need'} PI details`:legacy?'Review historical quantities':'Item details are complete';
+  el('readinessHint').textContent=dirty?'Save item details below before generating your PI.':empty?'Add SKU lines, quantities and agreed prices to get started.':missing.length?`Enter the missing HSN code and item condition in the highlighted fields (${missing.slice(0,3).map(line=>line.sku).join(', ')}${missing.length>3?' and '+(missing.length-3)+' more':''}).`:legacy?'Complete the outstanding historical quantity review below.':'Choose the invoice currency below. Amounts use your saved order prices and any exchange rate you enter.';
+  el('itemDetailsHint').textContent=dirty?'You have unsaved changes to HSN codes or item conditions.':'HSN code and item condition are required for PI generation. Review each item before saving.';
+}
+el('completeItemDetails').onclick=()=>{
+  selectOrderTab('items');const first=commercialInputs.flatMap(item=>[item.hsn,item.condition]).find(input=>!input.value.trim());
+  if(first){first.scrollIntoView({behavior:'smooth',block:'center'});first.focus();}
+};
+el('saveItemDetails').onclick=async()=>{
+  if(!commercialDirty())return;savingCommercial=true;updatePiReadiness();
+  try{
+    const lines=commercialInputs.filter(item=>item.hsn.value.trim()!==item.originalHsn||item.condition.value.trim()!==item.originalCondition).map(item=>({id:item.id,hsn_code:item.hsn.value.trim(),item_condition:item.condition.value.trim()}));
+    await api(`/api/orders/${current.order.id}/line-commercial-details`,json('PUT',{lines}));
+    await showDetails(current.order.id);message('Item details saved.');
+  }catch(error){message(error.message,true);}finally{savingCommercial=false;updatePiReadiness();}
+};
 
 async function load() {
   const query=new URLSearchParams({page,page_size:25,q:el('search').value,status:el('filterStatus').value,sort:el('sort').value,direction:el('direction').value});
@@ -111,7 +157,7 @@ async function editOrder(id) {
   if(version!==formVersion)return;
   editing=id;initialDrafts.reset();el('initialLines').hidden=true;
   headerFields.forEach(key=>{el(key).value=data.order[key];});if(!await prepareClient(data.order.client_id,data.delivery,version))return;
-  el('formTitle').textContent='Edit order';el('referenceHint').textContent=data.order.reference;el('editor').hidden=false;el('editor').scrollIntoView({behavior:'smooth'});
+  el('detail').hidden=true;el('formTitle').textContent='Edit order';el('referenceHint').textContent=data.order.reference;el('editor').hidden=false;el('editor').scrollIntoView({behavior:'smooth'});
 }
 el('orderForm').onsubmit=async event=>{
   event.preventDefault();el('save').disabled=true;
@@ -129,7 +175,7 @@ el('orderForm').onsubmit=async event=>{
 async function showDetails(id) {
   const version=++detailVersion;const data=await api(`/api/orders/${id}`);if(version!==detailVersion)return;
   if((clientScope&&String(data.order.client_id)!==clientScope)||(enquiryScope&&String(data.order.enquiry_id)!==enquiryScope))throw new Error('Order does not belong to the selected record.');
-  current=data;editingLine=null;el('lineForm').hidden=true;el('lineDrafts').hidden=true;el('copyPanel').hidden=true;lineDrafts.reset();
+  current=data;commercialInputs=[];editingLine=null;el('editor').hidden=true;el('piError').hidden=true;el('lineForm').hidden=true;el('lineDrafts').hidden=true;el('copyPanel').hidden=true;lineDrafts.reset();
   const order=data.order;
   el('conversionHint').textContent='Choose the currency for this proforma invoice.';
   el('piForm').hidden=!order.can_edit||order.status==='cancelled';el('piCurrency').value='';el('piRate').value='';el('piRate').required=false;el('rateField').hidden=true;
@@ -168,25 +214,43 @@ async function showDetails(id) {
   const section=(label,value)=>{const block=document.createElement('section');const title=document.createElement('h3');title.textContent=label;const text=document.createElement('p');text.textContent=value||'Not provided';block.append(title,text);el('detailBody').append(block);};
   section('Order and PO / PI references',[order.order_date,order.po_reference&&`PO: ${order.po_reference}`,order.pi_reference&&`PI: ${order.pi_reference}`,order.pi_date&&`PI date: ${order.pi_date}`].filter(Boolean).join('\n'));
   section('Payment and delivery terms',[order.payment_terms,order.delivery_terms,order.delivery_time,order.dispatch_method].filter(Boolean).join('\n'));
-  section('Ownership and creation',`${order.owner_name} (client owner)\n${order.creator_name} (order creator)\n${new Date(order.created_at).toLocaleString()}`);
+  el('ownershipHistory').textContent=`Client owner: ${order.owner_name} / Order created by ${order.creator_name} / ${new Date(order.created_at).toLocaleString()}`;
   section('Destination / shipping',[order.destination,`${order.currency} ${order.shipping_charges}`].filter(Boolean).join(' / '));
   const destination=data.delivery||{};
   section('Consignee',destination.consignee_text??formatPartyBlock(destination.consignee,destination.shipping_address));
   section('Buyer Details',destination.buyer_text??(destination.buyer?.name?formatPartyBlock(destination.buyer,destination.billing_address):'Same as consignee'));
   section('Notify Details',destination.notify_text??(destination.notify_party?.name?formatPartyBlock(destination.notify_party,destination.notify_party?.address):'Same as consignee'));
-  section('Delivery instructions',destination.instructions);section('Notes',order.notes);
+  if(destination.instructions)section('Delivery instructions',destination.instructions);if(order.notes)section('Notes',order.notes);
   el('lineRows').replaceChildren();
   data.lines.forEach(line=>{
-    const row=document.createElement('tr');[line.sku,[line.description,line.hsn_code,line.item_condition].filter(Boolean).join(' / '),`${line.quantity} ${line.uom||'PCs'}`,line.unit_price,line.currency,line.line_total,line.source_enquiry_line_id?`Enquiry line #${line.source_enquiry_line_id}`:'Manual'].forEach(value=>cell(row,value));
-    const actions=cell(row,'');
-    if(order.can_edit)actions.append(action('Edit',async()=>{const latest=(await api(`/api/orders/${id}/lines/${line.id}`)).line;if(!latest.is_active)throw new Error('This line was removed.');editingLine=line.id;for(const [key,value] of Object.entries({lineSku:latest.sku,lineDescription:latest.description,lineQuantity:latest.quantity,linePrice:latest.unit_price,lineCurrency:latest.currency,lineHsn:latest.hsn_code||'',lineCondition:latest.item_condition||'',lineUom:latest.uom||'PCs'}))el(key).value=value;el('lineForm').hidden=false;el('lineForm').scrollIntoView({behavior:'smooth'});}));
+    const row=document.createElement('tr');
+    const product=cell(row,'');product.setAttribute('data-label','Item');const sku=document.createElement('strong');sku.textContent=line.sku;
+    const description=document.createElement('span');description.className='item-description';description.textContent=line.description;product.append(sku,description);
+    if(line.source_enquiry_line_id){const source=document.createElement('small');source.textContent=`Imported enquiry item #${line.source_enquiry_line_id}`;product.append(source);}
+    [line.quantity+' '+(line.uom||'PCs'),line.currency+' '+line.unit_price,line.currency+' '+line.line_total].forEach((value,index)=>cell(row,value).setAttribute('data-label',['Quantity','Unit price','Amount'][index]));
+    const inputs={id:line.id,originalHsn:line.hsn_code||'',originalCondition:line.item_condition||''};
+    for(const [key,label,limit,slot]of [['hsn_code','HSN code',20,'hsn'],['item_condition','Item condition',100,'condition']]){
+      const td=cell(row,'');td.setAttribute('data-label',label);
+      if(order.can_edit){
+        const input=document.createElement('input');input.type='text';input.maxLength=limit;input.value=line[key]||'';
+        input.placeholder=label==='HSN code'?'Enter HSN code':'Select or enter condition';input.className='commercial-input';
+        input.setAttribute('aria-label',`${label} for ${line.sku}`);input.setAttribute('aria-invalid',String(!input.value));
+        if(key==='item_condition')input.setAttribute('list','itemConditions');
+        input.oninput=()=>{input.setAttribute('aria-invalid',String(!input.value.trim()));updatePiReadiness();};
+        td.append(input);inputs[slot]=input;
+      }else{td.textContent=line[key]||'Not set';}
+    }
+    if(order.can_edit)commercialInputs.push(inputs);
+    const actions=cell(row,'');actions.setAttribute('data-label','Actions');
+    if(order.can_edit)actions.append(action('Edit',async()=>{if(commercialDirty())throw new Error('Save item details before opening the full line editor.');const latest=(await api(`/api/orders/${id}/lines/${line.id}`)).line;if(!latest.is_active)throw new Error('This line was removed.');editingLine=line.id;for(const [key,value] of Object.entries({lineSku:latest.sku,lineDescription:latest.description,lineQuantity:latest.quantity,linePrice:latest.unit_price,lineCurrency:latest.currency,lineHsn:latest.hsn_code||'',lineCondition:latest.item_condition||'',lineUom:latest.uom||'PCs'}))el(key).value=value;el('lineForm').hidden=false;el('lineForm').scrollIntoView({behavior:'smooth'});}));
     if(order.can_delete)actions.append(action('Delete',async()=>{if(!window.confirm(`Delete SKU ${line.sku}? History will be retained.`))return;await api(`/api/orders/${id}/lines/${line.id}`,{method:'DELETE'});await showDetails(id);},true));
     el('lineRows').append(row);
   });
-  if(!data.lines.length){const row=document.createElement('tr');cell(row,'No active order items.').colSpan=8;el('lineRows').append(row);}
+  if(!data.lines.length){const row=document.createElement('tr');cell(row,'No active order items.').colSpan=7;el('lineRows').append(row);}
   el('totals').replaceChildren();Object.entries(data.subtotals).forEach(([code,total])=>{const label=document.createElement('strong');label.textContent=`${code} subtotal: ${total}`;el('totals').append(label);});
   el('deliveryHistory').replaceChildren();data.delivery_history.forEach(item=>{const p=document.createElement('p');p.textContent=`${new Date(item.recorded_at).toLocaleString()} / version ${item.id}\nShipping: ${addressText(item.shipping_address)}\nBilling: ${addressText(item.billing_address)}`;el('deliveryHistory').append(p);});
   el('revisions').replaceChildren();data.revisions.forEach(item=>{const p=document.createElement('p');p.textContent=`${new Date(item.created_at).toLocaleString()} / ${item.action.replaceAll('_',' ')} / actor #${item.actor_user_id}`;el('revisions').append(p);});
+  selectOrderTab('items');updatePiReadiness();
   el('detail').hidden=false;el('detail').scrollIntoView({behavior:'smooth'});
 }
 el('lineForm').onsubmit=async event=>{event.preventDefault();try{await api(`/api/orders/${current.order.id}/lines/${editingLine}`,json('PUT',{sku:el('lineSku').value,description:el('lineDescription').value,quantity:el('lineQuantity').value,unit_price:el('linePrice').value,currency:el('lineCurrency').value,hsn_code:el('lineHsn').value,item_condition:el('lineCondition').value,uom:el('lineUom').value}));await showDetails(current.order.id);message('Order line saved.');}catch(error){message(error.message,true);}};
@@ -209,12 +273,17 @@ el('piCurrency').onchange=()=>{
   el('conversionHint').textContent=convert?'Enter INR per 1 USD. USD to INR multiplies; INR to USD divides. Unit rates round to 2 decimals before multiplying quantities. Shipping is converted separately.':'Amounts already in the selected currency use their saved prices.';
 };
 el('piForm').onsubmit=async event=>{
-  event.preventDefault();el('generatePi').disabled=true;
+  event.preventDefault();
+  if(commercialDirty()||current.lines.some(line=>!line.hsn_code||!line.item_condition)||!current.lines.length){updatePiReadiness();el('completeItemDetails').onclick();return;}
+  el('piError').hidden=true;el('generatePi').disabled=true;
   try{
     const data={currency:el('piCurrency').value};if(!el('rateField').hidden)data.usd_inr_rate=el('piRate').value;
     const result=await api(`/api/orders/${current.order.id}/invoices`,json('POST',data));
     await showDetails(current.order.id);message(`PI ${result.reference} generated. Download it below.`);
-  }catch(error){message(error.message,true);}finally{el('generatePi').disabled=false;}
+  }catch(error){
+    if(error.details?.code==='pi_lines_incomplete')await showDetails(current.order.id);
+    el('piError').textContent=error.message;el('piError').hidden=false;message(error.message,true);
+  }finally{updatePiReadiness();}
 };
 (async()=>{try{
   if(enquiryScope){const e=(await api(`/api/enquiries/${enquiryScope}`)).enquiry;el('context').textContent=`Orders for ${e.reference} / ${e.client_name}`;el('newOrder').hidden=!e.can_edit||!e.client_active;}

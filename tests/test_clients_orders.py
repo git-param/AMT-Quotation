@@ -265,10 +265,40 @@ class WorkspaceTests(unittest.TestCase):
         self.client.put(path + '/lines/' + str(state['lines'][0]['id']), json={'hsn_code': ''})
         self.assertEqual(self.client.post(path + '/invoices', json={'currency': 'USD'}).status_code, 400)
         self.assertEqual(self.client.get(path).json['invoices'], [])
+
         self.client.put(path + '/lines/' + str(state['lines'][0]['id']), json={'hsn_code': '85371090'})
         with patch.dict(os.environ, {'PI_TEMPLATE_USD': 'missing-company-template.xlsm'}):
             self.assertEqual(self.client.post(path + '/invoices', json={'currency': 'USD'}).status_code, 400)
         self.assertEqual(self.client.get(path).json['invoices'], [])
+
+    def test_missing_pi_fields_are_actionable_and_commercial_batch_is_scoped_and_atomic(self):
+        self.templates()
+        state = self.direct()
+        order_id, line_id = state['order']['id'], state['lines'][0]['id']
+        path = f'/api/orders/{order_id}'
+        self.client.put(path + '/lines/' + str(line_id), json={'hsn_code': '', 'item_condition': ''})
+        response = self.client.post(path + '/invoices', json={'currency': 'USD'})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json['code'], 'pi_lines_incomplete')
+        self.assertEqual(response.json['missing_lines'][0]['sku'], 'PART')
+        self.assertEqual(response.json['missing_lines'][0]['fields'], ['hsn_code', 'item_condition'])
+        original_price = self.client.get(path).json['lines'][0]['unit_price']
+        valid = {'id': line_id, 'hsn_code': '85371090', 'item_condition': 'Used'}
+        other_id = self.direct()['lines'][0]['id']
+        for invalid in ({'id': other_id, 'hsn_code': '1', 'item_condition': 'New'},
+                        dict(valid, id=10**100), dict(valid, unit_price='1'), dict(valid, hsn_code='X'*21)):
+            result = self.client.put(path + '/line-commercial-details', json={'lines': [valid, invalid]})
+            self.assertEqual(result.status_code, 400, result.json)
+            self.assertEqual(self.client.get(path).json['lines'][0]['hsn_code'], '')
+        self.share('VIEW')
+        self.as_user('exec2')
+        self.assertEqual(self.client.put(path + '/line-commercial-details', json={'lines': [valid]}).status_code, 403)
+        self.as_user('exec1')
+        saved = self.client.put(path + '/line-commercial-details', json={'lines': [valid]})
+        self.assertEqual(saved.status_code, 200, saved.json)
+        self.assertEqual(saved.json['pi_line_requirements'], [])
+        self.assertEqual(saved.json['lines'][0]['unit_price'], original_price)
+        self.assertEqual(self.client.post(path + '/invoices', json={'currency': 'USD'}).status_code, 201)
 
     def test_populated_version_fourteen_upgrade_preserves_ids_revisions_and_references(self):
         self.order(pi_reference='HISTORICAL-PI')
@@ -334,7 +364,7 @@ class WorkspaceTests(unittest.TestCase):
     def test_real_company_templates_expand_without_changing_company_or_bank_content(self):
         defaults = Path.home() / 'Downloads'
         names = {'USD': 'Updated PI Format USD - 180626 2.xlsm', 'INR': 'Updated PI Format INR 1 2 2.xlsm'}
-        if not all((defaults / name).exists() for name in names.values()):
+        if not all((defaults / name).exists() or (defaults / ('pi-'+code+'.xlsm')).exists() for code,name in names.items()):
             self.skipTest('Local company workbook integration fixtures are unavailable.')
         state = self.direct(notes='Order notes ' * 100)
         state['lines'] *= 50

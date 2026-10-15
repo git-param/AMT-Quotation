@@ -20,6 +20,7 @@ class Element {
   setAttribute() {}
   reset() {}
   scrollIntoView() {}
+  focus(){this.focused=true;}
   querySelectorAll(selector) {
     const nodes = this.children.flatMap(child => [child, ...child.querySelectorAll('*')]);
     if (selector === 'input:checked') return nodes.filter(node => node.tag === 'input' && node.checked);
@@ -55,6 +56,7 @@ function setup(search = '?client_id=9') {
       if(url.startsWith('/api/orders?'))response=listing;
       else if(url==='/api/orders' && options.method==='POST')response=data;
       else if(url==='/api/orders/7')response=data;
+      else if(url==='/api/orders/7/line-commercial-details'){const body=JSON.parse(options.body);for(const item of body.lines)Object.assign(data.lines.find(line=>line.id===item.id),item);response=data;}
       else if(url.startsWith('/api/enquiries?'))response={enquiries:[enquiry],pages:1};
       else if(url==='/api/enquiries/1')response={enquiry};
       else if(url==='/api/enquiries/1/lines')response={lines:[{id:2,sku:'SKU-A',description:'Part',quantity:'1',unit_price:'10.00',currency:'USD'}]};
@@ -136,4 +138,30 @@ test('related order summaries preserve client scope and read-only navigation',as
   fixture.element('piRate').value='84.50';
   fixture.element('piCurrency').value='USD';fixture.element('piCurrency').onchange();
   assert.equal(fixture.element('rateField').hidden,true);assert.equal(fixture.element('piRate').value,'');
+});
+
+
+test('missing HSN and condition are editable in the item table and must be saved before PI',async()=>{
+  const fixture=setup();await settle();
+  fixture.data.lines=[{id:10,sku:'LEGACY-PART',description:'Imported part',quantity:'1',unit_price:'10.00',currency:'USD',line_total:'10.00',hsn_code:'',item_condition:''}];
+  await fixture.context.showDetails(7);
+  assert.equal(fixture.element('generatePi').disabled,true);
+  assert.match(fixture.element('readinessTitle').textContent,/1 item needs PI details/);
+  const row=fixture.element('lineRows').children[0];
+  const hsn=row.children[4].children[0],condition=row.children[5].children[0];
+  fixture.element('completeItemDetails').onclick();assert.equal(hsn.focused,true);
+  hsn.value='85371090';hsn.oninput();condition.value='Used';condition.oninput();
+  assert.equal(fixture.element('generatePi').disabled,true);assert.equal(fixture.element('saveItemDetails').disabled,false);
+  await fixture.element('saveItemDetails').onclick();
+  assert.equal(fixture.element('generatePi').disabled,false);
+  assert.match(fixture.element('readinessTitle').textContent,/complete/);
+  assert.ok(fixture.requests.some(request=>request.url.endsWith('/line-commercial-details')));
+});
+
+test('VIEW access keeps commercial fields read only',async()=>{
+  const fixture=setup();await settle();fixture.data.order.can_edit=false;
+  fixture.data.lines=[{id:10,sku:'PART',description:'Part',quantity:'1',unit_price:'10.00',currency:'USD',line_total:'10.00',hsn_code:'',item_condition:''}];
+  await fixture.context.showDetails(7);
+  assert.equal(fixture.element('saveItemDetails').hidden,true);
+  assert.equal(fixture.element('lineRows').children[0].children[4].children.length,0);
 });
