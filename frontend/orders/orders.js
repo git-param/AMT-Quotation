@@ -79,7 +79,7 @@ function updatePiReadiness(){
   el('piReadiness').className='pi-readiness'+(dirty||missing.length||empty||legacy?' needs-attention':' is-ready');
   el('readinessTitle').textContent=dirty?'Save your item changes':empty?'Add items to this order':missing.length?`${missing.length} item${missing.length===1?' needs':'s need'} PI details`:legacy?'Review historical quantities':'Item details are complete';
   el('readinessHint').textContent=dirty?'Save item details below before generating your PI.':empty?'Add SKU lines, quantities and agreed prices to get started.':missing.length?`Enter the missing HSN code and item condition in the highlighted fields (${missing.slice(0,3).map(line=>line.sku).join(', ')}${missing.length>3?' and '+(missing.length-3)+' more':''}).`:legacy?'Complete the outstanding historical quantity review below.':'Choose the invoice currency below. Amounts use your saved order prices and any exchange rate you enter.';
-  el('itemDetailsHint').textContent=dirty?'You have unsaved changes to HSN codes or item conditions.':'HSN code and item condition are required for PI generation. Review each item before saving.';
+  el('itemDetailsHint').textContent=dirty?'You have unsaved item details.':current.shared_hsn_code?'HSN code is shared across all SKUs and managed by TLs/admins in Configuration. Review each item condition before saving.':'HSN code and item condition are required for PI generation. TLs/admins can set a shared HSN code in Configuration.';
 }
 el('completeItemDetails').onclick=()=>{
   selectOrderTab('items');const first=commercialInputs.flatMap(item=>[item.hsn,item.condition]).find(input=>!input.value.trim());
@@ -236,6 +236,7 @@ async function showDetails(id) {
         const input=document.createElement('input');input.type='text';input.maxLength=limit;input.value=line[key]||'';
         input.placeholder=label==='HSN code'?'Enter HSN code':'Select or enter condition';input.className='commercial-input';
         input.setAttribute('aria-label',`${label} for ${line.sku}`);input.setAttribute('aria-invalid',String(!input.value));
+        if(key==='hsn_code'&&current.shared_hsn_code){input.readOnly=true;input.title='Shared HSN code managed in Configuration';}
         if(key==='item_condition')input.setAttribute('list','itemConditions');
         input.oninput=()=>{input.setAttribute('aria-invalid',String(!input.value.trim()));updatePiReadiness();};
         td.append(input);inputs[slot]=input;
@@ -243,7 +244,7 @@ async function showDetails(id) {
     }
     if(order.can_edit)commercialInputs.push(inputs);
     const actions=cell(row,'');actions.setAttribute('data-label','Actions');
-    if(order.can_edit)actions.append(action('Edit',async()=>{if(commercialDirty())throw new Error('Save item details before opening the full line editor.');const latest=(await api(`/api/orders/${id}/lines/${line.id}`)).line;if(!latest.is_active)throw new Error('This line was removed.');editingLine=line.id;for(const [key,value] of Object.entries({lineSku:latest.sku,lineDescription:latest.description,lineQuantity:latest.quantity,linePrice:latest.unit_price,lineCurrency:latest.currency,lineHsn:latest.hsn_code||'',lineCondition:latest.item_condition||'',lineUom:latest.uom||'PCs'}))el(key).value=value;el('lineForm').hidden=false;el('lineForm').scrollIntoView({behavior:'smooth'});}));
+    if(order.can_edit)actions.append(action('Edit',async()=>{if(commercialDirty())throw new Error('Save item details before opening the full line editor.');const latest=(await api(`/api/orders/${id}/lines/${line.id}`)).line;if(!latest.is_active)throw new Error('This line was removed.');editingLine=line.id;for(const [key,value] of Object.entries({lineSku:latest.sku,lineDescription:latest.description,lineQuantity:latest.quantity,linePrice:latest.unit_price,lineCurrency:latest.currency,lineHsn:current.shared_hsn_code||latest.hsn_code||'',lineCondition:latest.item_condition||'',lineUom:latest.uom||'PCs'}))el(key).value=value;el('lineHsn').readOnly=Boolean(current.shared_hsn_code);el('lineForm').hidden=false;el('lineForm').scrollIntoView({behavior:'smooth'});}));
     if(order.can_delete)actions.append(action('Delete',async()=>{if(!window.confirm(`Delete SKU ${line.sku}? History will be retained.`))return;await api(`/api/orders/${id}/lines/${line.id}`,{method:'DELETE'});await showDetails(id);},true));
     el('lineRows').append(row);
   });

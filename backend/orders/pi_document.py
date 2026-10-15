@@ -40,6 +40,34 @@ def party_block(party, address):
           ('email','Email: '),('gst_number','GST: ')) if party.get(key)]]))
 
 
+def inr_locations(doc):
+    """Use the domestic country in both PI locations for INR invoices."""
+    if doc['currency'] != 'INR':
+        return doc
+    source_delivery = doc['source_state'].get('delivery') or {}
+    countries = {'india', str(doc['order'].get('destination', '')).strip().casefold(),
+                 str((source_delivery.get('shipping_address') or {}).get('country', '')).strip().casefold(),
+                 str(doc['source_state']['order'].get('destination', '')).strip().casefold()}
+    lines = doc['delivery']['consignee_text'].splitlines()
+    result = []
+    inserted = False
+    for index, line in enumerate(lines):
+        if index > 0 and (re.match(r'^\s*Country\s*:', line, re.I)
+                          or (line.strip() and line.strip().casefold() in countries)):
+            if not inserted:
+                result.append('INDIA')
+                inserted = True
+        else:
+            result.append(line)
+    if not inserted:
+        contact = next((index for index, line in enumerate(result) if index > 0 and
+            re.match(r'^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:', line, re.I)), len(result))
+        result.insert(contact, 'INDIA')
+    doc['delivery']['consignee_text'] = '\n'.join(result)
+    doc['order']['destination'] = 'INDIA'
+    return doc
+
+
 def prepare(state, user, currency, rate):
     from backend.orders.invoices import calculate
     from backend.database import get_db
@@ -71,21 +99,23 @@ def prepare(state, user, currency, rate):
             assets[name] = base64.b64encode(path.read_bytes()).decode('ascii')
         except OSError as error:
             raise ValueError('Company PI image is missing: '+name) from error
-    return {'schema_version':2,'reference':'AMT/PI/'+uuid4().hex[:16].upper(),
+    return inr_locations({'schema_version':2,'reference':'AMT/PI/'+uuid4().hex[:16].upper(),
         'date':datetime.now(timezone(timedelta(hours=5,minutes=30))).date().isoformat(),
         'prepared_by':user['username'],'prepared_phone':company_phone(company),'currency':currency,'order':order,
         'delivery':{'consignee_text':consignee,'buyer_text':buyer,'notify_text':notify,
                     'instructions':destination.get('instructions','')},
-        'totals':totals,'source_conversion':deepcopy(totals),
+        'totals':totals,'source_conversion':deepcopy(totals),'shared_hsn_code':state.get('shared_hsn_code',''),
         'source_state':state,'company':company,'assets':assets,
-        'source_updated_at':state['order']['updated_at']}
+        'source_updated_at':state['order']['updated_at']})
 
 
 def edit(document, edits):
     from backend.orders.invoices import calculate
-    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges'}:
+    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','terms'}:
         raise ValueError('Invalid PI preview fields. Company details and invoice identity cannot be edited.')
     doc = deepcopy(document)
+    if 'terms' in edits:
+        doc['terms'] = text(edits['terms'],20000,'terms and conditions')
     if 'prepared_phone' in edits:
         doc['prepared_phone']=phone(edits['prepared_phone'])
     if 'date' in edits:
@@ -121,6 +151,8 @@ def edit(document, edits):
                 raise ValueError('Invalid or duplicate preview item.')
             seen.add(line['id'])
             validated = order_line({**{k:v for k,v in line.items() if k!='id'},'currency':doc['currency']})
+            if doc.get('shared_hsn_code'):
+                validated['hsn_code'] = doc['shared_hsn_code']
             result.append({**originals[line['id']],**serialize(validated),'id':line['id']})
         lines = result
     shipping = edits.get('shipping_charges',doc['totals']['shipping'])
@@ -131,7 +163,7 @@ def edit(document, edits):
                       'shipping_charges':format(Decimal(shipping_minor)/100,'.2f')},
              'lines':[{**line,'currency':doc['currency']} for line in lines]}
     doc['totals'] = calculate(state,doc['currency'],None,Decimal(doc['totals']['tax_rate']))
-    return doc
+    return inr_locations(doc)
 
 
 def validate_ready(doc):

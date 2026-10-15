@@ -11,6 +11,8 @@ WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
 
 
 def terms(doc):
+    if 'terms' in doc:
+        return doc['terms']
     values = list(doc['company']['terms'][doc['currency']])
     for index,value in enumerate(values):
         match=re.match(r'^(\s*\d+[.)]\s*)?PAYMENT\b',value,re.I)
@@ -26,20 +28,25 @@ def layout(doc):
         return c(col,span,label+str(value),style,path,label,value,**extra)
     order,total=doc['order'],doc['totals']
     seller=list(doc['company']['seller'])
-    metadata=[c(5,6,'Proforma Invoice No:    '+doc['reference'],'bold'),
-        editable(5,6,'Proforma Invoice Date: ',doc['date'],'date',type='date'),
-        editable(5,6,'Purchase Order: ',order['po_reference'],'order.po_reference'),
-        c(5,2,'Prepared By: '+doc['prepared_by']),
-        editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_bottom=True),
-        editable(5,3,'Delivery Terms: ',order['delivery_terms'],'order.delivery_terms')]
+    metadata=[
+        [c(5,2,'Proforma Invoice No:'),c(7,4,doc['reference'],'bold')],
+        [c(5,2,'Proforma Invoice Date:'),editable(7,4,'',doc['date'],'date',type='date',aria='Proforma Invoice Date')],
+        [c(5,2,'Purchase Order:'),editable(7,4,'',order['po_reference'],'order.po_reference',aria='Purchase Order')],
+        [c(5,2,'Prepared By:'),c(7,1,doc['prepared_by']),editable(8,3,'Tel: ',doc.get('prepared_phone',''),'prepared_phone',type='tel')],
+        [editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_bottom=True)],
+        [editable(5,3,'Delivery Terms: ',order['delivery_terms'],'order.delivery_terms')]]
     header=[[c(0,11,'PROFORMA INVOICE','title',line_bottom=True)]]
     for index in range(7):
         left=c(0,5,'SUPPLIER/SELLER','bold') if index==0 else c(0,5,seller[index-1] if index<=len(seller) else '')
-        if index==3:right=[metadata[index],editable(7,4,'Tel: ',doc.get('prepared_phone',''),'prepared_phone',type='tel')]
-        elif index<5:right=[metadata[index]]
-        elif index==5:right=[metadata[5],editable(8,3,'',order['destination'],'order.destination',aria='Destination')]
+        if index<5:right=metadata[index]
+        elif index==5:right=[*metadata[5],editable(8,3,'',order['destination'],'order.destination',aria='Destination')]
         else:right=[editable(5,3,'Delivery Time: ',order['delivery_time'],'order.delivery_time'),
                     editable(8,3,'Dispatch By: ',order['dispatch_method'],'order.dispatch_method')]
+        if index<4:
+            for offset,cell in enumerate(right):
+                cell['open_left'] = offset>0
+                cell['open_right'] = offset<len(right)-1
+                cell['header_metadata'] = True
         header.append([left,*right])
     # Additional configured seller lines are retained, rather than discarded.
     for value in seller[6:]:header.append([c(0,5,value),c(5,6)])
@@ -57,7 +64,7 @@ def layout(doc):
         prefix=f'lines.{index}.'
         items.append([c(0,1,index+1,'center'),
             editable(1,3,'',line['description'],prefix+'description',multiline=True,sku=line['sku'],sku_field=prefix+'sku'),
-            editable(4,1,'',line['hsn_code'],prefix+'hsn_code','center'),
+            editable(4,1,'',line['hsn_code'],prefix+'hsn_code','center',readonly=bool(doc.get('shared_hsn_code'))),
             editable(5,1,'',line['item_condition'],prefix+'item_condition','center'),
             editable(6,2,'',line['quantity'],prefix+'quantity','center',uom=line['uom'],uom_field=prefix+'uom',type='number'),
             editable(8,1,'',line['unit_price'],prefix+'unit_price','amount',type='number'),
@@ -83,9 +90,12 @@ def layout(doc):
     bank_rows.append([c(0,2,'Amount In Word','bold'),c(2,6,total['amount_in_words'],'bold'),
                       c(8,1,'Grand Total','bold'),c(9,2,total['grand_total'],'bold_amount',numeric=True)])
     clauses=[[c(0,11,'Terms & Conditions:-','bold')]]
-    for value in terms(doc).splitlines():
+    term_text = terms(doc)
+    for index,value in enumerate(term_text.splitlines() or ['']):
         final=bool(re.match(r'^\s*\d+[.)]\s*THE FINAL TAX (?:INVOICE|INVOCIE)',value,re.I))
-        clauses.append([c(0,11,value,'final_term' if final else 'terms')])
+        clauses.append([c(0,11,value,'final_term' if final else 'terms',
+            field='terms' if index==0 else None, value=term_text if index==0 else None,
+            multiline=True, aria='Terms and conditions', preview_hidden=index>0)])
     for label,value,path in [('Delivery instructions',doc['delivery']['instructions'],'delivery.instructions'),
                               ('Order notes',order['notes'],'order.notes')]:
         # Keep empty fields editable in the preview without printing empty sections.

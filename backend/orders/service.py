@@ -182,12 +182,16 @@ def delivery_version(row):
 
 def details(connection, order):
     """Calculate totals and return independent line and delivery versions."""
+    from backend.settings import shared_hsn
+    hsn = shared_hsn(connection)
     lines = []
     totals = {}
     for row in connection.execute(
             'SELECT * FROM order_sku_lines WHERE order_id = ? '
             'AND is_active = 1 ORDER BY id', (order['id'],)):
         line = serialize(row)
+        if hsn:
+            line['hsn_code'] = hsn
         source = line.pop('source_snapshot_json')
         line['source_snapshot'] = json.loads(source) if source else None
         lines.append(line)
@@ -214,7 +218,7 @@ def details(connection, order):
             'WHERE r.order_id = ? AND r.source_line_id = s.id '
             'AND replacement.order_id = ? AND replacement.is_active = 1)',
             (order['enquiry_id'], order['id'], order['id']))]
-    return {'order': result, 'lines': lines, 'invoices': invoices,
+    return {'order': result, 'lines': lines, 'invoices': invoices, 'shared_hsn_code': hsn,
             'pi_line_requirements': pi_line_requirements(lines),
             'legacy_lines_requiring_review': legacy_review,
             'subtotals': {key: format(value, '.2f')

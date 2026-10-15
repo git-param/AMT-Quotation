@@ -100,10 +100,13 @@ window.createPiPreview = function (host, api, json, onIssued) {
       table.append(columns);
       const body = node("tbody");
       for (const row of section.rows) {
+        if (row.every(cell => cell.preview_hidden)) continue;
         const tr = node("tr");
         for (const cell of row) {
           if (section.name === "parties" && cell.placeholder) continue;
           const td = node("td", undefined, "pi-cell-" + (cell.style || "normal")); td.colSpan = cell.span;
+          if (cell.open_left) td.classList.add('pi-open-left');
+          if (cell.open_right) td.classList.add('pi-open-right');
           if (cell.line_top) td.classList.add("pi-border-top");
           if (cell.line_bottom) td.classList.add("pi-border-bottom");
           if (cell.editor_rows) td.rowSpan = cell.editor_rows;
@@ -111,9 +114,11 @@ window.createPiPreview = function (host, api, json, onIssued) {
             if (cell.sku_field) field(td, "SKU", cell.sku, cell.sku_field);
             const amount = cell.style.includes("amount") && !cell.free;
             const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.free ? 'Free' : cell.value, cell.field, cell.multiline, cell.free ? 'text' : cell.type || "text");
+            if (cell.readonly) { input.readOnly = true; input.title = 'Shared HSN code managed in Configuration'; }
             if (!cell.label && !amount) td.lastChild.classList.add("pi-unlabelled");
             if (cell.editor_rows) input.rows = 12;
             else if (cell.multiline) input.rows = cell.field.startsWith("delivery.") ? 5 : 2;
+            if (cell.field === 'terms') input.rows = Math.max(5, String(cell.value).split('\n').length);
             if (cell.uom_field) {field(td, "UOM", cell.uom, cell.uom_field);td.classList.add("pi-quantity-cell");}
           } else td.append(node("div", (cell.style.includes("amount") ? symbol + " " : "") + cell.text, "pi-cell-text"));
           tr.append(td);

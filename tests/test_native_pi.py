@@ -154,6 +154,66 @@ class NativePiTests(unittest.TestCase):
         self.assertIn('2. PAYMENT Agreed advance',output)
         self.assertIn('4. SHIPMENT: DISPATCH WITHIN 24 HOURS OF PAYMENT CONFIRMATION',output)
 
+    def test_editable_terms_persist_in_both_exports(self):
+        preview=self.preview()
+        url=self.base+'/preview/'+preview['preview_id']
+        custom='1. Custom warranty <agreed> & approved\n2. Delivery after inspection'
+        saved=self.client.put(url,json={'terms':custom})
+        self.assertEqual(saved.status_code,200,saved.json)
+        self.assertEqual(pi_exports.terms(saved.json['document']),custom)
+        self.assertEqual(self.client.put(url,json={'terms':['bad']}).status_code,400)
+        self.assertEqual(self.client.put(url,json={'terms':'x'*20001}).status_code,400)
+        issued=self.issue(saved.json)
+        self.assertEqual(issued.status_code,201,issued.json)
+        self.assertTrue(self.client.get(issued.json['pdf_url']).data.startswith(b'%PDF-'))
+        with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
+            self.assertIn('Delivery after inspection',book.read('xl/sharedStrings.xml').decode())
+        self.assertNotIn('terms',self.client.get(f'/api/orders/{self.order_id}').json['order'])
+
+    def test_inr_uses_india_in_destination_and_consignee(self):
+        usd=self.preview()['document']
+        self.assertEqual(usd['order']['destination'],'USA')
+        preview=self.preview(currency='INR',usd_inr_rate='80')
+        doc=preview['document']
+        self.assertEqual(doc['order']['destination'],'INDIA')
+        self.assertIn('INDIA',doc['delivery']['consignee_text'].splitlines())
+        url=self.base+'/preview/'+preview['preview_id']
+        saved=self.client.put(url,json={'order':{'destination':'USA'},'delivery':{
+            'consignee_text':'Updated consignee\nStreet address\nCountry: USA\nTel: +919876543210'}})
+        self.assertEqual(saved.status_code,200,saved.json)
+        self.assertEqual(saved.json['document']['order']['destination'],'INDIA')
+        self.assertEqual(saved.json['document']['delivery']['consignee_text'],
+            'Updated consignee\nStreet address\nINDIA\nTel: +919876543210')
+        again=self.client.put(url,json={})
+        self.assertEqual(again.json['document']['delivery'],saved.json['document']['delivery'])
+        issued=self.issue(again.json)
+        self.assertEqual(issued.status_code,201,issued.json)
+        with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
+            self.assertIn('INDIA',book.read('xl/sharedStrings.xml').decode())
+        self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['order']['destination'],'USA')
+
+    def test_shared_hsn_applies_to_every_line_and_is_snapshotted(self):
+        connection=database.get_db()
+        with connection:
+            connection.execute("UPDATE app_settings SET value='00123456' WHERE key='hsn_code'")
+        connection.close()
+        state=self.client.get(f'/api/orders/{self.order_id}').json
+        self.assertTrue(all(line['hsn_code']=='00123456' for line in state['lines']))
+        preview=self.preview()
+        changes=self.edits(preview['document'])
+        changes['lines'][0]['hsn_code']='9999'
+        saved=self.client.put(self.base+'/preview/'+preview['preview_id'],json=changes)
+        self.assertEqual(saved.json['document']['totals']['lines'][0]['hsn_code'],'00123456')
+        connection=database.get_db()
+        with connection:
+            connection.execute("UPDATE app_settings SET value='8888' WHERE key='hsn_code'")
+        connection.close()
+        self.assertEqual(self.preview()['document']['totals']['lines'][0]['hsn_code'],'8888')
+        issued=self.issue(saved.json)
+        self.assertEqual(issued.status_code,201,issued.json)
+        with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
+            self.assertIn('00123456',book.read('xl/sharedStrings.xml').decode())
+
     def test_editable_preparer_phone_and_free_shipping_preserve_numeric_totals(self):
         preview=self.preview()
         url=self.base+'/preview/'+preview['preview_id']

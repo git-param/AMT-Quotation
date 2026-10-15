@@ -519,6 +519,14 @@ NATIVE_PI_SCHEMA = (
     'CREATE INDEX idx_invoice_previews_order ON invoice_previews(order_id,created_by)',
 )
 
+CONFIGURATION_SCHEMA = (
+    "CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    "INSERT INTO app_settings(key,value) VALUES('hsn_code','')",
+    "INSERT INTO permissions(code,description) VALUES('settings.manage','Manage application configuration')",
+    "INSERT INTO role_permissions(role_code,permission_code) VALUES "
+    "('admin','settings.manage'),('manager','settings.manage'),('sales_tl','settings.manage')",
+)
+
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
@@ -538,4 +546,5 @@ MIGRATIONS = (
     (16, 'order_legacy_line_review', LEGACY_REVIEW_SCHEMA),
     (17, 'client_location', CLIENT_LOCATION_SCHEMA),
     (18, 'native_pi_previews_exports', NATIVE_PI_SCHEMA),
+    (19, 'shared_hsn_configuration', CONFIGURATION_SCHEMA),
 )

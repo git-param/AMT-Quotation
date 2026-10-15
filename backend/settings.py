@@ -1,0 +1,49 @@
+"""Shared application configuration managed by team leads and administrators."""
+import json
+import re
+
+from flask import Blueprint, jsonify, request, send_file
+
+from backend.common.auth import get_current_user, permission_required
+from backend.config import FRONTEND_DIR
+from backend.database import get_db
+
+bp = Blueprint('settings', __name__)
+
+
+def shared_hsn(connection):
+    row = connection.execute("SELECT value FROM app_settings WHERE key='hsn_code'").fetchone()
+    return row[0] if row else ''
+
+
+@bp.route('/configuration')
+@permission_required('settings.manage')
+def page():
+    return send_file(FRONTEND_DIR / 'configuration' / 'configuration.html')
+
+
+@bp.route('/api/settings', methods=['GET', 'PUT'])
+@permission_required('settings.manage')
+def settings():
+    user = get_current_user()
+    connection = get_db()
+    try:
+        if request.method == 'PUT':
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict) or set(data) != {'hsn_code'}:
+                raise ValueError('Provide the shared HSN code.')
+            value = data['hsn_code']
+            if not isinstance(value, str) or not re.fullmatch(r'[0-9]{4}|[0-9]{6}|[0-9]{8}', value.strip()):
+                raise ValueError('Enter a 4, 6 or 8 digit HSN code.')
+            with connection:
+                previous = shared_hsn(connection)
+                connection.execute("UPDATE app_settings SET value=? WHERE key='hsn_code'", (value.strip(),))
+                connection.execute(
+                    'INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
+                    "VALUES(?,?,'settings_update','app_settings','hsn_code',?)",
+                    (user['id'], user['username'], json.dumps({'before': previous, 'after': value.strip()})))
+        return jsonify(hsn_code=shared_hsn(connection))
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    finally:
+        connection.close()

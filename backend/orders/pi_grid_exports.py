@@ -144,14 +144,15 @@ def pdf(doc):
                 col,span=cell['col'],cell['span'];kind=cell['style']
                 content=cell['_paragraph'];row[col]=content
                 if span>1:commands.append(('SPAN',(col,index),(col+span-1,index)))
-                commands.extend([('LINEBEFORE',(col,index),(col,index),.8,colors.black),
-                    ('LINEAFTER',(col+span-1,index),(col+span-1,index),.8,colors.black)])
+                if not cell.get('open_left'):commands.append(('LINEBEFORE',(col,index),(col,index),.8,colors.black))
+                if not cell.get('open_right'):commands.append(('LINEAFTER',(col+span-1,index),(col+span-1,index),.8,colors.black))
                 if kind=='warning':commands.append(('BACKGROUND',(col,index),(col+span-1,index),colors.yellow))
                 if kind=='final_term':commands.append(('BACKGROUND',(col,index),(col+span-1,index),colors.HexColor('#FFF2CC')))
                 if cell.get('line_top'):commands.append(('LINEABOVE',(col,index),(col+span-1,index),.8,colors.black))
                 if cell.get('line_bottom'):commands.append(('LINEBELOW',(col,index),(col+span-1,index),.8,colors.black))
                 _,h=content.wrap(sum(columns[col:col+span])-6,10000)
                 min_height=max(min_height,h+3)
+                if cell.get('header_metadata'):min_height=max(min_height,h+7)
             if section['name']=='parties' and index==1:min_height=max(min_height,62)
             if section['name']=='parties' and index==3:min_height=max(min_height,46)
             if section['name']=='items' and index>0:min_height=max(min_height,19)
@@ -240,9 +241,10 @@ def xlsx(doc):
                          or (cell.get('line_top') and chunk_index==0))
                     bottom=((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1) or cell['style']=='head'
                             or (cell.get('line_bottom') and chunk_index==len(parts)-1))
-                    key=(cell['style'],top,bottom)
+                    key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False))
                     if key not in formats:
-                        formats[key]=book.add_format({**format_values[cell['style']],'top':2 if top else 0,'bottom':2 if bottom else 0})
+                        formats[key]=book.add_format({**format_values[cell['style']],'top':2 if top else 0,'bottom':2 if bottom else 0,
+                            'left':0 if cell.get('open_left') else 2,'right':0 if cell.get('open_right') else 2})
                     fmt=formats[key]
                     number=(cell.get('numeric') or cell['field']=='shipping_charges' or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
                     if cell['span']>1:sheet.merge_range(row_index,col,row_index,end,'',fmt)
@@ -252,6 +254,7 @@ def xlsx(doc):
                         else:sheet.write_string(row_index,col,symbol+' '+cell['text'],fmt)
                     else:sheet.write_string(row_index,col,value,fmt)
                     height=max(height,len(lines)*(13 if cell['style'] in ('terms','final_term') else 16))
+                    if cell.get('header_metadata'):height=max(height,len(lines)*16+5)
                 if section['name']=='parties' and index==1:height=max(height,90)
                 if section['name']=='parties' and index==3:height=max(height,65)
                 if section['name']=='header' and index==0:height=max(height,30)
