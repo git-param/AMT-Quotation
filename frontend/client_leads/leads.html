@@ -14,7 +14,7 @@
         <div class="hdr-logo">Client Leads</div>
         <div class="hdr-sub">Your client contacts</div>
       </div>
-      <nav>
+      <nav><a class="back-link" href="/enquiries">Enquiries</a>
         <span id="hdrUser"></span
         ><a
           class="back-link"
@@ -183,7 +183,6 @@
             </button>
           </form>
         </section>
-        <section id="clientDetail" class="panel" hidden aria-labelledby="detailTitle"><div class="source-toolbar"><h2 id="detailTitle">Client details</h2><button class="btn-sm" id="closeDetail" type="button">Close</button></div><div id="detailBody" class="detail-grid"></div><details><summary>Saved address history</summary><div id="addressHistory"></div></details><p class="history-note">These are reusable client addresses. A future order can use a saved address or a different consignee/shipping address without changing these defaults.</p></section>
         <section class="panel">
           <div class="source-toolbar">
             <div>
@@ -215,6 +214,7 @@
                   <th>Created by</th>
                   <th>Created</th>
                   <th>Notes</th>
+                  <th>Enquiries</th>
                   <th>Status</th>
                   <th>Access</th>
                   <th>Actions</th>
@@ -224,6 +224,22 @@
             </table>
           </div>
           <div class="pagination"><button class="btn-sm" id="previousPage" type="button">Previous</button><span id="pageInfo" aria-live="polite"></span><button class="btn-sm" id="nextPage" type="button">Next</button><label>Rows <select id="pageSize"><option>25</option><option>50</option><option>100</option></select></label></div>
+        </section>
+        <section id="clientDetail" class="panel" hidden aria-labelledby="detailTitle">
+          <div class="client-detail-header">
+            <div class="client-avatar" id="detailAvatar" aria-hidden="true"></div>
+            <div class="client-detail-heading">
+              <span class="eyebrow">CLIENT DETAILS</span>
+              <h2 id="detailTitle">Client details</h2>
+              <p id="detailSubtitle"></p>
+              <div id="detailBadges" class="client-detail-badges"></div>
+            </div>
+            <div id="detailActions" class="client-detail-actions"></div>
+            <button class="btn-sm" id="closeDetail" type="button">Close</button>
+          </div>
+          <div id="detailBody" class="detail-grid"></div>
+          <details class="client-address-history"><summary>Saved address history</summary><div id="addressHistory"></div></details>
+          <p class="history-note">Billing and default shipping addresses are reusable. Each future order can use a saved address or its own delivery address.</p>
         </section>
       </div>
     </main>

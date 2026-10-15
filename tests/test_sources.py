@@ -181,7 +181,9 @@ class SourceTests(unittest.TestCase):
             ).fetchall()
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [4, 5, 6, 7, 8, 9])
+        self.assertEqual(
+            migrate_database(path), [4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+        )
         connection = sqlite3.connect(path)
         try:
             self.assertEqual(original, connection.execute(

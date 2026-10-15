@@ -276,7 +276,7 @@ class LeadTests(unittest.TestCase):
             f'/api/leads/{uid}'
         ).json['lead']['name'], 'exec1')
 
-    def test_edit_reassignment_metadata_and_no_delete(self):
+    def test_edit_reassignment_metadata_and_executive_delete_denial(self):
         uid = self.create('exec1')
         self.assign('exec1', 'tl1')
         self.assign('exec1', 'tl2')
@@ -291,7 +291,7 @@ class LeadTests(unittest.TestCase):
             }).status_code, 400)
         self.assertEqual(self.client.delete(
             f'/api/leads/{uid}'
-        ).status_code, 405)
+        ).status_code, 403)
         self.as_user(None)
         self.assertEqual(self.client.put(
             f'/api/leads/{uid}', json={'name': 'Forbidden'}

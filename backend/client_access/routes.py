@@ -25,7 +25,8 @@ def managed_leads(connection, user, lead_id=None):
     predicate, parameters = management_scope(user)
     sql = (
         'SELECT l.*, u.username AS creator_name FROM client_leads l '
-        'JOIN users u ON u.id = l.created_by WHERE (' + predicate + ')'
+        'JOIN users u ON u.id = l.created_by WHERE (' + predicate + ') '
+        'AND l.deleted_at IS NULL'
     )
     if lead_id is not None:
         sql += ' AND l.id = ?'

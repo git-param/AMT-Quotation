@@ -231,6 +231,72 @@ CLIENT_DISCOVERY_SCHEMA = (
     "SELECT id, billing_address_json, shipping_address_json FROM client_leads",
 )
 
+ENQUIRY_SCHEMA = (
+    "CREATE TABLE client_enquiries ("
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "client_id INTEGER NOT NULL REFERENCES client_leads(id) "
+    "ON DELETE RESTRICT, "
+    "reference TEXT NOT NULL COLLATE NOCASE UNIQUE "
+    "CHECK (length(trim(reference)) BETWEEN 1 AND 80), "
+    "enquiry_date TEXT NOT NULL, "
+    "subject TEXT NOT NULL CHECK (length(trim(subject)) BETWEEN 1 AND 200), "
+    "description TEXT NOT NULL DEFAULT '' "
+    "CHECK (length(description) <= 5000), "
+    "status TEXT NOT NULL DEFAULT 'open' "
+    "CHECK (status IN ('open', 'in_progress', 'closed', 'cancelled')), "
+    "created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "updated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "created_at TEXT NOT NULL DEFAULT "
+    "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), "
+    "updated_at TEXT NOT NULL DEFAULT "
+    "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))",
+    "CREATE INDEX idx_enquiries_client_id ON client_enquiries(client_id, id)",
+    "CREATE INDEX idx_enquiries_status_date "
+    "ON client_enquiries(status, enquiry_date, id)",
+    "CREATE INDEX idx_enquiries_creator_id "
+    "ON client_enquiries(created_by, id)",
+)
+
+ENQUIRY_LINE_SCHEMA = (
+    "CREATE TABLE enquiry_sku_lines ("
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "enquiry_id INTEGER NOT NULL REFERENCES client_enquiries(id) "
+    "ON DELETE RESTRICT, sku TEXT NOT NULL "
+    "CHECK (length(trim(sku)) BETWEEN 1 AND 100), "
+    "description TEXT NOT NULL "
+    "CHECK (length(trim(description)) BETWEEN 1 AND 2000), "
+    "quantity_milli INTEGER NOT NULL "
+    "CHECK (quantity_milli BETWEEN 1 AND 999999999), "
+    "unit_price_minor INTEGER NOT NULL "
+    "CHECK (unit_price_minor BETWEEN 0 AND 99999999999), "
+    "currency TEXT NOT NULL CHECK (currency IN ('USD', 'INR')), "
+    "is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)), "
+    "created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "updated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "created_at TEXT NOT NULL DEFAULT "
+    "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), "
+    "updated_at TEXT NOT NULL DEFAULT "
+    "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))",
+    "CREATE INDEX idx_enquiry_lines_active "
+    "ON enquiry_sku_lines(enquiry_id, is_active, id)",
+    "CREATE TABLE enquiry_line_revisions ("
+    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    "line_id INTEGER NOT NULL REFERENCES enquiry_sku_lines(id) "
+    "ON DELETE RESTRICT, "
+    "snapshot_json TEXT NOT NULL, "
+    "action TEXT NOT NULL CHECK (action IN ('create', 'edit', 'remove')), "
+    "actor_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, "
+    "created_at TEXT NOT NULL DEFAULT "
+    "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))",
+    "CREATE INDEX idx_line_revisions_line "
+    "ON enquiry_line_revisions(line_id, id)",
+)
+
+ENQUIRY_DEAL_SCHEMA = (
+    "ALTER TABLE client_enquiries ADD COLUMN deal_currency TEXT "
+    "CHECK (deal_currency IN ('USD', 'INR'))",
+)
+
 # Add new versions here; never edit the name or SQL of an applied version.
 SOFT_DELETE_SCHEMA = (
     "ALTER TABLE client_leads ADD COLUMN deleted_at TEXT",
@@ -414,13 +480,10 @@ MIGRATIONS = (
     (7, 'client_share_levels', SHARE_LEVEL_SCHEMA),
     (8, 'client_crm_details', CRM_DETAIL_SCHEMA),
     (9, 'client_discovery', CLIENT_DISCOVERY_SCHEMA),
-<<<<<<< Updated upstream
-=======
     (10, 'client_enquiries', ENQUIRY_SCHEMA),
     (11, 'enquiry_sku_lines', ENQUIRY_LINE_SCHEMA),
     (12, 'enquiry_deal_currency', ENQUIRY_DEAL_SCHEMA),
     (13, 'client_enquiry_soft_deletion', SOFT_DELETE_SCHEMA),
     (14, 'orders_delivery_snapshots', ORDER_SCHEMA),
     (15, 'clients_orders_workspace', WORKSPACE_SCHEMA),
->>>>>>> Stashed changes
 )
