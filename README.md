@@ -639,3 +639,73 @@ Application startup applies migration 13 using the existing migration runner.
 Follow the backup instructions above before upgrading. No automatic purge or
 restore endpoint is included. Tests cover management permissions, cross-team
 isolation, sharing, descendant access, historical preservation and upgrades.
+
+### Module 5.3: orders and delivery details
+
+Open **Orders** from Client Leads or Enquiries. Each detail view includes an
+Orders section with a scoped count, recent orders, View all orders and an Add
+Order link when the current client is active and editable. The order page keeps
+its searchable, status-filtered, sorted and paginated list above the editor and
+detail view. An order belongs to one client and one enquiry; a client/enquiry
+can have multiple orders. References (`ORD-000001`, etc.) are generated inside
+the create transaction and cannot be changed or reassigned through the API.
+
+Creation requires an authorized active enquiry/client, a valid order date,
+USD/INR deal currency, a consignee legal name, a shipping street/country and
+at least one complete line. Select active enquiry items or add reviewed manual
+items using the existing SKU draft/lookup component. Copying creates independent
+order-line IDs and retains the original enquiry-line ID plus its full source
+snapshot. Editing either record never silently updates the other. Historical
+fractional enquiry quantities must be reviewed as whole-number manual order
+items; they are never rounded or rewritten automatically.
+
+Order lines support positive whole quantities, nonnegative prices with up to
+two decimals, USD/INR currency, immutable relationships and server Decimal
+totals. Subtotals are calculated separately per line currency. Header currency
+is the default for new draft items; changing it does not convert saved prices.
+VIEW grants allow reading only. EDIT grants permit order/header/delivery and
+line creation/editing, without onward-sharing authority. Persisted line
+deletion follows the management-only policy above and retains revision history.
+Revocation immediately removes access, even from orders created by the share
+recipient. TL access remains limited to their own clients and assigned active
+executives; Admins and legacy managers retain existing access. New orders are
+blocked for inactive clients, while existing orders remain accessible/editable
+according to those same permissions.
+
+Each order stores independent billing/shipping, consignee, buyer, notify-party,
+contact/PIC/GST details and delivery instructions. Select any saved billing or
+default shipping address version belonging to this client, or enter a different
+shipping address for this order. The selected version is copied, not resolved
+from mutable defaults later. Delivery edits append a new snapshot with its actor,
+timestamp and saved-address provenance. Client defaults, address history and
+other orders remain unchanged. Order dates, PO/PI references/date, payment terms,
+delivery terms/destination, delivery time, courier, notes and status are editable.
+PO/PI references are context fields; no final PI document is generated here.
+
+Migration 14 adds `client_orders`, `order_sku_lines`,
+`order_delivery_versions` and `order_revisions`, with restrictive foreign keys,
+indexes, value constraints and a composite enquiry/client FK. Existing client,
+enquiry, line and migration records are preserved. Writes, delivery versions and
+full order revisions commit or roll back together. Deleting an origin enquiry
+does not remove independent orders; their enquiry link remains historical and
+new copying from that deleted enquiry is blocked. Deleting the client hides all
+its orders through the shared client-visibility predicate. No order purge API
+or PI issuance/export is included.
+
+APIs:
+
+- `GET/POST /api/orders`; list accepts `client_id`, `enquiry_id`, `q`, `status`,
+  `page`, `page_size`, `sort` and `direction`.
+- `GET/PUT /api/orders/<id>` returns current lines, calculated subtotals,
+  delivery/history and revisions. Creation accepts `enquiry_id`, header fields,
+  `delivery`, optional `source_line_ids` and optional manual `lines`.
+- `GET/POST /api/orders/<id>/lines`; POST accepts a complete manual line or
+  `source_line_id` from that order's enquiry.
+- `GET/PUT/DELETE /api/orders/<id>/lines/<line_id>`.
+- `POST /api/orders/<id>/lines/bulk` atomically adds 1–50 reviewed items.
+
+Run `.\.venv\Scripts\python.exe -B -m unittest discover -s tests` and
+`node --test tests/test_sku_drafts.cjs tests/test_orders_frontend.cjs` for backend,
+migration and frontend workflow regressions. Browser testing of layout,
+keyboard/mobile use and live Shopify lookup remains necessary. Follow the
+database backup guidance before restarting Flask to apply pending migrations.

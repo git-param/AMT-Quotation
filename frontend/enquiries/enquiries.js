@@ -79,7 +79,9 @@ async function details(id){
     const block=document.createElement('section'); if(label==='Description'||label==='Subject')block.className='detail-wide';
     const title=document.createElement('h3');title.textContent=label;const text=document.createElement('p');text.textContent=value||'Not provided';block.append(title,text);byId('detailBody').append(block);
   });
-  const link=document.createElement('a');link.href=`/leads?client_id=${e.client_id}`;link.textContent='View client details';byId('detailBody').append(link);byId('detail').hidden=false;await window.showEnquiryLines(e);byId('detail').scrollIntoView({behavior:'smooth'});
+  const link=document.createElement('a');link.href=`/leads?client_id=${e.client_id}`;link.textContent='View client details';byId('detailBody').append(link);
+  await window.renderRelatedOrders(byId('detailBody'),{enquiry_id:e.id},e.can_edit&&e.client_active);
+  byId('detail').hidden=false;await window.showEnquiryLines(e);byId('detail').scrollIntoView({behavior:'smooth'});
 }
 async function deleteEnquiry(enquiry) {
   if (!window.confirm(`Delete enquiry ${enquiry.reference}? Its SKU lines and history will be retained.`)) return;

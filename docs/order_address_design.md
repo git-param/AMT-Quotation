@@ -41,3 +41,20 @@ See [PI field checklist](pi_order_fields.md) for USD/INR party, GST, delivery,
 line-item and document-snapshot requirements. This module deliberately creates
 no order, consignee/delivery, enquiry, SKU-line or PI tables/endpoints. Those
 fields belong to the future order delivery record, not extra client columns.
+
+## Module 5.3 implementation
+
+The contract above is now implemented in `client_orders` and
+`order_delivery_versions` (migration 14). Orders retain immutable client/enquiry
+links; delivery versions store copied billing/shipping snapshots, separate
+consignee/buyer/notify-party details, instructions, saved-address version/kind,
+actor and timestamp. Saved-address selection is validated against the order's
+original client. Custom order destinations never update saved client addresses.
+Order edits append versions rather than changing existing snapshots.
+
+Order SKU lines also have independent IDs and optional original-enquiry-line
+snapshots. Full order revisions record each committed create/edit/line change.
+Current client VIEW/EDIT permissions govern reading/writing these records; new
+orders require an active client. Existing order history remains readable when
+the client is inactive. Final PI issuance and its supplier/bank/document
+snapshots remain a later module; no final PI documents are generated here.

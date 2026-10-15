@@ -310,6 +310,104 @@ SOFT_DELETE_SCHEMA = (
     "ON client_enquiries(client_id, deleted_at, id)",
 )
 
+ORDER_SCHEMA = (
+    "CREATE UNIQUE INDEX idx_enquiry_client_pair "
+    "ON client_enquiries(id, client_id)",
+    """CREATE TABLE client_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reference TEXT NOT NULL UNIQUE CHECK (length(trim(reference)) > 0),
+        client_id INTEGER NOT NULL REFERENCES client_leads(id)
+            ON DELETE RESTRICT,
+        enquiry_id INTEGER NOT NULL,
+        order_date TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft'
+            CHECK (status IN ('draft','confirmed','processing','dispatched',
+                             'completed','cancelled')),
+        currency TEXT NOT NULL CHECK (currency IN ('USD','INR')),
+        po_reference TEXT NOT NULL DEFAULT '',
+        pi_reference TEXT NOT NULL DEFAULT '',
+        pi_date TEXT NOT NULL DEFAULT '',
+        payment_terms TEXT NOT NULL DEFAULT '',
+        delivery_terms TEXT NOT NULL DEFAULT '',
+        delivery_time TEXT NOT NULL DEFAULT '',
+        dispatch_method TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '',
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        updated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        created_at TEXT NOT NULL DEFAULT
+            (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT
+            (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        FOREIGN KEY (enquiry_id, client_id)
+            REFERENCES client_enquiries(id, client_id) ON DELETE RESTRICT
+    )""",
+    "CREATE INDEX idx_orders_client ON client_orders(client_id, id)",
+    "CREATE INDEX idx_orders_enquiry ON client_orders(enquiry_id, id)",
+    "CREATE INDEX idx_orders_status_date "
+    "ON client_orders(status, order_date, id)",
+    """CREATE TABLE order_sku_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES client_orders(id)
+            ON DELETE RESTRICT,
+        source_enquiry_line_id INTEGER REFERENCES enquiry_sku_lines(id)
+            ON DELETE RESTRICT,
+        source_snapshot_json TEXT CHECK
+            (source_snapshot_json IS NULL OR json_valid(source_snapshot_json)),
+        sku TEXT NOT NULL CHECK (length(trim(sku)) BETWEEN 1 AND 100),
+        description TEXT NOT NULL
+            CHECK (length(trim(description)) BETWEEN 1 AND 2000),
+        quantity_milli INTEGER NOT NULL CHECK
+            (quantity_milli BETWEEN 1000 AND 999999000
+             AND quantity_milli % 1000 = 0),
+        unit_price_minor INTEGER NOT NULL CHECK
+            (unit_price_minor BETWEEN 0 AND 99999999999),
+        currency TEXT NOT NULL CHECK (currency IN ('USD','INR')),
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        updated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        created_at TEXT NOT NULL DEFAULT
+            (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT
+            (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )""",
+    "CREATE INDEX idx_order_lines_active "
+    "ON order_sku_lines(order_id, is_active, id)",
+    "CREATE UNIQUE INDEX idx_order_lines_source "
+    "ON order_sku_lines(order_id, source_enquiry_line_id) "
+    "WHERE is_active = 1 AND source_enquiry_line_id IS NOT NULL",
+    """CREATE TABLE order_delivery_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES client_orders(id)
+            ON DELETE RESTRICT,
+        saved_address_id INTEGER REFERENCES client_address_history(id)
+            ON DELETE RESTRICT,
+        saved_address_kind TEXT CHECK
+            (saved_address_kind IN ('billing','shipping')),
+        snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+        recorded_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        recorded_at TEXT NOT NULL DEFAULT
+            (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        CHECK ((saved_address_id IS NULL AND saved_address_kind IS NULL) OR
+               (saved_address_id IS NOT NULL
+                AND saved_address_kind IS NOT NULL))
+    )""",
+    "CREATE INDEX idx_order_delivery_version "
+    "ON order_delivery_versions(order_id, id)",
+    """CREATE TABLE order_revisions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES client_orders(id)
+            ON DELETE RESTRICT,
+        action TEXT NOT NULL CHECK
+            (action IN ('create','edit','line_create','line_edit',
+                        'line_remove')),
+        snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+        actor_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        created_at TEXT NOT NULL DEFAULT
+            (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )""",
+    "CREATE INDEX idx_order_revisions ON order_revisions(order_id, id)",
+)
+
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
@@ -324,4 +422,5 @@ MIGRATIONS = (
     (11, 'enquiry_sku_lines', ENQUIRY_LINE_SCHEMA),
     (12, 'enquiry_deal_currency', ENQUIRY_DEAL_SCHEMA),
     (13, 'client_enquiry_soft_deletion', SOFT_DELETE_SCHEMA),
+    (14, 'orders_delivery_snapshots', ORDER_SCHEMA),
 )
