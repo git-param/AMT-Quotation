@@ -104,7 +104,7 @@ def pdf(doc):
     story=[]
     symbol='₹' if doc['currency']=='INR' else '$'
     def paragraph(cell):
-        kind=cell['style'];text=cell['text']
+        kind=cell['style'];text=cell.get('display_text',cell['text'])
         is_bold=kind in ('bold','head','bank_title','warning','final_term','title','bold_amount')
         size=14 if kind=='title' else 7 if kind in ('terms','final_term') else 8
         alignment=2 if 'amount' in kind else 1 if kind in ('title','head','center') else 0
@@ -112,7 +112,7 @@ def pdf(doc):
             leading=size+2,alignment=alignment,textColor=colors.red if kind=='warning' else colors.black)
         if cell.get('sku'):text=cell['sku']+'\n'+text
         if 'uom' in cell:text+=' '+cell['uom']
-        if 'amount' in kind:text=symbol+' '+text
+        if 'amount' in kind and not cell.get('free'):text=symbol+' '+text
         content=escape(text).replace('\n','<br/>')
         if kind=='bank_title':content='<u>'+content+'</u>'
         return Paragraph(content,style)
@@ -225,7 +225,7 @@ def xlsx(doc):
             # height at 409pt. Every character remains printable and editable.
             chunks=[]
             for cell in row:
-                value=cell['text']
+                value=cell.get('display_text',cell['text'])
                 if cell.get('sku'):value=cell['sku']+'\n'+value
                 if 'uom' in cell:value+=' '+cell['uom']
                 chars=max(4,int(sum(model['widths'][cell['col']:cell['col']+cell['span']])*.9))
@@ -244,7 +244,7 @@ def xlsx(doc):
                     if key not in formats:
                         formats[key]=book.add_format({**format_values[cell['style']],'top':2 if top else 0,'bottom':2 if bottom else 0})
                     fmt=formats[key]
-                    number=(cell.get('numeric') or cell['field']=='shipping_charges' or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0
+                    number=(cell.get('numeric') or cell['field']=='shipping_charges' or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
                     if cell['span']>1:sheet.merge_range(row_index,col,row_index,end,'',fmt)
                     if number:
                         decimal=Decimal(cell['text'])

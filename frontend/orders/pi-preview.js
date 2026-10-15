@@ -46,9 +46,10 @@ window.createPiPreview = function (host, api, json, onIssued) {
   }
   function collect() {
     const doc = state.document;
-    const data = {date:doc.date,order:{},delivery:{},shipping_charges:doc.totals.shipping,
+    const data = {date:doc.date,prepared_phone:doc.prepared_phone||'',order:{},delivery:{},shipping_charges:doc.totals.shipping,
       lines:doc.totals.lines.map(line=>Object.fromEntries(["id","sku","description","hsn_code","item_condition","uom","quantity","unit_price"].map(key=>[key,line[key]])))};
     for(const {input,path} of inputs){const keys=path.split('.');let target=data;for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)]=input.value;}
+    if(String(data.shipping_charges).trim().toLowerCase()==='free')data.shipping_charges='0.00';
     return data;
   }
   async function save(){
@@ -108,8 +109,8 @@ window.createPiPreview = function (host, api, json, onIssued) {
           if (cell.editor_rows) td.rowSpan = cell.editor_rows;
           if (cell.field) {
             if (cell.sku_field) field(td, "SKU", cell.sku, cell.sku_field);
-            const amount = cell.style.includes("amount");
-            const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.value, cell.field, cell.multiline, cell.type || "text");
+            const amount = cell.style.includes("amount") && !cell.free;
+            const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.free ? 'Free' : cell.value, cell.field, cell.multiline, cell.free ? 'text' : cell.type || "text");
             if (!cell.label && !amount) td.lastChild.classList.add("pi-unlabelled");
             if (cell.editor_rows) input.rows = 12;
             else if (cell.multiline) input.rows = cell.field.startsWith("delivery.") ? 5 : 2;

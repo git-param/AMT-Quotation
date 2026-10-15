@@ -154,6 +154,26 @@ class NativePiTests(unittest.TestCase):
         self.assertIn('2. PAYMENT Agreed advance',output)
         self.assertIn('4. SHIPMENT: DISPATCH WITHIN 24 HOURS OF PAYMENT CONFIRMATION',output)
 
+    def test_editable_preparer_phone_and_free_shipping_preserve_numeric_totals(self):
+        preview=self.preview()
+        url=self.base+'/preview/'+preview['preview_id']
+        self.assertEqual(self.client.put(url,json={'prepared_phone':'invalid'}).status_code,400)
+        saved=self.client.put(url,json={'prepared_phone':'+91 97252 18537','shipping_charges':'0.00'})
+        self.assertEqual(saved.status_code,200,saved.json)
+        self.assertEqual(saved.json['document']['prepared_phone'],'+919725218537')
+        self.assertEqual(saved.json['document']['totals']['shipping'],'0.00')
+        self.assertEqual(saved.json['document']['totals']['grand_total'],'37.02')
+        cells=[cell for section in saved.json['layout']['sections'] for row in section['rows'] for cell in row]
+        shipping=next(cell for cell in cells if cell['field']=='shipping_charges')
+        self.assertEqual(shipping['display_text'],'Free')
+        self.assertEqual(next(cell for cell in cells if cell['field']=='prepared_phone')['label'],'Tel: ')
+        issued=self.issue(saved.json)
+        self.assertEqual(issued.status_code,201,issued.json)
+        with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
+            strings=book.read('xl/sharedStrings.xml').decode()
+            self.assertIn('Free',strings)
+            self.assertIn('Tel: +919725218537',strings)
+
     def test_company_grid_keeps_bold_borders_fonts_and_warning_highlight(self):
         preview=self.preview()
         model=preview['layout']

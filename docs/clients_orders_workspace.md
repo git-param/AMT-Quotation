@@ -148,10 +148,14 @@ decimals before multiplication by whole-unit quantity; shipping converts and
 rounds separately. Existing company tax rates apply to items plus shipping.
 Preview edits use the displayed PI currency and are never converted twice.
 Original source prices, conversion rate/rule and final totals are all retained.
+The editable `prepared_phone` prints beside Prepared By, initially using a
+configured company contact when available. It is saved in the PI snapshot and
+uses the existing phone validation. Zero shipping prints as **Free** in all
+three views while remaining numeric zero for calculations.
 
 Native API contracts:
 - `POST /api/orders/{id}/invoices/preview`: `{currency, usd_inr_rate?}`.
-- `PUT /api/orders/{id}/invoices/preview/{preview_id}`: any of `date`, `order`
+- `PUT /api/orders/{id}/invoices/preview/{preview_id}`: any of `date`, `prepared_phone`, `order`
   (commercial fields only), `delivery` (three text blocks/instructions), `lines`
   (same unique IDs, editable commercial fields), `shipping_charges`.
 - `GET /api/orders/{id}/invoices/preview/{preview_id}/pdf`: exact saved preview.

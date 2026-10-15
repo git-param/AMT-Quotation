@@ -29,13 +29,14 @@ def layout(doc):
     metadata=[c(5,6,'Proforma Invoice No:    '+doc['reference'],'bold'),
         editable(5,6,'Proforma Invoice Date: ',doc['date'],'date',type='date'),
         editable(5,6,'Purchase Order: ',order['po_reference'],'order.po_reference'),
-        c(5,6,'Prepared By: '+doc['prepared_by']),
+        c(5,2,'Prepared By: '+doc['prepared_by']),
         editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_bottom=True),
         editable(5,3,'Delivery Terms: ',order['delivery_terms'],'order.delivery_terms')]
     header=[[c(0,11,'PROFORMA INVOICE','title',line_bottom=True)]]
     for index in range(7):
         left=c(0,5,'SUPPLIER/SELLER','bold') if index==0 else c(0,5,seller[index-1] if index<=len(seller) else '')
-        if index<5:right=[metadata[index]]
+        if index==3:right=[metadata[index],editable(7,4,'Tel: ',doc.get('prepared_phone',''),'prepared_phone',type='tel')]
+        elif index<5:right=[metadata[index]]
         elif index==5:right=[metadata[5],editable(8,3,'',order['destination'],'order.destination',aria='Destination')]
         else:right=[editable(5,3,'Delivery Time: ',order['delivery_time'],'order.delivery_time'),
                     editable(8,3,'Dispatch By: ',order['dispatch_method'],'order.dispatch_method')]
@@ -66,7 +67,8 @@ def layout(doc):
     bank=[c(0,8,'BANK DETAIL','bank_title')]+[c(0,8,value,'bold') for value in doc['company']['bank']]
     bank.append(c(0,8,doc['company'].get('bank_charges',''),'warning'))
     tax_label=f'GST {Decimal(total["tax_rate"])*100:g}%'
-    summaries=[(editable(9,2,'',total['shipping'],'shipping_charges','amount',type='number'),'Shipping'),
+    free=Decimal(total['shipping'])==0
+    summaries=[(editable(9,2,'',total['shipping'],'shipping_charges','amount',type='number',free=free,display_text='Free' if free else total['shipping']),'Shipping'),
                (c(9,2,total['subtotal'],'amount',numeric=True),'Sub Total')]
     if Decimal(total['tax_rate']):summaries.append((c(9,2,total['tax'],'amount',numeric=True),tax_label))
     count=max(len(bank),len(summaries)+1)

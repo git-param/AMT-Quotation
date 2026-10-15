@@ -1,12 +1,13 @@
 """Validated editable PI snapshots, independent of a reference workbook."""
 import base64
+import re
 from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 
 from backend.config import ROOT_DIR
-from backend.client_leads.details import text
+from backend.client_leads.details import text,phone
 from backend.enquiries.lines import number, serialize
 from backend.orders.company import get_profile
 from backend.orders.parties import text_delivery
@@ -16,6 +17,17 @@ ASSETS = ('header.png', 'address.png', 'payment_options.png', 'signature.png')
 ORDER_FIELDS = {'po_reference', 'payment_terms', 'delivery_terms', 'destination',
                 'delivery_time', 'dispatch_method', 'notes'}
 LINE_FIELDS = {'id','sku','description','hsn_code','item_condition','uom','quantity','unit_price'}
+
+
+def company_phone(company):
+    if company.get('prepared_phone'):
+        return phone(company['prepared_phone'])
+    for line in company.get('seller',[]):
+        match=re.match(r'^\s*(?:Tel|Telephone|Phone)\s*:?\s*(.+)',line,re.I)
+        if match:
+            try:return phone(match[1].split('/')[0].strip())
+            except ValueError:continue
+    return ''
 
 
 def party_block(party, address):
@@ -61,7 +73,7 @@ def prepare(state, user, currency, rate):
             raise ValueError('Company PI image is missing: '+name) from error
     return {'schema_version':2,'reference':'AMT/PI/'+uuid4().hex[:16].upper(),
         'date':datetime.now(timezone(timedelta(hours=5,minutes=30))).date().isoformat(),
-        'prepared_by':user['username'],'currency':currency,'order':order,
+        'prepared_by':user['username'],'prepared_phone':company_phone(company),'currency':currency,'order':order,
         'delivery':{'consignee_text':consignee,'buyer_text':buyer,'notify_text':notify,
                     'instructions':destination.get('instructions','')},
         'totals':totals,'source_conversion':deepcopy(totals),
@@ -71,9 +83,11 @@ def prepare(state, user, currency, rate):
 
 def edit(document, edits):
     from backend.orders.invoices import calculate
-    if not isinstance(edits,dict) or set(edits)-{'date','order','delivery','lines','shipping_charges'}:
+    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges'}:
         raise ValueError('Invalid PI preview fields. Company details and invoice identity cannot be edited.')
     doc = deepcopy(document)
+    if 'prepared_phone' in edits:
+        doc['prepared_phone']=phone(edits['prepared_phone'])
     if 'date' in edits:
         raw = text(edits['date'],10,'PI date')
         try:
