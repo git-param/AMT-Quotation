@@ -3,6 +3,19 @@
   const countries = new Set();
   const gstLine = /^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$/i;
   const contactLine = /^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:/i;
+  function addressOnly(value) {
+    return value.split('\n').filter((line,index)=>!index||!/^\s*(?:Tel|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line)).join('\n').trimEnd();
+  }
+  function partyParts(value, country = '') {
+    const lines = value.split('\n');
+    const boundary = lines.findIndex((line, index) => index > 0 && (
+      !line.trim() || /^\s*Country\s*:/i.test(line) || contactLine.test(line) ||
+      countries.has(line.trim().toUpperCase()) || (country && line.trim().toUpperCase() === country.trim().toUpperCase())));
+    return boundary < 0 ? [value, ''] : [lines.slice(0, boundary).join('\n').trimEnd(), lines.slice(boundary).join('\n').trimStart()];
+  }
+  function joinParty(primary, secondary) {
+    return [primary.trimEnd(), secondary.trimStart()].filter(Boolean).join('\n\n');
+  }
   function countryBlock(value, country, previous = []) {
     country = country.trim().toUpperCase();
     if (!country) return value;
@@ -36,5 +49,5 @@
       if (list) { const option = document.createElement('option'); option.value = value; list.append(option); }
     }
   }).catch(() => {});
-  window.orderLocations = {countryBlock, gstNumber, withGst, ready};
+  window.orderLocations = {countryBlock, gstNumber, withGst, partyParts, joinParty, addressOnly, ready};
 })();

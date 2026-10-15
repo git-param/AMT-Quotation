@@ -144,6 +144,7 @@ def pdf(doc):
                 col,span=cell['col'],cell['span'];kind=cell['style']
                 content=cell['_paragraph'];row[col]=content
                 if span>1:commands.append(('SPAN',(col,index),(col+span-1,index)))
+                if cell.get('bottom_aligned'):commands.append(('VALIGN',(col,index),(col+span-1,index),'BOTTOM'))
                 if not cell.get('open_left'):commands.append(('LINEBEFORE',(col,index),(col,index),.8,colors.black))
                 if not cell.get('open_right'):commands.append(('LINEAFTER',(col+span-1,index),(col+span-1,index),.8,colors.black))
                 if kind=='warning':commands.append(('BACKGROUND',(col,index),(col+span-1,index),colors.yellow))
@@ -241,10 +242,11 @@ def xlsx(doc):
                          or (cell.get('line_top') and chunk_index==0))
                     bottom=((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1) or cell['style']=='head'
                             or (cell.get('line_bottom') and chunk_index==len(parts)-1))
-                    key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False))
+                    key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False))
                     if key not in formats:
                         formats[key]=book.add_format({**format_values[cell['style']],'top':2 if top else 0,'bottom':2 if bottom else 0,
-                            'left':0 if cell.get('open_left') else 2,'right':0 if cell.get('open_right') else 2})
+                            'left':0 if cell.get('open_left') else 2,'right':0 if cell.get('open_right') else 2,
+                            'valign':'bottom' if cell.get('bottom_aligned') else 'top'})
                     fmt=formats[key]
                     number=(cell.get('numeric') or cell['field']=='shipping_charges' or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
                     if cell['span']>1:sheet.merge_range(row_index,col,row_index,end,'',fmt)

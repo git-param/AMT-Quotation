@@ -4,18 +4,17 @@ import re
 from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from uuid import uuid4
 
 from backend.config import ROOT_DIR
 from backend.client_leads.details import text,phone
 from backend.enquiries.lines import number, serialize
 from backend.orders.company import get_profile
 from backend.orders.parties import text_delivery
-from backend.orders.locations import country_block, gst_number, with_gst
+from backend.orders.locations import country_block, gst_number, with_gst, address_only
 from backend.orders.service import header, order_line
 
 ASSETS = ('header.png', 'address.png', 'payment_options.png', 'signature.png')
-ORDER_FIELDS = {'po_reference', 'payment_terms', 'delivery_terms', 'destination',
+ORDER_FIELDS = {'po_reference', 'pi_reference', 'payment_terms', 'delivery_terms', 'destination',
                 'delivery_time', 'dispatch_method', 'notes'}
 LINE_FIELDS = {'id','sku','description','hsn_code','item_condition','uom','quantity','unit_price'}
 
@@ -69,6 +68,9 @@ def prepare(state, user, currency, rate):
         connection.close()
     if currency not in ('USD','INR'):
         raise ValueError('Choose USD or INR PI currency.')
+    reference = text(state['order']['pi_reference'],100,'Proforma Invoice No.')
+    if not reference:
+        raise ValueError('Enter the Proforma Invoice No. in order details before opening a PI preview.')
     if not state['lines']:
         raise ValueError('Add order items before opening a PI preview.')
     if state['legacy_lines_requiring_review']:
@@ -83,6 +85,8 @@ def prepare(state, user, currency, rate):
     consignee = destination.get('consignee_text',party_block(destination.get('consignee'),destination.get('shipping_address')))
     buyer = destination.get('buyer_text') or party_block(destination.get('buyer'),destination.get('billing_address')) or consignee
     notify = destination.get('notify_text') or party_block(destination.get('notify_party'),destination.get('notify_party',{}).get('address')) or consignee
+    if buyer == consignee: buyer = address_only(buyer)
+    if notify == consignee: notify = address_only(notify)
     assets = {}
     for name in ASSETS:
         path = ROOT_DIR/'assets'/'PI-img'/name
@@ -90,7 +94,7 @@ def prepare(state, user, currency, rate):
             assets[name] = base64.b64encode(path.read_bytes()).decode('ascii')
         except OSError as error:
             raise ValueError('Company PI image is missing: '+name) from error
-    return sync_locations({'schema_version':2,'reference':'AMT/PI/'+uuid4().hex[:16].upper(),
+    return sync_locations({'schema_version':2,'reference':reference,
         'date':datetime.now(timezone(timedelta(hours=5,minutes=30))).date().isoformat(),
         'prepared_by':user['username'],'prepared_phone':company_phone(company),'currency':currency,'order':order,
         'delivery':{'consignee_text':consignee,'buyer_text':buyer,'notify_text':notify,
@@ -123,6 +127,9 @@ def edit(document, edits):
         validated = header(edits['order'],doc['order'])
         for key in ORDER_FIELDS:
             doc['order'][key] = validated[key]
+        if not doc['order']['pi_reference']:
+            raise ValueError('Enter the Proforma Invoice No.')
+        doc['reference'] = doc['order']['pi_reference']
     if 'delivery' in edits:
         if not isinstance(edits['delivery'],dict) or set(edits['delivery'])-{
                 'consignee_text','buyer_text','notify_text','instructions'}:

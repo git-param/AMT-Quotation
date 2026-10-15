@@ -3,7 +3,7 @@ const params = new URLSearchParams(location.search);
 const clientScope = params.get('client_id');
 const enquiryScope = params.get('enquiry_id');
 if(params.get('embedded')==='1')document.body.classList.add('embedded');
-const headerFields = ['order_date','po_reference','delivery_terms','delivery_time','dispatch_method','notes','currency','destination','shipping_charges'];
+const headerFields = ['order_date','po_reference','pi_reference','delivery_terms','delivery_time','dispatch_method','currency','destination','shipping_charges'];
 const addressFields = ['line1','line2','city','state','postal_code','country'];
 let page=1, pages=0;
 let current=null, editing=null, editingLine=null, clientData=null;
@@ -40,7 +40,18 @@ function formatPartyBlock(party={},address={}){
   if(party.gst_number)lines.push('GST: '+party.gst_number);
   return lines.join('\n');
 }
-function syncConsignee(){for(const prefix of ['buyer','notify'])if(el(prefix+'_same').checked)el(prefix+'_text').value=el('consignee_text').value;}
+function showPartyFields(prefix){
+  const [primary,secondary]=window.orderLocations.partyParts(el(prefix+'_text').value,el('destination').value);
+  el(prefix+'_primary').value=primary;el(prefix+'_details').value=secondary;
+}
+function syncConsignee(){for(const prefix of ['buyer','notify'])if(el(prefix+'_same').checked){el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value);showPartyFields(prefix);}}
+for(const prefix of ['consignee','buyer','notify']){
+  const changed=()=>{
+    el(prefix+'_text').value=window.orderLocations.joinParty(el(prefix+'_primary').value,el(prefix+'_details').value);
+    el(prefix+'_text').oninput();
+  };
+  el(prefix+'_primary').oninput=changed;el(prefix+'_details').oninput=changed;
+}
 function refreshBuyerGst(){
   el('buyerGstField').hidden=el('destination').value.trim().toUpperCase()!=='INDIA';
   el('buyerGst').value=window.orderLocations.gstNumber(el('buyer_text').value);
@@ -49,15 +60,17 @@ el('destination').oninput=()=>{el('buyerGstField').hidden=el('destination').valu
 el('destination').onchange=()=>{
   el('destination').value=el('destination').value.trim().toUpperCase();
   el('consignee_text').value=window.orderLocations.countryBlock(el('consignee_text').value,el('destination').value);
+  showPartyFields('consignee');
   syncConsignee();refreshBuyerGst();
 };
 el('buyerGst').oninput=()=>{
   el('buyer_text').value=window.orderLocations.withGst(el('buyer_text').value,el('buyerGst').value);
-  el('buyer_same').checked=el('buyer_text').value===el('consignee_text').value;
+  showPartyFields('buyer');
+  el('buyer_same').checked=el('buyer_text').value===window.orderLocations.addressOnly(el('consignee_text').value);
 };
 for(const prefix of ['buyer','notify']){
-  el(prefix+'_text').oninput=()=>{el(prefix+'_same').checked=el(prefix+'_text').value===el('consignee_text').value;refreshBuyerGst();};
-  el(prefix+'_same').onchange=()=>{if(el(prefix+'_same').checked)el(prefix+'_text').value=el('consignee_text').value;refreshBuyerGst();};
+  el(prefix+'_text').oninput=()=>{el(prefix+'_same').checked=el(prefix+'_text').value===window.orderLocations.addressOnly(el('consignee_text').value);refreshBuyerGst();};
+  el(prefix+'_same').onchange=()=>{if(el(prefix+'_same').checked)el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value);showPartyFields(prefix);refreshBuyerGst();};
 }
 el('consignee_text').oninput=()=>{syncConsignee();refreshBuyerGst();};
 const initialDrafts=window.createSkuDraftEditor(el('initialDrafts'),()=>({client_id:Number(clientScope)}),()=>el('currency').value,null,true);
@@ -146,10 +159,11 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
     ['buyer','buyer_text',delivery?.buyer,delivery?.billing_address],
     ['notify','notify_text',delivery?.notify_party,delivery?.notify_party?.address],
   ]){
-    const value=delivery?.[key]??(party?.name?formatPartyBlock(party,address):consignee);
-    el(prefix+'_text').value=value;el(prefix+'_same').checked=value===consignee;
+    let value=delivery?.[key]??(party?.name?formatPartyBlock(party,address):window.orderLocations.addressOnly(consignee));
+    if(value===consignee)value=window.orderLocations.addressOnly(value);
+    el(prefix+'_text').value=value;el(prefix+'_same').checked=value===window.orderLocations.addressOnly(consignee);
   }
-  el('instructions').value=delivery?.instructions||'';
+  for(const prefix of ['consignee','buyer','notify'])showPartyFields(prefix);
   if(!delivery)el('destination').value=saved.country||'';
   refreshBuyerGst();
   return true;
@@ -162,6 +176,8 @@ async function createOrder() {
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));
   el('order_date').value=`${parts.year}-${parts.month}-${parts.day}`;
   el('shipping_charges').value='0.00';
+  el('delivery_terms').value='DAP';el('delivery_time').value='4 to 6 days';el('dispatch_method').value='DHL/Fedex/Aramex';
+  el('pi_reference').value='';el('pi_reference').readOnly=false;
   if(!await prepareClient(Number(clientScope),null,version))return;
   if(!clientData.lead.can_edit||!clientData.lead.is_active)throw new Error('Choose an editable, active client.');
   el('editor').hidden=false;el('detail').hidden=true;el('editor').scrollIntoView({behavior:'smooth'});
@@ -172,6 +188,7 @@ async function editOrder(id) {
   if(version!==formVersion)return;
   editing=id;initialDrafts.reset();el('initialLines').hidden=true;
   headerFields.forEach(key=>{el(key).value=data.order[key];});if(!await prepareClient(data.order.client_id,data.delivery,version))return;
+  el('pi_reference').readOnly=Boolean(data.invoices?.some(invoice=>invoice.workbook_format==='xlsm'));
   el('detail').hidden=true;el('formTitle').textContent='Edit order';el('referenceHint').textContent=data.order.reference;el('editor').hidden=false;el('editor').scrollIntoView({behavior:'smooth'});
 }
 el('orderForm').onsubmit=async event=>{
@@ -183,7 +200,7 @@ el('orderForm').onsubmit=async event=>{
     syncConsignee();
     const data=Object.fromEntries(headerFields.map(key=>[key,el(key).value]));
     data.delivery={consignee_text:el('consignee_text').value,buyer_text:el('buyer_text').value,
-      notify_text:el('notify_text').value,instructions:el('instructions').value};
+      notify_text:el('notify_text').value};
     if(editing===null){data.client_id=Number(clientScope);data.lines=el('initialDrafts').hidden?[]:initialDrafts.values();}
     const result=await api(editing===null?'/api/orders':`/api/orders/${editing}`,json(editing===null?'POST':'PUT',data));
     el('editor').hidden=true;await load();await showDetails(result.order.id);message('Order saved.');
@@ -239,7 +256,6 @@ async function showDetails(id) {
   section('Consignee',destination.consignee_text??formatPartyBlock(destination.consignee,destination.shipping_address));
   section('Buyer Details',destination.buyer_text??(destination.buyer?.name?formatPartyBlock(destination.buyer,destination.billing_address):'Same as consignee'));
   section('Notify Details',destination.notify_text??(destination.notify_party?.name?formatPartyBlock(destination.notify_party,destination.notify_party?.address):'Same as consignee'));
-  if(destination.instructions)section('Delivery instructions',destination.instructions);if(order.notes)section('Notes',order.notes);
   el('lineRows').replaceChildren();
   data.lines.forEach(line=>{
     const row=document.createElement('tr');

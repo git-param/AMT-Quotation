@@ -169,7 +169,8 @@ def save_order(order_id=None):
         previous = details(connection, old)['delivery'] if old else None
         if old and connection.execute(
                 'SELECT 1 FROM order_invoices WHERE order_id = ?', (order_id,)).fetchone():
-            if any(values[key] != old[key] for key in ('pi_reference', 'pi_date')):
+            legacy = connection.execute("SELECT 1 FROM order_invoices WHERE order_id=? AND workbook_format='xlsm'",(order_id,)).fetchone()
+            if values['pi_date']!=old['pi_date'] or (legacy and values['pi_reference']!=old['pi_reference']):
                 raise ValueError('Generated PI references and dates cannot be edited.')
         destination = None
         if not old or 'delivery' in data:

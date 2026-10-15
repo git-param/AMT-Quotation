@@ -7,6 +7,20 @@ from backend.config import FRONTEND_DIR
 COUNTRIES = frozenset(json.loads((FRONTEND_DIR / 'common' / 'countries.json').read_text(encoding='utf-8')))
 GST_LINE = re.compile(r'^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?)\s*:\s*(.*)$', re.I)
 CONTACT_LINE = re.compile(r'^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:', re.I)
+COPIED_CONTACT = re.compile(r'^\s*(?:Tel|Telephone|Phone|PIC|E-?mail)\s*:', re.I)
+
+
+def address_only(value):
+    return '\n'.join(line for i,line in enumerate(value.splitlines()) if not i or not COPIED_CONTACT.match(line)).rstrip()
+
+
+def party_parts(value):
+    """Keep company/address text above country and contact text."""
+    lines = value.splitlines()
+    boundary = next((i for i, line in enumerate(lines) if i and (
+        not line.strip() or re.match(r'^\s*Country\s*:', line, re.I)
+        or CONTACT_LINE.match(line) or line.strip().upper() in COUNTRIES)), len(lines))
+    return '\n'.join(lines[:boundary]).rstrip(), '\n'.join(lines[boundary:]).lstrip()
 
 
 def country_block(value, country, previous=()):

@@ -83,9 +83,28 @@ test('party blocks are prefilled from editable client data without removed order
   const request=fixture.requests.find(item=>item.url==='/api/orders'&&item.options.method==='POST');
   const body=JSON.parse(request.options.body);
   assert.equal(body.client_id,9);assert.deepEqual(body.lines,[]);
-  for(const key of ['status','payment_terms','pi_reference','pi_date','enquiry_id'])assert.equal(body[key],undefined);
+  for(const key of ['status','payment_terms','pi_date','enquiry_id','notes'])assert.equal(body[key],undefined);
+  assert.equal(body.pi_reference,'');assert.equal(body.delivery.instructions,undefined);
   assert.match(body.delivery.consignee_text,/Order-only instruction/);
   assert.equal(body.delivery.buyer_text,body.delivery.consignee_text);assert.equal(body.delivery.shipping_address,undefined);
+});
+
+test('new orders keep multiline address and contact sections together with delivery defaults',async()=>{
+  const fixture=setup();await settle();await fixture.context.createOrder();
+  assert.equal(fixture.element('delivery_terms').value,'DAP');
+  assert.equal(fixture.element('delivery_time').value,'4 to 6 days');
+  assert.equal(fixture.element('dispatch_method').value,'DHL/Fedex/Aramex');
+  assert.match(fixture.element('consignee_primary').value,/Company\nSaved shipping/);
+  assert.match(fixture.element('consignee_details').value,/Country: India/);
+  fixture.element('pi_reference').value='SALES/001';
+  fixture.element('consignee_primary').value='Updated company\nNew street\nCity, state 12345';fixture.element('consignee_primary').oninput();
+  fixture.element('consignee_details').value='INDIA\nTel: +12345678901';fixture.element('consignee_details').oninput();
+  assert.equal(fixture.element('buyer_primary').value,'Updated company\nNew street\nCity, state 12345');
+  await fixture.element('orderForm').onsubmit({preventDefault(){}});
+  const saved=JSON.parse(fixture.requests.find(item=>item.url==='/api/orders'&&item.options.method==='POST').options.body);
+  assert.equal(saved.pi_reference,'SALES/001');
+  assert.match(saved.delivery.consignee_text,/^Updated company\nNew street\nCity, state 12345\n\nINDIA/);
+  assert.equal(saved.delivery.buyer_text,saved.delivery.consignee_text);
 });
 
 test('buyer and notify stay editable and can independently follow or diverge from consignee',async()=>{

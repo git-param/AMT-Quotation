@@ -5,7 +5,7 @@ is a layout definition only; it never opens a workbook or changes PI amounts.
 """
 from decimal import Decimal
 import re
-from backend.orders.locations import gst_number, without_gst
+from backend.orders.locations import gst_number, without_gst, party_parts
 
 WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
           15.7109375,8.7109375,8,16,8.7109375,8.140625]
@@ -27,13 +27,17 @@ def layout(doc):
                     label=label,value=value,**extra)
     def editable(col,span,label,value,path,style='',**extra):
         return c(col,span,label+str(value),style,path,label,value,**extra)
+    def party_cell(col,span,value,path,**extra):
+        primary,secondary=party_parts(value)
+        return c(col,span,'\n\n'.join(part for part in (primary,secondary) if part),field=path,value=value,
+                 multiline=True,party=True,**extra)
     order,total=doc['order'],doc['totals']
     seller=list(doc['company']['seller'])
     metadata=[
-        [c(5,2,'Proforma Invoice No:'),c(7,4,doc['reference'],'bold')],
+        [c(5,2,'Proforma Invoice No:'),editable(7,4,'',doc['reference'],'order.pi_reference','bold',aria='Proforma Invoice No.')],
         [c(5,2,'Proforma Invoice Date:'),editable(7,4,'',doc['date'],'date',type='date',aria='Proforma Invoice Date')],
         [c(5,2,'Purchase Order:'),editable(7,4,'',order['po_reference'],'order.po_reference',aria='Purchase Order')],
-        [c(5,2,'Prepared By:'),c(7,1,doc['prepared_by']),editable(8,3,'Tel: ',doc.get('prepared_phone',''),'prepared_phone',type='tel')],
+        [c(5,3,'Prepared By: '+doc['prepared_by']),c(8,1,'Tel:'),editable(9,2,'',doc.get('prepared_phone',''),'prepared_phone',type='tel',aria='Tel')],
         [editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_bottom=True)],
         [editable(5,3,'Delivery Terms: ',order['delivery_terms'],'order.delivery_terms')]]
     header=[[c(0,11,'PROFORMA INVOICE','title',line_bottom=True)]]
@@ -51,17 +55,21 @@ def layout(doc):
         header.append([left,*right])
     # Additional configured seller lines are retained, rather than discarded.
     for value in seller[6:]:header.append([c(0,5,value),c(5,6)])
-    domestic = order['destination'].strip().upper() == 'INDIA'
+    domestic = doc['currency']=='INR' or order['destination'].strip().upper() == 'INDIA'
     buyer_text = without_gst(doc['delivery']['buyer_text']) if domestic else doc['delivery']['buyer_text']
     parties=[
         [c(0,5,'CONSIGNEE','bold'),c(5,6,'BUYER Details','bold')],
-        [editable(0,5,'',doc['delivery']['consignee_text'],'delivery.consignee_text',multiline=True,editor_rows=4 if domestic else 3),
-         editable(5,6,'',buyer_text,'delivery.buyer_text',multiline=True)],
+        [party_cell(0,5,doc['delivery']['consignee_text'],'delivery.consignee_text',editor_rows=4 if domestic else 3),
+         party_cell(5,6,buyer_text,'delivery.buyer_text')],
         [c(0,5,'',placeholder=True),c(5,6,'Notify Details','bold',line_top=True)],
-        [c(0,5,'',placeholder=True),editable(5,6,'',doc['delivery']['notify_text'],'delivery.notify_text',multiline=True)]]
+        [c(0,5,'',placeholder=True),party_cell(5,6,doc['delivery']['notify_text'],'delivery.notify_text')]]
     if domestic:
         parties.insert(2,[c(0,5,'',placeholder=True),editable(5,6,'GST No.: ',
             doc.get('buyer_gst_number',gst_number(doc['delivery']['buyer_text'])),'buyer_gst_number')])
+    primary,secondary=party_parts(doc['delivery']['consignee_text'])
+    parties[1][0]['text']=primary
+    parties[1][0]['bottom_contacts']=True
+    parties[-1][0].update(text=secondary,bottom_aligned=True)
     item_header=[c(start,span,label,'head') for start,span,label in
         [(0,1,'Sno'),(1,3,'Description'),(4,1,'HSN Code'),(5,1,'Condition'),
          (6,2,'QTY'),(8,1,'Rate / PCs'),(9,2,'Total Amount')]]
@@ -102,10 +110,6 @@ def layout(doc):
         clauses.append([c(0,11,value,'final_term' if final else 'terms',
             field='terms' if index==0 else None, value=term_text if index==0 else None,
             multiline=True, aria='Terms and conditions', preview_hidden=index>0)])
-    for label,value,path in [('Delivery instructions',doc['delivery']['instructions'],'delivery.instructions'),
-                              ('Order notes',order['notes'],'order.notes')]:
-        # Keep empty fields editable in the preview without printing empty sections.
-        if value:clauses.append([editable(0,11,label+': ',value,path,multiline=True)])
     return {'widths':WIDTHS,'currency':doc['currency'],'sections':[
         {'name':'header','rows':header},{'name':'parties','rows':parties},
         {'name':'items','rows':items},{'name':'bank','rows':bank_rows},

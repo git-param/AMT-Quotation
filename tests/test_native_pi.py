@@ -31,7 +31,7 @@ class NativePiTests(unittest.TestCase):
         c=database.get_db()
         with c:c.execute('INSERT INTO company_pi_settings(id,profile_json) VALUES(1,?)',(json.dumps(self.company),))
         c.close()
-        self.order_id=self.direct()['order']['id']
+        self.order_id=self.direct(pi_reference='AMT/1234')['order']['id']
         self.base=f'/api/orders/{self.order_id}/invoices'
 
     def preview(self,**changes):
@@ -49,6 +49,7 @@ class NativePiTests(unittest.TestCase):
     def test_native_exports_without_reference_workbooks_and_idempotent_issuance(self):
         with patch('backend.orders.invoices.template',side_effect=AssertionError('No template at runtime')):
             preview=self.preview()
+            self.assertEqual(preview['document']['reference'],'AMT/1234')
             exact=self.client.get(preview['pdf_url'])
             self.assertEqual(exact.status_code,200)
             self.assertTrue(exact.data.startswith(b'%PDF-'))
@@ -71,6 +72,32 @@ class NativePiTests(unittest.TestCase):
                 self.assertFalse(sheet.findall('.//{*}f'))
             self.assertEqual(len(self.client.get(f'/api/orders/{self.order_id}').json['invoices']),1)
             self.assertEqual(self.client.put(self.base+'/preview/'+preview['preview_id'],json={}).status_code,409)
+
+    def test_pi_number_is_entered_by_sales_and_duplicate_issuance_is_rejected(self):
+        self.client.put(f'/api/orders/{self.order_id}',json={'pi_reference':''})
+        missing=self.client.post(self.base+'/preview',json={'currency':'USD'})
+        self.assertEqual(missing.status_code,400)
+        self.assertIn('Proforma Invoice No.',missing.json['error'])
+        self.client.put(f'/api/orders/{self.order_id}',json={'pi_reference':'SALES/2026/001'})
+        first=self.preview()
+        second=self.preview()
+        issued=self.issue(first)
+        self.assertEqual(issued.status_code,201,issued.json)
+        self.assertEqual(issued.json['reference'],'SALES/2026/001')
+        # The stale preview must not produce a second invoice with the same number.
+        self.assertEqual(self.issue(second).status_code,409)
+        with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
+            self.assertIn('SALES/2026/001',book.read('xl/sharedStrings.xml').decode())
+
+    def test_party_address_and_contacts_have_export_spacing(self):
+        preview=self.preview()
+        parties=next(section for section in preview['layout']['sections'] if section['name']=='parties')
+        cells=[cell for row in parties['rows'] for cell in row if cell.get('party')]
+        self.assertEqual(len(cells),3)
+        consignee=next(cell for cell in cells if cell['field']=='delivery.consignee_text')
+        self.assertIn('Consignee\nOrder destination\n\nUSA',consignee['text'])
+        with ZipFile(BytesIO(pi_exports.xlsx(preview['document']))) as book:
+            self.assertIn('Consignee\nOrder destination\n\nUSA',book.read('xl/sharedStrings.xml').decode())
 
     def test_edits_recalculate_in_selected_currency_and_keep_source_order_unchanged(self):
         self.assertEqual(self.client.post(self.base+'/preview',json={'currency':'INR'}).status_code,400)

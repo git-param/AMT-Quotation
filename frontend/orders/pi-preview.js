@@ -1,5 +1,5 @@
 /* Editable commercial snapshot; the server owns identity, bank details and totals. */
-window.createPiPreview = function (host, api, json, onIssued) {
+window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}) {
   let state = null,
     issued = null,
     busy = false,
@@ -14,6 +14,9 @@ window.createPiPreview = function (host, api, json, onIssued) {
     if (className) n.className = className;
     return n;
   };
+  function valueOf(item) {
+    return item.primaryInput ? window.orderLocations.joinParty(item.primaryInput.value,item.input.value) : item.input.value;
+  }
   function field(parent, label, value, path, multiline = false, type = "text") {
     const wrap = node("label", undefined, "pi-field");
     wrap.append(node("span", label));
@@ -28,7 +31,11 @@ window.createPiPreview = function (host, api, json, onIssued) {
       input.onchange = () => {
         input.value = input.value.trim().toUpperCase();
         const consignee = inputs.find(item => item.path === 'delivery.consignee_text');
-        if (consignee) consignee.input.value = window.orderLocations.countryBlock(consignee.input.value, input.value, [state.document.order.destination]);
+        if (consignee) {
+          const value=window.orderLocations.countryBlock(valueOf(consignee), input.value, [state.document.order.destination]);
+          if(consignee.primaryInput){const [primary,secondary]=window.orderLocations.partyParts(value,input.value);consignee.primaryInput.value=primary;consignee.input.value=secondary;}
+          else consignee.input.value=value;
+        }
       };
     }
     if (multiline) input.rows = path.startsWith("delivery.") ? 9 : 3;
@@ -47,6 +54,16 @@ window.createPiPreview = function (host, api, json, onIssued) {
     inputs.push({ input, path });
     return input;
   }
+  function partyField(parent, value, path) {
+    const group=node('div',undefined,'pi-party-editor');parent.append(group);
+    const [primary,secondary]=window.orderLocations.partyParts(value,state.document.order.destination);
+    const primaryInput=field(group,'Company / address details',primary,path+'.primary',true);inputs.pop();
+    primaryInput.rows=4;
+    const input=field(group,'Country / GST / contact details',secondary,path,true);
+    inputs.at(-1).primaryInput=primaryInput;
+    input.rows=5;
+    return input;
+  }
   function image(parent, name) {
     const img = node("img");
     img.src = "data:image/png;base64," + state.document.assets[name];
@@ -57,13 +74,14 @@ window.createPiPreview = function (host, api, json, onIssued) {
     const doc = state.document;
     const data = {date:doc.date,prepared_phone:doc.prepared_phone||'',order:{},delivery:{},shipping_charges:doc.totals.shipping,
       lines:doc.totals.lines.map(line=>Object.fromEntries(["id","sku","description","hsn_code","item_condition","uom","quantity","unit_price"].map(key=>[key,line[key]])))};
-    for(const {input,path} of inputs){const keys=path.split('.');let target=data;for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)]=input.value;}
+    for(const item of inputs){const keys=item.path.split('.');let target=data;for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)]=valueOf(item);}
     if(String(data.shipping_charges).trim().toLowerCase()==='free')data.shipping_charges='0.00';
     return data;
   }
   async function save(){
     const base=state.base;
     state={...await api(base+'/'+state.preview_id,json('PUT',collect())),base};
+    onSaved(state.document);
     render();
   }
   async function run(callback){
@@ -119,7 +137,10 @@ window.createPiPreview = function (host, api, json, onIssued) {
           if (cell.line_top) td.classList.add("pi-border-top");
           if (cell.line_bottom) td.classList.add("pi-border-bottom");
           if (cell.editor_rows) td.rowSpan = cell.editor_rows;
-          if (cell.field) {
+          if (cell.party) {
+            if(cell.bottom_contacts)td.classList.add('pi-consignee-cell');
+            partyField(td,cell.value,cell.field);
+          } else if (cell.field) {
             if (cell.sku_field) field(td, "SKU", cell.sku, cell.sku_field);
             const amount = cell.style.includes("amount") && !cell.free;
             const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.free ? 'Free' : cell.value, cell.field, cell.multiline, cell.free ? 'text' : cell.type || "text");
@@ -136,15 +157,11 @@ window.createPiPreview = function (host, api, json, onIssued) {
       }
       table.append(body);(section.name === "header" ? headerBox : paper).append(table);
     }
-    for (const [label, key, path] of [["Delivery instructions", "instructions", "delivery.instructions"], ["Order notes", "notes", "order.notes"]]) {
-      const value = key === "notes" ? doc.order.notes : doc.delivery.instructions;
-      if (!value) field(paper, label, "", path, true);
-    }
     const signatures = node("div", undefined, "pi-signatures");
     image(signatures, "payment_options.png");image(signatures, "signature.png");
     const footerBox=node("div",undefined,"pi-footer-box");footerBox.append(signatures);
     image(footerBox, "address.png");paper.append(footerBox);
-    if (issued) for (const { input } of inputs) input.disabled = true;
+    if (issued) for (const { input, primaryInput } of inputs) {input.disabled = true;if(primaryInput)primaryInput.disabled=true;}
   }
   return {
     open(data, base) {
