@@ -3,3 +3,5 @@ Werkzeug==2.3.8
 requests==2.31.0
 beautifulsoup4==4.9.3
 python-dotenv
+XlsxWriter==3.2.9
+reportlab==4.5.1

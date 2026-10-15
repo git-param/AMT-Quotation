@@ -73,7 +73,7 @@ function updatePiReadiness(){
   if(!current)return;
   const missing=current.lines.filter(line=>!line.hsn_code||!line.item_condition);
   const dirty=commercialDirty(),empty=!current.lines.length,legacy=Boolean(current.legacy_lines_requiring_review?.length);
-  el('generatePi').disabled=dirty||missing.length>0||empty||legacy||savingCommercial;
+  el('generatePi').disabled=dirty||empty||legacy||savingCommercial;
   el('saveItemDetails').hidden=!current.order.can_edit;el('saveItemDetails').disabled=!dirty||savingCommercial;
   el('completeItemDetails').hidden=!current.order.can_edit||!missing.length;
   el('piReadiness').className='pi-readiness'+(dirty||missing.length||empty||legacy?' needs-attention':' is-ready');
@@ -180,7 +180,8 @@ async function showDetails(id) {
   el('conversionHint').textContent='Choose the currency for this proforma invoice.';
   el('piForm').hidden=!order.can_edit||order.status==='cancelled';el('piCurrency').value='';el('piRate').value='';el('piRate').required=false;el('rateField').hidden=true;
   el('invoiceList').replaceChildren();
-  for(const invoice of data.invoices||[]){const link=document.createElement('a');link.textContent=`${invoice.reference} / ${invoice.currency} / ${invoice.created_at.slice(0,10)} - Download PI`;link.href=`/api/orders/${id}/invoices/${invoice.id}/download`;el('invoiceList').append(link);}
+  invoicePreview.reset();
+  for(const invoice of data.invoices||[])appendInvoice(invoice,id);
   if(data.legacy_lines_requiring_review?.length)message('Historical fractional quantities need review before PI generation. Original lines remain preserved in the enquiry history.',true);
   el('legacyReview').replaceChildren();
   for(const source of data.legacy_lines_requiring_review||[]){
@@ -272,14 +273,25 @@ el('piCurrency').onchange=()=>{
   if(!convert)el('piRate').value='';
   el('conversionHint').textContent=convert?'Enter INR per 1 USD. USD to INR multiplies; INR to USD divides. Unit rates round to 2 decimals before multiplying quantities. Shipping is converted separately.':'Amounts already in the selected currency use their saved prices.';
 };
+function appendInvoice(invoice,id){
+  const row=document.createElement('div');row.className='pi-download-row';
+  const title=document.createElement('span');title.textContent=`${invoice.reference} / ${invoice.currency} / ${(invoice.created_at||'').slice(0,10)}`;row.append(title);
+  for(const format of [invoice.workbook_format||'xlsm',...(invoice.has_pdf?['pdf']:[])]){const link=document.createElement('a');link.textContent='Download '+format.toUpperCase();link.href=`/api/orders/${id}/invoices/${invoice.id}/download?format=${format}`;row.append(link);}
+  el('invoiceList').append(row);
+}
+const invoicePreview=window.createPiPreview(el('piPreview'),api,json,async result=>{
+  appendInvoice({...result,currency:el('piCurrency').value,workbook_format:'xlsx',has_pdf:true},current.order.id);
+  message(`PI ${result.reference} generated. Excel and PDF are ready.`);
+});
 el('piForm').onsubmit=async event=>{
   event.preventDefault();
-  if(commercialDirty()||current.lines.some(line=>!line.hsn_code||!line.item_condition)||!current.lines.length){updatePiReadiness();el('completeItemDetails').onclick();return;}
+  if(commercialDirty()||!current.lines.length){updatePiReadiness();el('completeItemDetails').onclick();return;}
   el('piError').hidden=true;el('generatePi').disabled=true;
   try{
     const data={currency:el('piCurrency').value};if(!el('rateField').hidden)data.usd_inr_rate=el('piRate').value;
-    const result=await api(`/api/orders/${current.order.id}/invoices`,json('POST',data));
-    await showDetails(current.order.id);message(`PI ${result.reference} generated. Download it below.`);
+    const base=`/api/orders/${current.order.id}/invoices/preview`;
+    const result=await api(base,json('POST',data));
+    invoicePreview.open(result,base);
   }catch(error){
     if(error.details?.code==='pi_lines_incomplete')await showDetails(current.order.id);
     el('piError').textContent=error.message;el('piError').hidden=false;message(error.message,true);

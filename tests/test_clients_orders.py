@@ -247,7 +247,7 @@ class WorkspaceTests(unittest.TestCase):
             before = connection.execute('SELECT shipping_address_json,status,business_details FROM client_leads').fetchone()
         finally:
             connection.close()
-        self.assertEqual(migrate_database(path), [17])
+        self.assertEqual(migrate_database(path), list(range(17, len(MIGRATIONS)+1)))
         connection = sqlite3.connect(path)
         try:
             self.assertEqual(connection.execute('SELECT shipping_address_json,status,business_details FROM client_leads').fetchone(), before)

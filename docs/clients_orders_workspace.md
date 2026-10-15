@@ -23,9 +23,9 @@ is searchable with the client directory's existing authorization scope.
 
 Order creation/editing no longer asks for PI reference/date, payment terms or
 status. Those server fields remain intact on existing records; new orders default
-to pending drafts. If an order has no saved payment terms, PI issuance reads them
-from F8 in the configured company template and stores the effective terms and
-source in the issued snapshot. Existing saved payment terms take precedence.
+to pending drafts. Native PI previews use the company payment terms when an order
+has no saved terms. Existing saved payment terms take precedence. Commercial
+terms can be adjusted inside the PI preview without changing the source order.
 
 Consignee, Buyer Details and Notify Details are editable multiline text boxes.
 Consignee starts with the client's company/name, Location, telephone, person in
@@ -52,8 +52,9 @@ screens use item cards with visible HSN/condition inputs.
 
 The Items & PI tab identifies missing HSN codes and item conditions before
 issuance. Review the highlighted fields, enter the correct values, and select
-**Save item details**. Generate PI stays disabled while required item details are
-missing or edits are unsaved. Classification values are never guessed from an
+**Save item details**. Preview PI stays disabled while order item edits are
+unsaved. Missing HSN/condition can also be completed inside the PI preview;
+issuance validates both fields on every line. Classification values are never guessed from an
 example template. Drafts and historical records remain editable under their
 existing client permissions.
 
@@ -87,55 +88,70 @@ party, delivery, and required commercial fields. `GET /api/orders` adds
 parameters retain their behavior. Client detail/directory payloads add
 `order_count` and `pending_order_count`.
 
-## Company templates and PI generation
+## Editable PI previews and native Excel/PDF generation
 
-Configure the existing company workbooks once on the server:
+The active UI uses **Preview PI** after selecting USD or INR and any required
+exchange rate. Users edit the PI date, PO/commercial fields, consignee/buyer/notify
+text, item descriptions/HSN/condition/quantity/rate/UOM, shipping, instructions and
+notes directly on the invoice page. **Update preview** recalculates amounts on the
+server. **PDF print preview** shows the exact padded A4 document; **Edit invoice**
+returns to the editable page. Preview edits apply to the issued PI, leaving the
+source order intact. Seller/bank details, branding, reference, currency and
+ownership cannot be supplied or overridden by preview edits.
 
-```dotenv
-PI_TEMPLATE_USD=C:/company-templates/pi-usd.xlsm
-PI_TEMPLATE_INR=C:/company-templates/pi-inr.xlsm
+**Generate XLSX** and **Generate PDF** issue both formats together from one saved
+snapshot and PI reference. Subsequent downloads return the stored bytes. Issuance
+is idempotent for the same preview ID, rejects a changed source order, rechecks
+current client EDIT access and records an order revision and audit event.
+Preview endpoints also require the preview creator; downloads require current
+client visibility. Cancelled orders cannot issue invoices.
+
+Native renderers use `assets/PI-img/header.png`, `address.png`,
+`payment_options.png` and `signature.png`. Assets and company settings are frozen
+in each snapshot. No reference workbook, Excel installation, VBA, country lists
+or helper worksheets are needed for native generation. PDF uses A4 margins,
+repeated branding, and page numbers; long content and up to 50 lines paginate.
+XLSX is an ordinary macro-free workbook with embedded images, a defined print
+area and wrapped commercial content. Seller, company bank information, taxes,
+shipping, total, amount in words and existing commercial clauses are retained.
+
+Company seller/bank/payment/tax/terms configuration lives in the singleton
+`company_pi_settings` table. It is company-owned, never a client/order input.
+For an existing deployment, install `requirements.txt`, back up the database,
+apply migration 18, then explicitly import its configured historical workbooks
+once:
+
+```powershell
+python -m backend.orders.company import-legacy
 ```
 
-When unset, the local defaults are the existing `Updated PI Format USD - 180626
-2.xlsm` and `Updated PI Format INR 1 2 2.xlsm` files in the server account's
-Downloads directory. The shorter existing filenames `pi-USD.xlsm` and `pi-INR.xlsm`
-are also supported when the original filenames are absent. Keep those files accessible to the application account.
-Use the original company formats documented in [PI fields](pi_order_fields.md).
-Unexpected layouts and missing company/bank configuration fail before issuance.
-There is no per-client or per-order bank-details input. Do not commit company
-bank values or the templates to source control.
+The command reads `PI_TEMPLATE_USD` and `PI_TEMPLATE_INR` from `backend/.env`,
+validates the established company layouts, copies settings and records an audit
+entry. It does not run during native generation. Missing company configuration
+blocks preview with an actionable error. Re-importing deliberately updates the
+company configuration; issued snapshots and files remain unchanged.
 
-`POST /api/orders/{id}/invoices` requires `currency: "USD" | "INR"` and, only
-when conversion is needed, an explicit positive `usd_inr_rate`. The rate means
-**INR per 1 USD**, supports up to six decimal places, and has an upper bound of
-1,000,000. USD to INR multiplies; INR to USD divides. Same-currency amounts stay
-unchanged. No live or quotation-cache rate is silently applied to a PI.
+Conversion retains the existing explicit rule: enter INR per 1 USD; multiply
+USD to INR and divide INR to USD. Converted unit prices round HALF_UP to two
+decimals before multiplication by whole-unit quantity; shipping converts and
+rounds separately. Existing company tax rates apply to items plus shipping.
+Preview edits use the displayed PI currency and are never converted twice.
+Original source prices, conversion rate/rule and final totals are all retained.
 
-Converted unit rates round HALF_UP to two decimal places before multiplication
-by whole-unit quantity. Each line amount and converted shipping round separately
-to two decimal places. Shipping uses the order currency; each SKU uses its own
-saved currency. All calculations use Decimal and scaled database integers.
-Subtotal is the sum of generated line amounts. USD uses the original template's
-subtotal + shipping rule; INR reads the GST percentage from the existing
-template's J33 formula and applies it to items plus shipping, preserving the
-workbook's commercial calculation. Currency, rate, calculation rule, tax rate,
-totals and amount in words are recorded in the issued snapshot.
+Native API contracts:
+- `POST /api/orders/{id}/invoices/preview`: `{currency, usd_inr_rate?}`.
+- `PUT /api/orders/{id}/invoices/preview/{preview_id}`: any of `date`, `order`
+  (commercial fields only), `delivery` (three text blocks/instructions), `lines`
+  (same unique IDs, editable commercial fields), `shipping_charges`.
+- `GET /api/orders/{id}/invoices/preview/{preview_id}/pdf`: exact saved preview.
+- `POST /api/orders/{id}/invoices/issue`: `{preview_id}`; returns reference,
+  `xlsx_url` and `pdf_url`.
+- `GET /api/orders/{id}/invoices/{invoice_id}/download?format=xlsx|pdf|xlsm`:
+  stored issued format; a historical PI without PDF returns 404 for PDF.
 
-Every generation stores a unique PI reference, full issued order snapshot,
-generated workbook bytes, actor/time and an audit event in one transaction.
-The original template retains seller, GST/IEC, company contacts, bank data,
-charges policy, commercial terms, formatting, styles, and VBA content. VBA is
-never executed; amount in words is calculated in Python. Additional item rows
-copy original styles and expand merged ranges and print area; old cached
-calculation chains are removed. Order notes and delivery instructions print
-after the original terms; the payment clause uses the saved order payment terms. The supplied templates' four-row limits are not used
-as a data limit: up to 50 active order lines are supported.
-
-`GET /api/orders/{id}/invoices/{invoice_id}/download` returns that exact saved
-XLSM after rechecking current client access. Editing an order, client, rate, or
-company template does not alter an issued document. Older PIs remain downloadable
-after subsequent generations. Generated reference/date fields cannot be manually
-overwritten. PI issuance does not automatically change the order's business status.
+The old `POST /api/orders/{id}/invoices` contract remains available to legacy
+integrations and still uses the configured XLSM layouts. Historical XLSM bytes,
+references, snapshots and download URLs are unchanged.
 
 ## Migrations and historical records
 
@@ -183,6 +199,8 @@ only when those external fixtures are unavailable.
 
 Desktop/mobile browser smoke testing also verified client creation/editing/search,
 draft save/edit, order SKU fields, INR PI generation and profile card refresh.
-Excel successfully opened both real company-template workbooks with 50 item lines
-and exported them to PDF with macros disabled. Production documents are generated
-as XLSM; PDF is not a server export format in this implementation.
+Native PI tests cover company field protection, edited totals, original price
+provenance, idempotent issuance, stale previews, live permissions, long documents
+and formula-safe XLSX cells. Browser checks exercise editable previews, exact PDF
+preview and both download buttons. Excel also opened and printed the generated
+native USD/INR workbooks with macros disabled.

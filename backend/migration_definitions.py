@@ -498,6 +498,27 @@ CLIENT_LOCATION_SCHEMA = (
     ) + ", char(10) || ' ')",
 )
 
+NATIVE_PI_SCHEMA = (
+    '''CREATE TABLE company_pi_settings (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        profile_json TEXT NOT NULL CHECK(json_valid(profile_json)),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )''',
+    "ALTER TABLE order_invoices ADD COLUMN workbook_format TEXT NOT NULL DEFAULT 'xlsm' "
+    "CHECK(workbook_format IN ('xlsm','xlsx'))",
+    'ALTER TABLE order_invoices ADD COLUMN pdf BLOB',
+    '''CREATE TABLE invoice_previews (
+        id TEXT PRIMARY KEY,
+        order_id INTEGER NOT NULL REFERENCES client_orders(id) ON DELETE RESTRICT,
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        document_json TEXT NOT NULL CHECK(json_valid(document_json)),
+        issued_invoice_id INTEGER REFERENCES order_invoices(id) ON DELETE RESTRICT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )''',
+    'CREATE INDEX idx_invoice_previews_order ON invoice_previews(order_id,created_by)',
+)
+
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
@@ -516,4 +537,5 @@ MIGRATIONS = (
     (15, 'clients_orders_workspace', WORKSPACE_SCHEMA),
     (16, 'order_legacy_line_review', LEGACY_REVIEW_SCHEMA),
     (17, 'client_location', CLIENT_LOCATION_SCHEMA),
+    (18, 'native_pi_previews_exports', NATIVE_PI_SCHEMA),
 )

@@ -45,7 +45,7 @@ function setup(search = '?client_id=9') {
   const listing = {orders:[],total:0,page:1,pages:0};
   let denied = false;
   const context = {
-    window:{addEventListener(){},createSkuDraftEditor:()=>({reset(){},currencyChanged(){},values(){return [];} }),confirm:()=>true},
+    window:{addEventListener(){},createPiPreview:()=>({reset(){},open(){}}),createSkuDraftEditor:()=>({reset(){},currencyChanged(){},values(){return [];} }),confirm:()=>true},
     document:{body:new Element(),getElementById:element,createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag)},
     location:{search},URLSearchParams,Intl,Date,
     Option: class extends Element { constructor(label,value){super('option');this.textContent=label;this.value=String(value);} },
@@ -145,7 +145,7 @@ test('missing HSN and condition are editable in the item table and must be saved
   const fixture=setup();await settle();
   fixture.data.lines=[{id:10,sku:'LEGACY-PART',description:'Imported part',quantity:'1',unit_price:'10.00',currency:'USD',line_total:'10.00',hsn_code:'',item_condition:''}];
   await fixture.context.showDetails(7);
-  assert.equal(fixture.element('generatePi').disabled,true);
+  assert.equal(fixture.element('generatePi').disabled,false); // Metadata can be completed in the editable PI preview.
   assert.match(fixture.element('readinessTitle').textContent,/1 item needs PI details/);
   const row=fixture.element('lineRows').children[0];
   const hsn=row.children[4].children[0],condition=row.children[5].children[0];

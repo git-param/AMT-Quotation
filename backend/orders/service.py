@@ -201,7 +201,8 @@ def details(connection, order):
     result = dict(order)
     result['shipping_charges'] = format(Decimal(result['shipping_minor']) / 100, '.2f')
     invoices = [dict(row) for row in connection.execute(
-        'SELECT id, reference, currency, created_at FROM order_invoices '
+        'SELECT id, reference, currency, created_at, workbook_format, '
+        '(pdf IS NOT NULL) AS has_pdf FROM order_invoices '
         'WHERE order_id = ? ORDER BY id DESC', (order['id'],))]
     legacy_review = []
     if order['reference'] == 'LEGACY-ENQ-' + str(order['enquiry_id']):
