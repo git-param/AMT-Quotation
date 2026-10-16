@@ -3,6 +3,7 @@ import threading
 from backend.config import FRONTEND_DIR
 from backend.common.auth import login_required
 from backend.common.request import _get_ip
+from backend.common.skus import duplicate_skus
 from backend.database import log_search, log_copy
 from backend.quotation_tool.shopify import fetch_sku, get_inr_rate, _sku_cache, _sku_lock, _token_cache, _token_lock
 
@@ -25,6 +26,10 @@ def api_rate():
 def api_lookup():
     data      = request.json or {}
     skus_raw  = [s.strip() for s in data.get('skus', []) if str(s).strip()][:50]
+    duplicates = duplicate_skus(skus_raw)
+    if duplicates:
+        return jsonify(error='Duplicate SKUs: '+', '.join(duplicates)+
+                       '. Enter each SKU only once.'), 400
     user_name = session.get('username', 'Unknown')
     user_ip   = _get_ip()
 

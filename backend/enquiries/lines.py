@@ -375,6 +375,11 @@ def bulk_lookup():
         error = permitted()
         if error:
             return error
+        from backend.common.skus import duplicate_skus
+        duplicates = duplicate_skus(skus)
+        if duplicates:
+            return jsonify(error='Duplicate SKUs: '+', '.join(duplicates)+
+                           '. Enter each SKU only once.'), 400
         rate = None
         try:
             rate = Decimal(str(lookup_rate()))

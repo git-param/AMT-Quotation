@@ -331,6 +331,16 @@ class LineTests(unittest.TestCase):
             ).status_code, 404)
             lookup.assert_not_called()
 
+    def test_bulk_lookup_rejects_duplicate_skus_before_provider_calls(self):
+        for scope in ({'client_id':self.parent},{'enquiry_id':self.enquiry_id}):
+            with patch('backend.enquiries.lines.lookup_product') as lookup, \
+                    patch('backend.enquiries.lines.lookup_rate') as rate:
+                response=self.client.post('/api/enquiries/sku-lookup',json={
+                    **scope,'skus':[' PART-A ','part-a'],'currency':'USD'})
+                self.assertEqual(response.status_code,400,response.json)
+                self.assertIn('Duplicate SKUs: part-a',response.json['error'])
+                lookup.assert_not_called();rate.assert_not_called()
+
     def test_bulk_add_is_atomic_and_keeps_enquiry_items_independent(self):
         endpoint = self.path + '/bulk'
         item = {'sku': 'BULK', 'description': 'Part', 'quantity': '1',

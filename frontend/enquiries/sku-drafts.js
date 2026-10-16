@@ -1,5 +1,5 @@
 (() => {
-  window.createSkuDraftEditor = (host, scope, currency, onSave = null, commercial = false) => {
+  window.createSkuDraftEditor = (host, scope, currency, onSave = null, commercial = false, savedRows = () => []) => {
     let rows = [];
     let fetching = false;
     let activeRow = 0;
@@ -8,6 +8,15 @@
     let defaultsLoaded = false, loadingDefaults = false, revision = 0;
     let unresolved = [];
     const uoms=['PCs','Lot','Kit','set'];
+    const skuKey=sku=>sku.trim().toLowerCase();
+    const existingSkuMessage=sku=>`SKU ${sku} is already in the draft. Increase the quantity of the existing draft item instead.`;
+    function showError(message){status.className='draft-status error';status.textContent=message;}
+    function existingSku(skus){return [...rows,...savedRows()].find(row=>skuKey(row.sku)&&skus.some(sku=>skuKey(sku)===skuKey(row.sku)));}
+    function rejectExisting(row){
+      const index=rows.indexOf(row);
+      if(index>=0){activeRow=index;render();editBox.querySelector?.('[aria-label="Quantity"]')?.focus();}
+      showError(existingSkuMessage(row.sku));
+    }
     function stockIssue(row){
       if(!commercial)return '';
       const quantity=Number(row.quantity);
@@ -118,7 +127,13 @@
         if(type==='number'){control.min=key==='quantity'?'1':'0';control.step=key==='quantity'?'1':'0.01';}
         if(commercial&&key==='quantity'&&row.found&&row.stock!=null&&Number.isFinite(Number(row.stock)))control.max=String(row.stock);
         if(key==='hsn_code'&&sharedHsn){control.readOnly=true;control.title='Shared HSN code managed in Configuration';}
-        control.setAttribute('aria-label',title);control.oninput=()=>{row[key]=control.value;renderTable();if(commercial){const issue=stockIssue(row);status.className='draft-status'+(issue?' error':'');status.textContent=issue||'Item updated. Selected items are ready to review.';}};label.append(control);fields.append(label);
+        control.setAttribute('aria-label',title);control.oninput=()=>{
+          if(key==='sku'){
+            const duplicate=[...rows,...savedRows()].find(other=>other!==row&&skuKey(other.sku)&&skuKey(other.sku)===skuKey(control.value));
+            if(duplicate){control.value=row.sku;showError(existingSkuMessage(duplicate.sku));return;}
+          }
+          row[key]=control.value;renderTable();if(commercial){const issue=stockIssue(row);status.className='draft-status'+(issue?' error':'');status.textContent=issue||'Item updated. Selected items are ready to review.';}
+        };label.append(control);fields.append(label);
       });
       editBox.append(fields);
     }
@@ -141,6 +156,8 @@
     }
     async function addManualSku(sku=''){
       if(fetching||loadingDefaults)return false;
+      const duplicate=sku&&existingSku([sku]);
+      if(duplicate){rejectExisting(duplicate);return false;}
       const curr=currency(),version=revision,target=JSON.stringify(scope());
       if(!['USD','INR'].includes(curr)){status.textContent='Choose a deal currency first.';return false;}
       try{
@@ -152,9 +169,9 @@
         }
         if(version!==revision)return false;
         if(curr!==currency()||target!==JSON.stringify(scope()))throw new Error('Client or currency changed. Add the manual SKU again.');
-        const existing=sku?rows.findIndex(row=>row.sku.trim()===sku.trim()):-1;
-        if(existing<0){rows.push({sku,description:'',quantity:'1',unit_price:'',currency:curr,hsn_code:sharedHsn,uom:'PCs'});activeRow=rows.length-1;}
-        else activeRow=existing;
+        const existing=sku&&existingSku([sku]);
+        if(existing){rejectExisting(existing);return false;}
+        rows.push({sku,description:'',quantity:'1',unit_price:'',currency:curr,hsn_code:sharedHsn,uom:'PCs'});activeRow=rows.length-1;
         render();status.className='draft-status';status.textContent=commercial&&sharedHsn?'Manual item added with the configured HSN code. Complete its description, quantity and price.':'Manual item added. Complete its details before saving.';
         editBox.querySelector?.('[aria-label="SKU / item code"]')?.focus();return true;
       }catch(error){if(version===revision){status.className='draft-status error';status.textContent=error.message;}return false;}
@@ -164,8 +181,13 @@
     fetchButton.onclick=async()=>{
       if(fetching||loadingDefaults)return;
       const version=revision;
-      const curr=currency();const skus=[...new Set(input.value.split(/[\n,;]+/).map(v=>v.trim()).filter(Boolean))];
+      const curr=currency();const skus=input.value.split(/[\n,;]+/).map(v=>v.trim()).filter(Boolean);
       if(!['USD','INR'].includes(curr)||!skus.length){status.textContent='Choose USD/INR and enter at least one SKU.';return;}
+      const seen=new Set(),duplicates=[];
+      for(const sku of skus){const key=skuKey(sku);if(seen.has(key))duplicates.push(sku);seen.add(key);}
+      if(duplicates.length){showError(`Duplicate SKUs: ${duplicates.join(', ')}. Enter each SKU only once.`);return;}
+      const existing=existingSku(skus);
+      if(existing){rejectExisting(existing);return;}
       fetching=true;fetchButton.disabled=true;status.className='draft-status';status.textContent='Fetching SKU details...';
       try {
         const target = scope();
@@ -193,7 +215,15 @@
         }
         if(version!==revision)return;
         if(target[keys[0]]!==scope()[keys[0]] || curr!==currency())throw new Error('Client or currency changed while fetching. Look up SKUs again.');
-        let added = 0;let updated = 0;
+        const duplicate=existingSku(data.drafts.filter(draft=>draft.found!==false).map(draft=>draft.sku));
+        if(duplicate){rejectExisting(duplicate);return;}
+        const returned=new Set();
+        for(const draft of data.drafts){
+          const key=skuKey(draft.sku);
+          if(returned.has(key))throw new Error(`Duplicate SKU ${draft.sku} returned by lookup. Each SKU can only be added once.`);
+          returned.add(key);
+        }
+        let added = 0;
         unresolved=[];
         for (const draft of data.drafts) {
           if(draft.found===false){
@@ -202,23 +232,12 @@
           }
           if(commercial){draft.item_condition=draft.condition||'';draft.hsn_code=sharedHsn||draft.hsn_code||'';draft.uom='PCs';}
           if (Number.isInteger(Number(draft.quantity))) draft.quantity = String(Number(draft.quantity));
-          const existing = rows.find(row=>row.sku.trim()===draft.sku.trim());
-          if (existing) {
-            const edits = {sku:existing.sku, description:existing.description || draft.description,
-              quantity:existing.quantity, unit_price:existing.unit_price || draft.unit_price,
-              included:existing.included};
-            if(commercial)Object.assign(edits,{
-              hsn_code:sharedHsn||existing.hsn_code||draft.hsn_code,
-              item_condition:existing.item_condition||draft.item_condition,
-              uom:existing.uom||draft.uom,
-            });
-            Object.assign(existing,draft,edits);updated++;
-          } else { rows.push({...draft});added++; }
+          rows.push({...draft});added++;
         }
-        render();renderLookupNotice();status.textContent=`${added} draft rows added; ${updated} existing rows refreshed. Review each row; missing values must be completed.`;
+        render();renderLookupNotice();status.textContent=`${added} draft rows added. Review each row; missing values must be completed.`;
         if(unresolved.length)lookupNotice.scrollIntoView?.({block:'nearest'});
         if(commercial){const issue=rows.filter(row=>row.included!==false).map(stockIssue).find(Boolean);if(issue){status.className='draft-status error';status.textContent=issue;}}
-      }catch(error){if(version===revision)status.textContent=error.message;}finally{fetching=false;fetchButton.disabled=false;}
+      }catch(error){if(version===revision)showError(error.message);}finally{fetching=false;fetchButton.disabled=false;}
     };
     const editor = {
       values() {
@@ -226,6 +245,8 @@
         if(loadingDefaults)throw new Error('Wait for the shared HSN code to load.');
         const selected=rows.filter(row=>row.included!==false);
         if(!selected.length)throw new Error('Select at least one complete SKU line.');
+        const savedDuplicate=savedRows().find(row=>selected.some(item=>skuKey(item.sku)===skuKey(row.sku)));
+        if(savedDuplicate){const message=existingSkuMessage(savedDuplicate.sku);showError(message);throw new Error(message);}
         if(selected.some(row=>row.currency!==currency()))throw new Error('Currency changed. Fetch again or review the draft prices.');
         for(const row of selected){const issue=stockIssue(row);if(issue){activeRow=rows.indexOf(row);renderEditor();status.className='draft-status error';status.textContent=issue;throw new Error(issue);}}
         for(const control of editBox.querySelectorAll('input,textarea,select'))if(!control.reportValidity())throw new Error('Complete all SKU row fields.');

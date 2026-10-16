@@ -51,6 +51,16 @@ async function lookupSKUs() {
   if (!raw) return;
   const skus = raw.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
   if (!skus.length) return;
+  const seen = new Set(), duplicates = [];
+  for (const sku of skus) {
+    const key = sku.toLowerCase();
+    if (seen.has(key)) duplicates.push(sku);
+    seen.add(key);
+  }
+  if (duplicates.length) {
+    setStatus(`Duplicate SKUs: ${duplicates.join(', ')}. Enter each SKU only once.`, 'status-err');
+    return;
+  }
 
   _rows = []; _urlMap = {};
   toggleImageDownloadButtons(false);
@@ -69,7 +79,8 @@ async function lookupSKUs() {
       body: JSON.stringify({ skus })
     });
     if (!resp.ok) {
-      setStatus(resp.status === 401 ? 'Session ended. Please sign in again.' : 'Access denied.', 'status-err');
+      const error = await resp.json().catch(() => ({}));
+      setStatus(error.error || (resp.status === 401 ? 'Session ended. Please sign in again.' : 'Access denied.'), 'status-err');
       return;
     }
     const data = await resp.json();

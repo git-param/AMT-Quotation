@@ -103,6 +103,26 @@ class OrderTests(unittest.TestCase):
         self.assertEqual(self.client.post(base,json=data).status_code,400)
         self.assertEqual(self.client.post(base,json={**data,'uom':'unsupported'}).status_code,400)
 
+    def test_duplicate_sku_additions_are_blocked_and_existing_quantity_can_increase(self):
+        state=self.order();order_id=state['order']['id'];base=f'/api/orders/{order_id}/lines'
+        line=state['lines'][0]
+        item={'sku':' '+line['sku'].lower()+' ','description':'Duplicate',
+              'quantity':'1','unit_price':'10.00','currency':'USD'}
+        for path,data in ((base,item),(base+'/bulk',{'lines':[dict(item,sku='NEW-SKU'),item]})):
+            result=self.client.post(path,json=data)
+            self.assertEqual(result.status_code,400,result.json)
+            self.assertIn('Increase the quantity of the existing draft item',result.json['error'])
+        self.assertEqual(len(self.client.get(f'/api/orders/{order_id}').json['lines']),1)
+        result=self.client.put(base+'/'+str(line['id']),json={'quantity':'2'})
+        self.assertEqual(result.status_code,200,result.json)
+        self.assertEqual(result.json['lines'][0]['quantity'],'2')
+
+    def test_duplicate_skus_in_new_order_are_rejected(self):
+        item={'sku':'DUPLICATE','description':'Part','quantity':'1','unit_price':'10','currency':'USD'}
+        result=self.client.post('/api/orders',json=self.payload(source_line_ids=[],lines=[item,dict(item,sku=' duplicate ')]))
+        self.assertEqual(result.status_code,400,result.json)
+        self.assertIn('Increase the quantity',result.json['error'])
+
     def test_independent_copies_decimal_totals_and_stable_order_line_ids(self):
         first, second = self.order(), self.order()
         order_id = first['order']['id']
@@ -251,9 +271,9 @@ class OrderTests(unittest.TestCase):
         )).status_code, 400)
         order = self.order()
         path = f"/api/orders/{order['order']['id']}/lines"
-        self.assertEqual(self.client.post(path, json={
-            'source_line_id': self.line_id,
-        }).status_code, 409)
+        duplicate=self.client.post(path, json={'source_line_id': self.line_id})
+        self.assertEqual(duplicate.status_code,400)
+        self.assertIn('Increase the quantity',duplicate.json['error'])
         self.assertEqual(self.client.post(path, json={
             'source_line_id': foreign_line,
         }).status_code, 400)

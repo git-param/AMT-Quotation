@@ -326,6 +326,12 @@ def order_lines(order_id, line_id=None):
             action = 'line_remove'
         elif request.method == 'PUT':
             values = order_line(data, row)
+            if values['sku'].strip().lower()!=row['sku'].strip().lower() and connection.execute(
+                    'SELECT 1 FROM order_sku_lines WHERE order_id=? AND id!=? '
+                    'AND trim(sku)=? COLLATE NOCASE AND is_active=1',
+                    (order_id,line_id,values['sku'].strip())).fetchone():
+                raise ValueError(f"SKU {values['sku']} is already in the draft. "
+                                 'Increase the quantity of the existing draft item instead.')
             if values['sku']!=row['sku'] or values['quantity_milli']!=row['quantity_milli']:
                 from decimal import Decimal
                 from backend.orders.catalog import validate_stock

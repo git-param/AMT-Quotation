@@ -116,7 +116,7 @@ el('consignee_text').oninput=()=>{syncConsignee();refreshConsigneeGst();};
 const initialDrafts=window.createSkuDraftEditor(el('initialDrafts'),()=>({client_id:Number(clientScope)}),()=>el('currency').value,null,true);
 const lineDrafts=window.createSkuDraftEditor(el('lineDrafts'),()=>({client_id:current.order.client_id}),()=>current.order.currency,async lines=>{
   await api(`/api/orders/${current.order.id}/lines/bulk`,json('POST',{lines}));await showDetails(current.order.id);
-},true);
+},true,()=>current?.lines||[]);
 el('currency').onchange=()=>{setIndiaCurrency();initialDrafts.currencyChanged();};
 
 

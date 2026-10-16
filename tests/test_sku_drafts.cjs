@@ -18,7 +18,7 @@ class Element {
   querySelectorAll() { return []; }
 }
 
-function setup(scope, fetch, currency = 'USD', commercial = false) {
+function setup(scope, fetch, currency = 'USD', commercial = false, savedRows = () => []) {
   const context = {
     window: {}, document: {createElement: tag => new Element(tag)}, fetch,
   };
@@ -26,7 +26,7 @@ function setup(scope, fetch, currency = 'USD', commercial = false) {
   const file = path.join(__dirname, '../frontend/enquiries/sku-drafts.js');
   vm.runInContext(fs.readFileSync(file, 'utf8'), context);
   const host = new Element('div');
-  const drafts = context.window.createSkuDraftEditor(host, scope, () => currency, null, commercial);
+  const drafts = context.window.createSkuDraftEditor(host, scope, () => currency, null, commercial, savedRows);
   const lookup = host.children[1];
   const input = lookup.children[1];
   input.value = '1258\n4657';
@@ -126,7 +126,7 @@ test('quotation table retains editable deal details and selected items', async (
   assert.equal(editor.drafts.values().length, 1);
 });
 
-test('order lookup retains HSN, condition and units after refreshing catalog details', async () => {
+test('order lookup rejects an existing SKU and retains HSN, condition and units', async () => {
   const line={sku:'1258',description:'Part',quantity:'1',unit_price:'10.00',currency:'USD',condition:'Used',catalog_prices:{}};
   const editor=setup(()=>({client_id:7}),async()=>({ok:true,json:async()=>({drafts:[{...line}]})}),'USD',true);
   await editor.button.onclick();
@@ -135,6 +135,7 @@ test('order lookup retains HSN, condition and units after refreshing catalog det
     const control=fields.children[index].children[0];control.value=value;control.oninput();
   }
   await editor.button.onclick();
+  assert.match(editor.status.textContent,/already in the draft.*Increase the quantity/);
   const saved=editor.drafts.values()[0];
   assert.equal(saved.hsn_code,'85371090');assert.equal(saved.item_condition,'Refurbished');assert.equal(saved.uom,'Kit');
 });
@@ -161,29 +162,101 @@ test('order lookup explains zero stock, zero quantity and excess quantity before
   }
 });
 
-test('repeated lookup merges identical SKUs and preserves user edits', async () => {
+test('repeated lookup is blocked and preserves user edits', async () => {
   const line = {sku: '1258', description: 'Original part', quantity: '1',
     unit_price: '10.00', currency: 'USD', catalog_prices: {}};
-  let payload;
+  let requests=0;
   const editor = setup(() => ({client_id: 7}), async (url, options) => {
-    payload = JSON.parse(options.body);
-    return {ok: true, json: async () => ({drafts: [line, {...line}]})};
+    requests++;
+    return {ok: true, json: async () => ({drafts: [{...line}]})};
   });
-  editor.input.value = '1258, 1258\n1258';
+  editor.input.value = '1258';
   await editor.button.onclick();
-  assert.deepEqual(payload.skus, ['1258']);
   const fields = editor.host.children[3].children[1];
   for (const [index, value] of [[1, 'Custom description'], [2, '2'], [3, '8.75']]) {
     const control = fields.children[index].children[0];
     control.value = value;control.oninput();
   }
   await editor.button.onclick();
+  assert.equal(requests,1);
+  assert.match(editor.status.textContent,/1258.*already in the draft.*Increase the quantity/);
   const saved = editor.drafts.values();
   assert.equal(saved.length, 1);
   assert.equal(saved[0].description, 'Custom description');
   assert.equal(saved[0].quantity, '2');
   assert.equal(saved[0].unit_price, '8.75');
   assert.equal(editor.host.children[2].children[0].children[1].children.length, 1);
+});
+
+for(const commercial of [false,true]){
+  test(`duplicate lookup inputs are rejected before fetching (commercial=${commercial})`,async()=>{
+    let requests=0;
+    const editor=setup(()=>({client_id:7}),async()=>{requests++;},'USD',commercial);
+    for(const input of ['1258, 1258\n4657',' PART-A ; part-a ','001\n001']){
+      editor.input.value=input;await editor.button.onclick();
+      assert.match(editor.status.textContent,/Duplicate SKUs:.*Enter each SKU only once/);
+      assert.equal(editor.status.className,'draft-status error');
+    }
+    assert.equal(requests,0);assert.throws(()=>editor.drafts.values(),/Select at least one/);
+  });
+}
+
+test('mixed lookup with an existing SKU is rejected without adding new rows or changing quantity',async()=>{
+  let requests=0;
+  const editor=setup(()=>({client_id:7}),async()=>{requests++;return {ok:true,json:async()=>({drafts:[{
+    sku:'PART-A',description:'Part',quantity:'3',unit_price:'10.00',currency:'USD',catalog_prices:{}
+  }]})};});
+  editor.input.value='PART-A';await editor.button.onclick();
+  editor.input.value='NEW, part-a';await editor.button.onclick();
+  assert.equal(requests,1);assert.equal(editor.drafts.values().length,1);
+  assert.equal(editor.drafts.values()[0].quantity,'3');
+  assert.match(editor.status.textContent,/PART-A.*Increase the quantity/);
+});
+
+test('manual SKU entries cannot duplicate an existing draft SKU',async()=>{
+  const editor=setup(()=>({client_id:7}),async()=>({ok:true,json:async()=>({drafts:[{
+    sku:'PART-A',description:'Part',quantity:'1',unit_price:'10.00',currency:'USD',catalog_prices:{}
+  }]})}));
+  editor.input.value='PART-A';await editor.button.onclick();
+  await editor.host.children[1].children[2].children[1].onclick();
+  const fields=editor.host.children[3].children[1];
+  const sku=fields.children[0].children[0];sku.value=' part-a ';sku.oninput();
+  assert.equal(sku.value,'');assert.match(editor.status.textContent,/PART-A.*Increase the quantity/);
+  sku.value='PART-B';sku.oninput();
+  for(const [index,value] of [[1,'Second part'],[3,'5.00']]){const control=fields.children[index].children[0];control.value=value;control.oninput();}
+  assert.equal(editor.drafts.values().length,2);
+});
+
+test('duplicate results from a lookup are rejected without partial additions',async()=>{
+  const line={sku:'PART-A',description:'Part',quantity:'1',unit_price:'10.00',currency:'USD',catalog_prices:{}};
+  const editor=setup(()=>({client_id:7}),async()=>({ok:true,json:async()=>({drafts:[line,{...line,sku:'part-a'}]})}));
+  await editor.button.onclick();
+  assert.match(editor.status.textContent,/Duplicate SKU part-a returned/);
+  assert.throws(()=>editor.drafts.values(),/Select at least one/);
+});
+
+test('saved order draft SKUs cannot be added again through lookup or manual entry',async()=>{
+  let requests=0;
+  const editor=setup(()=>({client_id:7}),async()=>{requests++;return {ok:true,json:async()=>({shared_hsn_code:''})};},'USD',true,()=>[{sku:'PART-A'}]);
+  editor.input.value=' part-a ';await editor.button.onclick();
+  assert.equal(requests,0);assert.match(editor.status.textContent,/already in the draft.*Increase the quantity/);
+  await editor.host.children[1].children[2].children[1].onclick();
+  const sku=editor.host.children[3].children[1].children[0].children[0];
+  sku.value='PART-A';sku.oninput();assert.equal(sku.value,'');
+  assert.match(editor.status.textContent,/already in the draft.*Increase the quantity/);
+});
+
+test('quotation lookup reports duplicate SKUs before clearing results or making requests',async()=>{
+  const source=fs.readFileSync(path.join(__dirname,'../frontend/quotation_tool/quotation.js'),'utf8');
+  let message='',requests=0;
+  const context={document:{getElementById:()=>({value:' PART-A, part-a\nNEW '})},
+    setStatus:(text,kind)=>{message=text;assert.equal(kind,'status-err');},
+    fetch:async()=>{requests++;},_rows:[{sku:'KEEP'}]};
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf('async function lookupSKUs()'),source.indexOf('function showProgress(')),context);
+  await context.lookupSKUs();
+  assert.match(message,/Duplicate SKUs: part-a.*Enter each SKU only once/);
+  assert.equal(requests,0);assert.equal(context._rows[0].sku,'KEEP');
 });
 
 for (const currency of ['USD', 'INR']) {

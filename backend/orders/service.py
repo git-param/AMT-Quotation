@@ -272,6 +272,14 @@ def insert_lines(connection, order_id, lines, actor):
     ).fetchone()[0]
     if not lines or count + len(lines) > 50:
         raise ValueError('An order supports 1 to 50 active SKU lines.')
+    existing_skus = {row['sku'].strip().lower() for row in connection.execute(
+        'SELECT sku FROM order_sku_lines WHERE order_id=? AND is_active=1', (order_id,))}
+    for line in lines:
+        key = line['sku'].strip().lower()
+        if key in existing_skus:
+            raise ValueError(f"SKU {line['sku']} is already in the draft. "
+                             'Increase the quantity of the existing draft item instead.')
+        existing_skus.add(key)
     for line in lines:
         from backend.orders.catalog import validate_stock
         existing_quantity=connection.execute('SELECT COALESCE(SUM(quantity_milli),0) FROM order_sku_lines WHERE order_id=? AND sku=? COLLATE NOCASE AND is_active=1',

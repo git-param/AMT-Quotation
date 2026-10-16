@@ -276,6 +276,14 @@ class RBACTests(unittest.TestCase):
                    return_value=83.5):
             self.assertEqual(self.client.get('/api/rate').json, {'rate': 83.5})
 
+    def test_quotation_lookup_rejects_duplicate_skus(self):
+        self.session_as('sales_executive')
+        with patch('backend.quotation_tool.routes.fetch_sku') as lookup:
+            response=self.client.post('/api/lookup',json={'skus':[' PART-A ','part-a']})
+            self.assertEqual(response.status_code,400,response.json)
+            self.assertIn('Duplicate SKUs: part-a',response.json['error'])
+            lookup.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()
