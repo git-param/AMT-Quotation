@@ -23,6 +23,7 @@
   for(const [label,url,path,permission] of entries){
     const link=original.find(item=>item.getAttribute('href')===url)||document.createElement('a');
     link.href=url;link.className='sidebar-link';link.replaceChildren();
+    link.removeAttribute('target');
     link.removeAttribute('onmouseover');link.removeAttribute('onmouseout');
     link.style.removeProperty('color');link.style.removeProperty('border-color');link.style.removeProperty('background');
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
