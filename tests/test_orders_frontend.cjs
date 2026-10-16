@@ -246,3 +246,59 @@ test('order cards confirm deletion and expose actor and timestamp in the log',as
   assert.match(log.children[1].children[0].textContent,/ORD-000007 — deleted by Owner/);
   assert.ok(fixture.requests.some(item=>item.url==='/api/orders/deletions?client_id=9'));
 });
+
+test('composer presents one continuous form with references and location first',async()=>{
+  const f=setup();await settle();await f.context.createOrder();
+  assert.equal(f.element('save').textContent,'Save draft');
+  assert.equal(f.element('cancel').hidden,false);
+  const html=fs.readFileSync(path.join(__dirname,'../frontend/orders/orders.html'),'utf8');
+  const form=html.slice(html.indexOf('<form id="orderForm"'),html.indexOf('<section id="detail"'));
+  assert.doesNotMatch(form,/composer-steps|composer-stage|previousStage|nextStage/);
+  const positions=['pi_reference','po_reference','destination','currency','order_date','delivery_terms','delivery_time','dispatch_method','shipping_charges','consignee_primary'].map(id=>form.indexOf('id="'+id+'"'));
+  assert.ok(positions.every((position,index)=>position>=0&&(!index||position>positions[index-1])));
+  assert.doesNotMatch(form,/<details/);
+});
+
+test('embedded order composer uses the outer close control only',async()=>{
+  const f=setup('?client_id=9&embedded=1');await settle();await f.context.createOrder();
+  assert.equal(f.element('cancel').hidden,true);
+});
+
+test('linked parties stay compact; custom party edits reopen with saved data',async()=>{
+  const f=setup();await settle();await f.context.createOrder();
+  assert.equal(f.element('buyerEditor').hidden,true);assert.equal(f.element('notifyEditor').hidden,true);
+  f.element('buyer_same').checked=false;f.element('buyer_same').onchange();
+  assert.equal(f.element('buyerEditor').hidden,false);assert.equal(f.element('buyer_primary').focused,true);
+  f.element('buyer_primary').value='Separate buyer\nBuyer street';f.element('buyer_primary').oninput();
+  f.element('consignee_primary').value='Consignee\nNew shipping';f.element('consignee_primary').oninput();
+  assert.equal(f.element('buyerSummary').textContent,'Separate buyer\nBuyer street');
+  assert.match(f.element('notifySummary').textContent,/New shipping/);
+  Object.assign(f.data.order,{destination:'INDIA',po_reference:'',pi_reference:'',delivery_terms:'DAP',delivery_time:'4 to 6 days',dispatch_method:'Courier',shipping_charges:'0'});
+  f.data.delivery.buyer_text='Separate buyer\nBuyer street';
+  await f.context.editOrder(7);
+  assert.equal(f.element('buyerEditor').hidden,false);assert.equal(f.element('notifyEditor').hidden,true);
+  assert.equal(f.element('buyer_primary').value,'Separate buyer\nBuyer street');
+  assert.equal(f.element('save').textContent,'Save changes');
+  assert.equal(f.element('editingItemsHint').hidden,false);
+});
+
+test('save failure retains the draft and exposes an inline retry message',async()=>{
+  const f=setup();await settle();await f.context.createOrder();
+  f.element('consignee_primary').value='Unsaved recipient';f.element('consignee_primary').oninput();
+  const realFetch=f.context.fetch;
+  f.context.fetch=async(url,options)=>url==='/api/orders'?{ok:false,status:500,json:async()=>({error:'Please retry saving.'})}:realFetch(url,options);
+  await f.element('orderForm').onsubmit({preventDefault(){}});
+  assert.equal(f.element('formError').hidden,false);assert.equal(f.element('formError').textContent,'Please retry saving.');
+  assert.equal(f.element('consignee_primary').value,'Unsaved recipient');assert.equal(f.element('save').disabled,false);
+  f.context.fetch=realFetch;await f.element('orderForm').onsubmit({preventDefault(){}});
+  assert.equal(f.element('editor').hidden,true);
+});
+
+test('pending drafts resume in the composer and enforce client scope',async()=>{
+  const f=setup('?client_id=9&order_id=7&edit=1');
+  Object.assign(f.data.order,{destination:'INDIA',po_reference:'',pi_reference:'',delivery_terms:'DAP',delivery_time:'4 to 6 days',dispatch_method:'Courier',shipping_charges:'0'});
+  await settle();await settle();
+  assert.equal(f.element('editor').hidden,false);assert.equal(f.element('save').textContent,'Save changes');
+  f.data.order.client_id=10;
+  await assert.rejects(()=>f.context.editOrder(7),/selected record/);
+});

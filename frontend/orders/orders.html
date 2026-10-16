@@ -75,79 +75,67 @@
             <div class="picker"><button id="previous" class="btn-sm" type="button">Previous</button><span
                     id="pageInfo"></span><button id="next" class="btn-sm" type="button">Next</button></div>
         </section>
-        <section id="editor" class="panel" hidden>
-            <div class="source-toolbar">
-                <div>
-                    <h2 id="formTitle">Create order</h2>
-                    <p id="referenceHint">Order reference is generated when saved.</p>
-                </div><button id="cancel" class="btn-sm" type="button">Cancel</button>
+        <section id="editor" class="panel order-composer" aria-labelledby="formTitle" hidden>
+            <div class="composer-heading">
+                <div><span class="eyebrow">ORDER WORKSPACE</span><h2 id="formTitle">New order</h2>
+                    <p id="referenceHint">Order reference is generated when saved.</p></div>
+                <button id="cancel" class="btn-sm" type="button">Cancel</button>
             </div>
-            <form id="orderForm">
-                <div class="fields">
-                    <div class="form-field"><label for="order_date">Order date</label><input id="order_date" type="date"
-                            required></div>
-                    <div class="form-field"><label for="pi_reference">Proforma Invoice No.</label><input
-                            id="pi_reference" type="text" maxlength="100" placeholder="Enter the PI number"></div>
-                    <div class="form-field"><label for="po_reference">Purchase order reference</label><input
-                            id="po_reference" type="text"></div>
-                    <div class="form-field"><label for="delivery_terms">Delivery terms</label><input id="delivery_terms"
-                            type="text" value="DAP"></div>
-                    <div class="form-field"><label for="destination">Location / country</label><input id="destination"
-                            maxlength="200" list="orderCountries" autocomplete="off"
-                            placeholder="Type a country name"><datalist id="orderCountries"></datalist></div>
-                    <div class="form-field"><label for="shipping_charges">Shipping charges (order
-                            currency)</label><input id="shipping_charges" type="number" min="0" step="0.01" value="0">
-                    </div>
-                    <div class="form-field"><label for="delivery_time">Delivery time</label><input id="delivery_time"
-                            type="text" value="4 to 6 days"></div>
-                    <div class="form-field"><label for="dispatch_method">Dispatch By</label><input id="dispatch_method"
-                            type="text" value="DHL/Fedex/Aramex"></div>
-                    <div class="form-field"><label for="currency">Deal currency</label><select id="currency">
-                            <option>USD</option>
-                            <option>INR</option>
-                        </select></div>
-                </div>
-                <div class="order-parties order-party-texts">
-                    <fieldset>
-                        <legend>Consignee</legend><textarea id="consignee_text" hidden></textarea>
-                        <div class="party-editor"><label for="consignee_primary">Company / address
-                                details</label><textarea id="consignee_primary" rows="4" maxlength="3800"
-                                placeholder="Company or recipient details&#10;Street address&#10;City, state, postal code"></textarea><label
-                                for="consignee_details">Country / GST / contact details</label><textarea
-                                id="consignee_details" rows="5" maxlength="3800"
-                                placeholder="Country:&#10;GST No.:&#10;Tel:&#10;PIC:&#10;Email:"></textarea><div id="consigneeGstField" class="form-field" hidden><label for="consigneeGst">GST No.</label><input
-                                id="consigneeGst" maxlength="200" autocomplete="off" placeholder="Consignee GST number"></div></div>
-
-                        <small>Prefilled from the client. Edit both text sections for this order.</small>
-                    </fieldset>
-                    <fieldset>
-                        <legend>Buyer Details</legend><label class="same-party"><input id="buyer_same" type="checkbox"
-                                checked> Same as consignee</label><textarea id="buyer_text" hidden></textarea>
-                        <div class="party-editor"><label for="buyer_primary">Company / address details</label><textarea
-                                id="buyer_primary" rows="6" maxlength="3800"
-                                placeholder="Company or recipient details&#10;Street address&#10;City, state, postal code"></textarea></div>
-                        <small>Edit this box to add buyer-specific details.</small>
-
-                    </fieldset>
-                    <fieldset>
-                        <legend>Notify Details</legend><label class="same-party"><input id="notify_same" type="checkbox"
-                                checked> Same as consignee</label><textarea id="notify_text" hidden></textarea>
-                        <div class="party-editor"><label for="notify_primary">Company / address details</label><textarea
-                                id="notify_primary" rows="6" maxlength="3800"
-                                placeholder="Company or recipient details&#10;Street address&#10;City, state, postal code"></textarea>
+            <form id="orderForm" novalidate>
+                <p id="formError" class="composer-error" role="alert" tabindex="-1" hidden></p>
+                <div class="composer-layout">
+                    <div class="composer-content">
+                        <div class="fields composer-fields">
+                            <div class="form-field"><label for="pi_reference">Proforma Invoice No.</label><input id="pi_reference" type="text" maxlength="100" placeholder="Enter the PI number"></div>
+                            <div class="form-field"><label for="po_reference">Purchase Order No.</label><input id="po_reference" type="text" placeholder="e.g. PO-2026-001"></div>
+                            <div class="form-field"><label for="destination">Location / country</label><input id="destination" maxlength="200" list="orderCountries" autocomplete="off" placeholder="Type a country name"><datalist id="orderCountries"></datalist></div>
+                            <div class="form-field"><label for="currency">Deal currency</label><select id="currency" aria-describedby="currencyHelp"><option>USD</option><option>INR</option></select><small id="currencyHelp">India uses INR. Changing currency does not convert prices.</small></div>
+                            <div class="form-field"><label for="order_date">Order date <span class="field-required">(required)</span></label><input id="order_date" type="date" required></div>
+                            <div class="form-field"><label for="delivery_terms">Delivery terms</label><input id="delivery_terms" type="text" value="DAP"></div>
+                            <div class="form-field"><label for="delivery_time">Delivery time</label><input id="delivery_time" type="text" value="4 to 6 days"></div>
+                            <div class="form-field"><label for="dispatch_method">Dispatch By</label><input id="dispatch_method" type="text" value="DHL/Fedex/Aramex"></div>
+                            <div class="form-field"><label for="shipping_charges">Shipping charges (order currency)</label><input id="shipping_charges" type="number" min="0" step="0.01" value="0"></div>
+                        </div>
+                            <div class="order-parties order-party-texts composer-parties">
+                                <fieldset>
+                                    <legend>Consignee <span>Receives the shipment</span></legend>
+                                    <textarea id="consignee_text" hidden></textarea>
+                                    <div class="party-editor consignee-editor">
+                                        <div><label for="consignee_primary">Company &amp; delivery address</label><textarea id="consignee_primary" rows="4" maxlength="3800" placeholder="Company or recipient details&#10;Street address&#10;City, state, postal code"></textarea></div>
+                                        <div><label for="consignee_details">Country &amp; contact details</label><textarea id="consignee_details" rows="5" maxlength="3800" placeholder="Country:&#10;Tel:&#10;PIC:&#10;Email:"></textarea></div>
+                                        <div id="consigneeGstField" class="form-field" hidden><label for="consigneeGst">GST No.</label><input id="consigneeGst" maxlength="200" autocomplete="off" placeholder="Consignee GST number"></div>
+                                    </div>
+                                </fieldset>
+                                <fieldset class="secondary-party">
+                                    <legend>Buyer <span>Purchases the goods</span></legend>
+                                    <div class="party-choice"><label class="same-party"><input id="buyer_same" type="checkbox" checked aria-controls="buyerEditor"> Same as consignee</label><button id="buyerToggle" class="party-toggle" type="button" aria-controls="buyerEditor" aria-expanded="false">Review / edit</button></div>
+                                    <p id="buyerSummary" class="party-summary"></p><textarea id="buyer_text" hidden></textarea>
+                                    <div id="buyerEditor" class="party-editor" hidden><label for="buyer_primary">Buyer company &amp; address</label><textarea id="buyer_primary" rows="4" maxlength="3800" placeholder="Buyer company and billing address" aria-describedby="buyerHelp"></textarea><small id="buyerHelp">Editing these details makes this a separate buyer.</small></div>
+                                </fieldset>
+                                <fieldset class="secondary-party">
+                                    <legend>Notify party <span>Receives shipment notifications</span></legend>
+                                    <div class="party-choice"><label class="same-party"><input id="notify_same" type="checkbox" checked aria-controls="notifyEditor"> Same as consignee</label><button id="notifyToggle" class="party-toggle" type="button" aria-controls="notifyEditor" aria-expanded="false">Review / edit</button></div>
+                                    <p id="notifySummary" class="party-summary"></p><textarea id="notify_text" hidden></textarea>
+                                    <div id="notifyEditor" class="party-editor" hidden><label for="notify_primary">Notify company &amp; address</label><textarea id="notify_primary" rows="4" maxlength="3800" placeholder="Notify party company and address" aria-describedby="notifyHelp"></textarea><small id="notifyHelp">Editing these details makes this a separate notify party.</small></div>
+                                </fieldset>
                             </div>
-                        <small>Edit this box to add notify-specific details.</small>
-                    </fieldset>
+                            <section id="initialLines" class="order-items composer-item-entry">
+                                <div><h4>Build your order</h4><p>Look up SKUs or enter items manually. You can also add them to the saved draft.</p></div><button id="manualToggle" type="button" class="btn-sm">+ Add items</button>
+                                <div id="initialDrafts" hidden></div>
+                            </section>
+                            <div id="editingItemsHint" class="composer-note" hidden>Existing items are retained. Manage quantities, prices and PI details in Items &amp; PI after saving.</div>
+                    </div>
+                    <aside class="composer-aside" aria-label="Order overview">
+                        <span class="eyebrow">YOUR ORDER</span><h3 id="composerClient"></h3>
+                        <dl><dt>Destination</dt><dd id="overviewDestination"></dd><dt>Deal currency</dt><dd id="overviewCurrency"></dd><dt>Parties</dt><dd id="overviewParties"></dd></dl>
+                        <div class="draft-reassurance"><strong>Pick up where you left off</strong><p>Save a pending draft at any point. No items or invoice numbers needed to start.</p></div>
+                        <p class="bank-reassurance">Your company&#8217;s configured bank details are used automatically in the PI.</p>
+                    </aside>
                 </div>
-
-                <section id="initialLines" class="order-items">
-                    <h3>Order items</h3><button id="manualToggle" type="button" class="btn-sm">Add manual / look up SKU
-                        items</button>
-                    <div id="initialDrafts" hidden></div>
-                    <p>Save a pending draft at any time. Complete delivery and commercial details before generating a
-                        PI.</p>
-                </section>
-                <button id="save" class="btn-sm btn-add" type="submit">Save order / pending draft</button>
+                <footer class="composer-footer">
+                    <span id="saveHint">Progress is saved when you choose Save draft.</span>
+                    <div class="composer-actions"><button id="save" class="btn-sm btn-add" type="submit">Save draft</button></div>
+                </footer>
             </form>
         </section>
         <section id="detail" class="panel" hidden>
