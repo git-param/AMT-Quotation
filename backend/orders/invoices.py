@@ -157,6 +157,7 @@ def calculate(state, currency, rate, tax_rate):
         lambda value: convert(value, order['currency']), currency)
     subtotal = sum((Decimal(line['line_total']) for line in lines), Decimal(0)) - summary_discount
     shipping = convert(order['shipping_charges'], order['currency'])
+    # Total discounts reduce the goods subtotal before GST is calculated.
     tax = money((subtotal + shipping) * tax_rate)
     grand = money(subtotal + shipping + tax)
     return {'currency': currency, 'usd_inr_rate': str(rate) if conversion else None,

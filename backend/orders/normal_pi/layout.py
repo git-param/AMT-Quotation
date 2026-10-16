@@ -97,12 +97,19 @@ def layout(doc):
     while len(items)<5:items.append([c(cell['col'],cell['span']) for cell in item_header])
     bank=[c(0,8,'BANK DETAIL','bank_title')]+[c(0,8,value,'bold') for value in doc['company']['bank']]
     bank.append(c(0,8,doc['company'].get('bank_charges',''),'warning'))
-    tax_label=f'GST {Decimal(total["tax_rate"])*100:g}%'
+    tax_label=f'GST {(Decimal(total["tax_rate"])*100).normalize():f}%'
     free=Decimal(total['shipping'])==0
     summaries=[(editable(9,2,'',total['shipping'],'shipping_charges','amount',type='number',free=free,display_text='Free' if free else total['shipping']),'Shipping'),
                (c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Sub Total')]
     if Decimal(total.get('summary_discount', '0')):
-        summaries.insert(0, (c(9,2,'-'+total['summary_discount'],'amount',numeric=True), 'Discount'))
+        discount=(c(9,2,'-'+total['summary_discount'],'amount',numeric=True), 'Discount')
+        if doc['currency']=='INR':
+            summaries=[(c(9,2,total['goods_total'],'amount',numeric=True,calculated='goods_total'),'Goods Subtotal'),
+                       discount,
+                       (c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Net Subtotal'),
+                       summaries[0]]
+        else:
+            summaries.insert(0, discount)
     if Decimal(total['tax_rate']):summaries.append((c(9,2,total['tax'],'amount',numeric=True,calculated='tax'),tax_label))
     count=max(len(bank),len(summaries)+1)
     bank_rows=[]

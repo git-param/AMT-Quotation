@@ -10,6 +10,7 @@ import test_bulk_pi
 from backend.orders.invoices import calculate
 from backend.orders.pi_document import edit
 from backend.orders.pi_layout import layout
+from backend.orders import pi_exports
 
 
 class DiscountTests(unittest.TestCase):
@@ -109,8 +110,44 @@ class DiscountTests(unittest.TestCase):
             doc = edit(doc, self.edits(doc))
             self.assertEqual(doc['totals']['discount_total'], '160.00')
 
+    def test_inr_total_discount_is_shown_and_calculated_before_gst_in_both_exports(self):
+        self.assertEqual(self.save(scope='total',type='percent',value='10').status_code,200)
+        for count in (1,5):
+            if count==5:test_bulk_pi.BulkPiTests.items(self,5)
+            doc=self.preview(currency='INR',**({'bulk_description':'Mixed spare parts'} if count==5 else {}))['document']
+            totals=doc['totals']
+            self.assertEqual(Decimal(totals['subtotal']),Decimal(totals['goods_total'])-Decimal(totals['summary_discount']))
+            expected=((Decimal(totals['subtotal'])+Decimal(totals['shipping']))*Decimal('0.18')).quantize(Decimal('0.01'))
+            self.assertEqual(Decimal(totals['tax']),expected)
+            model=layout(doc);bank=next(section for section in model['sections'] if section['name']=='bank')
+            labels=[cell['text'] for row in bank['rows'] for cell in row if cell['col']==8]
+            sequence=['Goods Subtotal','Discount','Net Subtotal','Shipping','GST 18%','Grand Total']
+            self.assertEqual([label for label in labels if label in sequence],sequence)
+            self.assertTrue(pi_exports.pdf(doc).startswith(b'%PDF-'))
+            with ZipFile(BytesIO(pi_exports.xlsx(doc))) as book:
+                sheet=ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
+                cells={cell.get('r'):cell for cell in sheet.findall('.//{*}c')}
+                tax=next(cell for cell in cells.values() if cell.find('{*}f') is not None and '*0.18' in cell.find('{*}f').text)
+                self.assertEqual(Decimal(tax.find('{*}v').text),Decimal(totals['tax']))
+                subtotal=next(cell for cell in cells.values() if cell.find('{*}f') is not None and
+                              cell.find('{*}v') is not None and Decimal(cell.find('{*}v').text)==Decimal(totals['subtotal']) and
+                              (cell.find('{*}f').text.endswith('-'+totals['summary_discount']) or count==5))
+                if count==1:self.assertIn(subtotal.get('r'),tax.find('{*}f').text)
+
 
 class AllocationTests(unittest.TestCase):
+    def test_inr_total_discounts_reduce_the_base_before_eighteen_percent_gst(self):
+        for kind,value in (('percent','10'),('amount','100')):
+            for visible in (True,False):
+                with self.subTest(kind=kind,visible=visible):
+                    state={'order':{'currency':'INR','shipping_charges':'0','discount':{
+                        'type':kind,'value':value,'scope':'total','line_ids':[],'show_on_pi':visible}},
+                        'lines':[{'id':1,'quantity':'1','unit_price':'1000','currency':'INR'}]}
+                    totals=calculate(state,'INR',None,Decimal('0.18'))
+                    self.assertEqual(totals['subtotal'],'900.00')
+                    self.assertEqual(totals['tax'],'162.00')
+                    self.assertEqual(totals['grand_total'],'1062.00')
+
     def test_hidden_total_cent_allocation_reconciles(self):
         lines = [dict(id=i, unit_price='0.01', quantity='1', currency='USD') for i in range(50)]
         state = dict(order=dict(currency='USD', shipping_charges='0', discount=dict(
