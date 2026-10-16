@@ -93,17 +93,21 @@ def annexure_section(doc):
         rows[-1][4] = cell(4, f'GST {Decimal(totals["tax_rate"])*100:g}%', 'bold')
         rows[-1][5] = cell(5, totals['tax'], 'amount', accounting=True, calculated='tax')
     summary_row = len(rows)
-    rows.append([cell(0, 'Amount\nin\nWord:', 'bold'),
+    rows.append([cell(0, 'Amount\nin Word:', 'bold', nowrap=True),
                  cell(1, annexure_words(doc), 'bold', calculated='annexure_amount_in_words'),
                  cell(2, 'Total', 'bold_center'),
                  cell(3, quantity_summary(doc), 'bold_center', calculated='annexure_quantity'),
                  cell(4, 'Total ('+doc['currency']+')', 'bold_center'),
                  cell(5, totals['subtotal'], 'bold_amount', accounting=True, calculated='subtotal')])
+    for total_cell in rows[-1]:
+        total_cell.update(total_cell=True)
     rows.append(blanks())
     final = blanks()
     final[4] = cell(4, 'Final Price', 'bold_center')
     final[5] = cell(5, totals['grand_total'], 'bold_amount', accounting=True, calculated='grand_total')
-    rows.extend([final, blanks()])
+    for total_cell in final[4:]:
+        total_cell.update(total_cell=True, rowspan=2)
+    rows.extend([final, blanks()[:4]])
     heights = [22.5,36]+[21.95]*len(doc['totals']['lines'])+[14.1,14.1,40.9,14.1,14.1,14.1]
     return dict(name='annexure', annexure=True, widths=ANNEXURE_WIDTHS,
                 rows=rows, row_heights=heights, summary_row=summary_row)

@@ -118,14 +118,19 @@ def pdf(doc):
             face=annex_bold if is_bold else annex_regular
             size=(8 if kind=='annexure_title' else 12)*annexure_scale
             if kind=='annexure_title':face='Helvetica-Bold'
+        if cell.get('total_cell'):alignment=1
+        if cell.get('nowrap'):
+            size=min(size,available_width/max(pdfmetrics.stringWidth(line,face,1) for line in text.splitlines()))
         style=ParagraphStyle('cell',fontName=face,fontSize=size,
             leading=size+2,alignment=alignment,textColor=colors.red if kind=='warning' else colors.black)
-        if cell.get('accounting'):
+        if cell.get('accounting') and not cell.get('total_cell'):
             left=Paragraph(escape(symbol),ParagraphStyle('currency',parent=style,alignment=0))
             right=Paragraph(format(Decimal(text),',.2f'),ParagraphStyle('money',parent=style,alignment=2))
             money=Table([[left,right]],colWidths=[10,available_width-10])
             money.setStyle(TableStyle([('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
             return money
+        if cell.get('accounting'):
+            text=format(Decimal(text),',.2f')
         if 'uom' in cell:text+=' '+cell['uom']
         if 'amount' in kind and not cell.get('free'):text=symbol+' '+text
         content=escape(text).replace('\n','<br/>')
@@ -155,13 +160,19 @@ def pdf(doc):
         for section in sections:
             section_weights=section.get('widths',weights)
             section_columns=[usable*w/sum(section_weights) for w in section_weights]
-            rows=[];commands=[];heights=[]
+            rows=[];commands=[];heights=[];total_commands=[]
             for index,source in enumerate(physical_rows(section['rows'],section_columns)):
                 row=['']*len(section_columns);min_height=12
                 for cell in source:
                     col,span=cell['col'],cell['span'];kind=cell['style']
                     content=cell['_paragraph'];row[col]=content
-                    if span>1:commands.append(('SPAN',(col,index),(col+span-1,index)))
+                    end_row=index+cell.get('rowspan',1)-1
+                    if span>1 or end_row>index:commands.append(('SPAN',(col,index),(col+span-1,end_row)))
+                    if section.get('annexure'):
+                        commands.append(('LINEBELOW',(col,end_row),(col+span-1,end_row),.8,colors.black))
+                    if cell.get('total_cell'):
+                        total_commands.extend([('BOX',(col,index),(col+span-1,end_row),1.6,colors.black),
+                                               ('VALIGN',(col,index),(col+span-1,end_row),'MIDDLE')])
                     if cell.get('bottom_aligned'):commands.append(('VALIGN',(col,index),(col+span-1,index),'BOTTOM'))
                     if not cell.get('open_left'):commands.append(('LINEBEFORE',(col,index),(col,index),.8,colors.black))
                     if not cell.get('open_right'):commands.append(('LINEAFTER',(col+span-1,index),(col+span-1,index),.8,colors.black))
@@ -178,7 +189,7 @@ def pdf(doc):
                 if section['name']=='annexure':
                     reference_height=22.5 if index==0 else 36 if index==1 else 40.9 if any(c.get('calculated')=='annexure_amount_in_words' for c in source) else 21.95 if any((c.get('field') or '').startswith('lines.') for c in source) else 14.1
                     min_height=max(min_height,reference_height*annexure_scale)
-                    commands.extend([('LINEBELOW',(0,index),(-1,index),.8,colors.black),('VALIGN',(0,index),(-1,index),'MIDDLE')])
+                    commands.append(('VALIGN',(0,index),(-1,index),'MIDDLE'))
                 rows.append(row);heights.append(min_height)
             table=LongTable(rows,colWidths=section_columns,rowHeights=heights,
                 repeatRows=2 if section['name']=='annexure' else 1 if section['name']=='items' else 0,splitInRow=1,hAlign='LEFT')
@@ -186,7 +197,7 @@ def pdf(doc):
                 ('LEFTPADDING',(0,0),(-1,-1),3),('RIGHTPADDING',(0,0),(-1,-1),3),
                 ('TOPPADDING',(0,0),(-1,-1),1.5),('BOTTOMPADDING',(0,0),(-1,-1),1.5),
                 *([('LINEBEFORE',(0,0),(0,-1),.9,colors.black),('LINEAFTER',(-1,0),(-1,-1),.9,colors.black),
-                   ('LINEBELOW',(0,-1),(-1,-1),.9,colors.black)] if section['name']=='header' else [('BOX',(0,0),(-1,-1),.9,colors.black)]),*commands,
+                   ('LINEBELOW',(0,-1),(-1,-1),.9,colors.black)] if section['name']=='header' else [('BOX',(0,0),(-1,-1),.9,colors.black)]),*commands,*total_commands,
                 *([('LINEBELOW',(0,0),(-1,0),.8,colors.black)] if section['name']=='items' else []),
                 *([('LINEABOVE',(0,-1),(-1,-1),.8,colors.black)] if section['name']=='bank' else [])]))
             story.append(table)
@@ -346,7 +357,7 @@ def write_annexure(book, doc, cover_coordinates):
     formats = {}
     def fmt(cell):
         kind = cell['style']
-        key = (kind,cell['col'],cell.get('accounting',False))
+        key = (kind,cell['col'],cell.get('accounting',False),cell.get('total_cell',False),cell.get('nowrap',False))
         if key not in formats:
             options = {**base,'left':2 if cell['col']==0 else 1,
                        'right':2 if cell['col']==5 or cell['span']==6 else 1}
@@ -360,6 +371,12 @@ def write_annexure(book, doc, cover_coordinates):
                 options.update(top=2,bottom=2)
             if cell.get('accounting'):
                 options.update(num_format='"'+symbol+'"* #,##0.00',align='right')
+            if cell.get('total_cell'):
+                options.update(border=2,left=2,right=2,align='center')
+                if cell.get('accounting'):
+                    options['num_format']='"'+symbol+'" #,##0.00'
+            if cell.get('nowrap'):
+                options.update(text_wrap=False,shrink=True,font_size=10)
             formats[key]=book.add_format(options)
         return formats[key]
     def image(name,row,col,width,height):
@@ -394,6 +411,8 @@ def write_annexure(book, doc, cover_coordinates):
         for chunk_index,chunk in enumerate(chunks):
             for cell in source:
                 col=cell['col'];value=cell['text'];style=fmt(cell)
+                if cell.get('rowspan',1)>1:
+                    sheet.merge_range(row,col,row+cell['rowspan']-1,col,'',style)
                 if chunk_index:
                     sheet.write_string(row,col,'\n'.join(chunk) if col==1 else '',style)
                     continue

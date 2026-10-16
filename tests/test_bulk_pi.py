@@ -163,15 +163,19 @@ class BulkPiTests(unittest.TestCase):
         self.assertEqual(section['rows'][0][0]['span'], 6)
         self.assertEqual([cell['text'] for cell in section['rows'][1]],
                          ['Sr No.','Item Description','Condition','Qty','Unit Price\n(USD)','Total Price\n(USD)'])
-        self.assertTrue(all(len(row)==6 for row in section['rows'][1:]))
+        self.assertTrue(all(len(row)==6 for row in section['rows'][1:-1]))
+        self.assertEqual([cell['col'] for cell in section['rows'][-1]], [0,1,2,3])
         self.assertTrue(all(not cell['text'] for row in section['rows'][11:13] for cell in row))
         summary = section['rows'][13]
-        self.assertEqual(summary[0]['text'], 'Amount\nin\nWord:')
+        self.assertEqual(summary[0]['text'], 'Amount\nin Word:')
+        self.assertTrue(summary[0]['nowrap'])
+        self.assertTrue(all(cell['total_cell'] for cell in summary))
         self.assertTrue(summary[1]['text'].startswith('USD '))
         self.assertEqual([cell['text'] for cell in summary[2:5]], ['Total','47PCs','Total (USD)'])
         self.assertEqual(summary[5]['text'], doc['totals']['subtotal'])
         self.assertEqual(section['rows'][15][4]['text'], 'Final Price')
         self.assertEqual(section['rows'][15][5]['text'], doc['totals']['grand_total'])
+        self.assertTrue(all(cell['rowspan']==2 for cell in section['rows'][15][4:]))
         self.assertTrue(all(not cell['text'] for cell in section['rows'][14]))
         self.assertTrue(all(not cell['text'] for cell in section['rows'][16]))
         with ZipFile(BytesIO(pi_exports.xlsx(doc))) as book:
@@ -181,6 +185,20 @@ class BulkPiTests(unittest.TestCase):
             self.assertTrue(all(int(col.get('max'))<=6 for col in sheet.findall('.//{*}col')))
             self.assertEqual(sheet.find('.//{*}row[@r="18"]').get('ht'), '40.9')
             self.assertTrue(any('A22:F26'==merge.get('ref') for merge in sheet.findall('.//{*}mergeCell')))
+            merges = {merge.get('ref') for merge in sheet.findall('.//{*}mergeCell')}
+            self.assertTrue({'E20:E21','F20:F21'} <= merges)
+            styles = ET.fromstring(book.read('xl/styles.xml'))
+            formats = styles.find('{*}cellXfs')
+            borders = styles.find('{*}borders')
+            for address in ('A18','B18','C18','D18','E18','F18','E20','F20'):
+                cell = sheet.find(f'.//{{*}}c[@r="{address}"]')
+                style = formats[int(cell.get('s'))]
+                alignment = style.find('{*}alignment')
+                self.assertEqual(alignment.get('horizontal'), 'center')
+                self.assertEqual(alignment.get('vertical'), 'center')
+                border = borders[int(style.get('borderId'))]
+                for edge in ('left','right','top','bottom'):
+                    self.assertEqual(border.find('{*}'+edge).get('style'), 'medium')
 
     def test_bulk_calculation_refreshes_annexure_words_and_total_quantity(self):
         self.items(5)

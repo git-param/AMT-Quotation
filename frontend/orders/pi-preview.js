@@ -194,6 +194,9 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         for (const cell of row) {
           if (section.name === "parties" && cell.placeholder) continue;
           const td = node("td", undefined, "pi-cell-" + (cell.style || "normal")); td.colSpan = cell.span;
+          if (cell.rowspan) td.rowSpan = cell.rowspan;
+          if (cell.total_cell) td.classList.add('pi-total-cell');
+          if (cell.nowrap) td.classList.add('pi-nowrap');
           if (cell.open_left) td.classList.add('pi-open-left');
           if (cell.open_right) td.classList.add('pi-open-right');
           if (cell.line_top) td.classList.add("pi-border-top");
