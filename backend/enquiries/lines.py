@@ -7,7 +7,8 @@ import re
 from flask import Blueprint, jsonify, request
 
 from backend.common.auth import authenticated_required, get_current_user
-from backend.database import get_db
+from backend.database import get_db, log_search
+from backend.common.request import _get_ip
 from backend.enquiries.routes import read_enquiry
 
 bp = Blueprint('enquiry_lines', __name__)
@@ -252,6 +253,7 @@ def sku_lookup(enquiry_id):
         try:
             product = lookup_product(data['sku'].strip())
         except Exception:
+            log_search(get_current_user()['username'], _get_ip(), [data['sku'].strip()], 0, 1)
             return jsonify(
                 error='SKU provider is unavailable. Try again.'
             ), 502
@@ -259,6 +261,8 @@ def sku_lookup(enquiry_id):
         _, error = authorize(connection, enquiry_id, write=True)
         if error:
             return error
+        found = int(bool(product.get('found')))
+        log_search(get_current_user()['username'], _get_ip(), [data['sku'].strip()], found, 1-found)
         if not product.get('found'):
             return jsonify(error='SKU not found.'), 404
         price = product.get('sale_price')
@@ -463,6 +467,8 @@ def bulk_lookup():
         error = permitted()
         if error:
             return error
+        found = sum(bool(row['found']) for row in results)
+        log_search(get_current_user()['username'], _get_ip(), [sku.strip() for sku in skus], found, len(results)-found)
         return jsonify(drafts=results, currency=currency,
                        usd_inr_rate=str(rate) if rate else None,shared_hsn_code=hsn)
     finally:

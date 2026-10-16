@@ -267,3 +267,6 @@ def assign_supervisor(uid):
     finally:
         connection.rollback()
         connection.close()
+
+# Register the separate TL workspace after this blueprint is defined.
+from backend.manager_dashboard import team  # noqa: E402,F401

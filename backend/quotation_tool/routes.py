@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, send_file, session, redirect, make_response
 import threading
 from backend.config import FRONTEND_DIR
-from backend.common.auth import login_required
+from backend.common.auth import login_required, get_current_user
 from backend.common.request import _get_ip
 from backend.common.skus import duplicate_skus
 from backend.database import log_search, log_copy
@@ -30,7 +30,7 @@ def api_lookup():
     if duplicates:
         return jsonify(error='Duplicate SKUs: '+', '.join(duplicates)+
                        '. Enter each SKU only once.'), 400
-    user_name = session.get('username', 'Unknown')
+    user_name = get_current_user()['username']
     user_ip   = _get_ip()
 
     results = []

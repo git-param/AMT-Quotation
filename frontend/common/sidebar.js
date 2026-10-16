@@ -7,6 +7,7 @@
     ['Quotation Tool','/','M4 3h16v18H4z M8 7h8 M8 11h8 M8 15h5'],
     ['Clients & Orders','/clients-orders','M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z M4 21v-2a8 8 0 0 1 16 0v2'],
     ['Search PI','/search-pi','M14 3H5v18h14V8l-5-5Z M14 3v5h5 M15 14a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z M14 16l3 3'],
+    ['TL Dashboard','/tl-dashboard','M3 20h18 M6 16v-5 M12 16V5 M18 16V8','management.view'],
     ['Client Access / Sharing','/client-access','M15 5a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z M3 12a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z M15 19a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z M9 11l6-5 M9 13l6 5','leads.share_manage'],
     ['Enquiry Sources','/sources','M3 5h18v14H3z m0 0 9 8 9-8','sources.manage'],
     ['Dashboard','/manager','M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z','management.view'],
@@ -34,7 +35,7 @@
     if(location.pathname===url||(url==='/clients-orders'&&['/leads','/orders','/enquiries'].includes(location.pathname))){link.classList.add('is-current');link.setAttribute('aria-current','page');}
     const row=document.createElement('div');row.className='sidebar-item';row.append(link);nav.append(row);
     if(url==='/logout')row.classList.add('sidebar-signout');
-    if(permission){row.hidden=true;restricted.push({row,link,permission});}
+    if(permission){row.hidden=true;restricted.push({row,link,permission,url});}
   }
   document.body.classList.add('has-sidebar');document.body.prepend(sidebar);
   const toggle=document.createElement('button');toggle.type='button';toggle.className='sidebar-toggle';toggle.textContent='Menu';toggle.setAttribute('aria-label','Open navigation');toggle.setAttribute('aria-controls',sidebar.id);toggle.setAttribute('aria-expanded','false');header.prepend(toggle);
@@ -52,7 +53,7 @@
     if(!response.ok)return;
     const user=await response.json();
     for(const item of restricted){
-      const roleAllowed=item.permission!=='leads.share_manage'||['admin','manager','sales_tl'].includes(user.role);
+      const roleAllowed=(item.permission!=='leads.share_manage'&&item.url!=='/tl-dashboard')||['admin','manager','sales_tl'].includes(user.role);
       item.row.hidden=!roleAllowed||!(user.permissions||[]).includes(item.permission);
     }
   }).catch(()=>{});

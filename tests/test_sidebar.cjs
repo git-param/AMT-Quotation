@@ -47,10 +47,11 @@ test('header links move to sidebar with original IDs and active-page state',asyn
   assert.equal(view.original['/manager'].getAttribute('target'),null);
   assert.equal(view.sidebar.children[1].children.find(row=>row.children[0].href==='/clients-orders').children[0].attributes['aria-current'],'page');
   const rows=view.sidebar.children[1].children;
-  assert.equal(rows.length,8);
+  assert.equal(rows.length,9);
   assert.ok(rows.every(row=>!row.hidden));
   assert.ok(rows.some(row=>row.children[0].href==='/clients-orders'));
   assert.ok(rows.some(row=>row.children[0].href==='/search-pi'));
+  assert.ok(rows.some(row=>row.children[0].href==='/tl-dashboard'));
 });
 
 test('executives do not see management, source, or sharing links',async()=>{
@@ -58,6 +59,7 @@ test('executives do not see management, source, or sharing links',async()=>{
   for(const url of ['/manager','/sources','/client-access'])assert.equal(view.original[url].parent.hidden,true);
   assert.equal(view.original['/leads'].parent,null);
   assert.equal(view.sidebar.children[1].children.find(row=>row.children[0].href==='/configuration').hidden,true);
+  assert.equal(view.sidebar.children[1].children.find(row=>row.children[0].href==='/tl-dashboard').hidden,true);
   assert.ok(!view.sidebar.children[1].children.some(row=>['/leads','/enquiries','/orders'].includes(row.children[0].href)));
 });
 

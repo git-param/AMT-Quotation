@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>TL Dashboard | AMT</title>
+    <link rel="stylesheet" href="/static/manager_dashboard/manager.css">
+    <link rel="stylesheet" href="/static/common/sidebar.css">
+    <link rel="stylesheet" href="/static/common/sku-feedback.css">
+    <link rel="stylesheet" href="/static/manager_dashboard/team.css">
+    <script src="/static/common/sidebar.js" defer></script>
+</head>
+
+<body>
+    <header class="hdr">
+        <div>
+            <div class="hdr-logo">TL Dashboard</div>
+            <div class="hdr-sub">Team performance and lookup activity</div>
+        </div>
+        <nav><a href="/clients-orders">Clients &amp; Orders</a><a href="/logout">Sign Out</a></nav>
+    </header>
+    <main class="tl-page">
+        <div class="tl-intro">
+            <div><span class="tl-eyebrow">Team workspace</span>
+                <h1>A clear view of your team's work</h1>
+                <p>Track client creation, generated PIs and the SKUs your team searches.</p>
+            </div><span id="tlScope" class="tl-scope">Loading team...</span>
+        </div>
+        <form id="tlFilters" class="tl-filters">
+            <div class="tl-field tl-user-field"><label for="tlUser">User</label><select id="tlUser">
+                    <option value="">All accessible users</option>
+                </select></div>
+            <div class="tl-field"><label for="tlFrom">From date</label><input id="tlFrom" type="date"></div>
+            <div class="tl-field"><label for="tlTo">To date</label><input id="tlTo" type="date"></div><button
+                id="tlApply" class="tl-primary" type="submit">Apply filters</button><button id="tlClear"
+                type="button">Clear</button>
+            <p>Dates and times are in IST. Filters apply to both sections.</p>
+        </form>
+        <div class="tl-stats" aria-label="Team totals">
+            <article><span>Clients created</span><strong id="tlClients">—</strong><small>Current client records</small>
+            </article>
+            <article><span>PIs generated</span><strong id="tlPis">—</strong><small>Saved, available invoices</small>
+            </article>
+            <article><span>Lookup requests</span><strong id="tlRequests">—</strong><small>Quotation and item
+                    searches</small></article>
+            <article><span>Unique SKUs searched</span><strong id="tlSkus">—</strong><small>Across the selected users and
+                    dates</small></article>
+        </div>
+        <section class="tl-panel">
+            <div class="tl-section-heading">
+                <div><span class="tl-eyebrow">Production</span>
+                    <h2>User performance</h2>
+                    <p>Client counts are attributed to their creator; PIs to the user who generated them.</p>
+                </div><span id="tlTeamCount" class="tl-meta" role="status"></span>
+            </div>
+            <div class="tl-table-wrap" id="tlTeamResults" aria-busy="true">
+                <table>
+                    <caption class="tl-sr-only">Clients and PIs created by each user</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">User</th>
+                            <th scope="col">Role</th>
+                            <th scope="col">Clients created</th>
+                            <th scope="col">PIs generated</th>
+                            <th scope="col">Invoice details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tlTeamRows"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="tl-panel">
+            <div class="tl-section-heading">
+                <div><span class="tl-eyebrow">Activity</span>
+                    <h2>SKU lookup history</h2>
+                    <p>See how many searches each user made for a SKU. Repeated SKUs in one request count once.</p>
+                </div>
+                <form id="tlSkuFilter" class="tl-inline-search" role="search"><input id="tlSkuSearch" type="search"
+                        maxlength="100" aria-label="Filter lookup history by SKU" placeholder="Find a SKU..."><button
+                        type="submit">Search SKU</button></form>
+            </div>
+            <div class="tl-table-wrap" id="tlLookupResults" aria-busy="true">
+                <table>
+                    <caption class="tl-sr-only">SKU search frequency per user</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">User</th>
+                            <th scope="col">SKU</th>
+                            <th scope="col">Times searched</th>
+                            <th scope="col">Last lookup (IST)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tlLookupRows"></tbody>
+                </table>
+            </div>
+            <div class="tl-paging"><span id="tlLookupCount" role="status"></span>
+                <div><button id="tlLookupPrevious" type="button" disabled>Previous</button><span id="tlLookupPage">Page
+                        1 of 1</span><button id="tlLookupNext" type="button" disabled>Next</button></div>
+            </div>
+        </section>
+        <section id="tlCleanup" class="tl-cleanup" hidden>
+            <div><span class="tl-eyebrow">Admin controls</span>
+                <h2>Clean up older lookup history</h2>
+                <p>For all users. Records on the cutoff date are kept. Deletion is permanent.</p>
+            </div>
+            <form id="tlCleanupForm">
+                <div class="tl-field"><label for="tlCleanupBefore">Delete records older than</label><input
+                        id="tlCleanupBefore" type="date" required></div><button id="tlCleanupReview"
+                    type="submit">Review &amp; delete</button>
+            </form>
+        </section>
+    </main>
+    <dialog id="tlPiDialog" class="tl-pi-dialog" aria-labelledby="tlPiTitle">
+        <div class="tl-dialog-heading">
+            <div><span class="tl-eyebrow">Client distribution</span>
+                <h2 id="tlPiTitle">User's PI list</h2>
+                <p id="tlPiSummary" role="status"></p>
+            </div><button id="tlPiClose" type="button" aria-label="Close PI list">Close</button>
+        </div>
+        <div class="tl-table-wrap" id="tlPiResults" aria-busy="false">
+            <table>
+                <caption class="tl-sr-only">Generated PIs grouped by client</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">PI number</th>
+                        <th scope="col">Order</th>
+                        <th scope="col">Generated (IST)</th>
+                        <th scope="col">Downloads</th>
+                    </tr>
+                </thead>
+                <tbody id="tlPiRows"></tbody>
+            </table>
+        </div>
+        <div class="tl-paging"><span id="tlPiCount"></span>
+            <div><button id="tlPiPrevious" type="button" disabled>Previous</button><span id="tlPiPage">Page 1 of
+                    1</span><button id="tlPiNext" type="button" disabled>Next</button></div>
+        </div>
+    </dialog>
+    <script src="/static/common/sku-feedback.js"></script>
+    <script src="/static/manager_dashboard/team.js"></script>
+</body>
+
+</html>

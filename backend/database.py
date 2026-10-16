@@ -1,5 +1,6 @@
 import sqlite3
 import threading
+from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash
 from backend.config import DB_PATH, DATABASE_DIR
 
@@ -30,16 +31,21 @@ def _seed_users():
 
 def log_search(user_name, user_ip, skus, found, not_found):
     with _db_lock:
+        con = None
         try:
             con = get_db()
+            # Lookup history uses local India time, including legacy records.
+            timestamp = datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime('%Y-%m-%d %H:%M:%S')
             con.execute(
-                'INSERT INTO search_logs (user_name,user_ip,skus,found_count,not_found) VALUES (?,?,?,?,?)',
-                (user_name, user_ip, ','.join(skus), found, not_found)
+                'INSERT INTO search_logs (user_name,user_ip,skus,found_count,not_found,ts) VALUES (?,?,?,?,?,?)',
+                (user_name, user_ip, ','.join(skus), found, not_found, timestamp)
             )
             con.commit()
-            con.close()
         except Exception:
             pass
+        finally:
+            if con is not None:
+                con.close()
 
 
 def log_copy(user_name, user_ip, copy_type, sku_count):
