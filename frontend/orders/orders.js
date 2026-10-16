@@ -42,14 +42,20 @@ for(const prefix of ['buyer','notify'])el(prefix+'Toggle').onclick=()=>{
   openPartyEditor(prefix,el(prefix+'Editor').hidden);
   if(!el(prefix+'Editor').hidden)el(prefix+'_primary').focus();
 };
-function message(text,error=false){el('message').textContent=text;el('message').className=error?'error':'';}
+function message(text,error=false){
+  if(window.skuFeedback){el('message').textContent='';window.skuFeedback.show(text,error);return;}
+  el('message').textContent=text;el('message').className=error?'error':'';
+}
 async function api(url,options={}) {
+  const finish=window.skuFeedback?.startRequest(url,options);
+  try{
   const response=await fetch(url,options);const data=await response.json();
   if(!response.ok){
     if([401,403,404].includes(response.status)){el('editor').hidden=true;el('detail').hidden=true;}
     const error=new Error(data.error||'Unable to complete request.');error.details=data;throw error;
   }
   return data;
+  }finally{finish?.();}
 }
 const json = (method,data) => ({method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
 function action(label,callback,danger=false){
@@ -247,7 +253,7 @@ el('orderForm').onsubmit=async event=>{
     if(editing===null){data.client_id=Number(clientScope);data.lines=el('initialDrafts').hidden?[]:initialDrafts.values();}
     const result=await api(editing===null?'/api/orders':`/api/orders/${editing}`,json(editing===null?'POST':'PUT',data));
     el('editor').hidden=true;await load();await showDetails(result.order.id);message('Order saved.');
-  }catch(error){el('formError').textContent=error.message;el('formError').hidden=false;el('formError').focus();message(error.message,true);}finally{el('save').disabled=false;el('save').textContent=editing===null?'Save draft':'Save changes';}
+  }catch(error){if(window.skuFeedback){el('formError').hidden=true;}else{el('formError').textContent=error.message;el('formError').hidden=false;el('formError').focus();}message(error.message,true);}finally{el('save').disabled=false;el('save').textContent=editing===null?'Save draft':'Save changes';}
 };
 
 async function showDetails(id) {
@@ -336,7 +342,7 @@ async function showDetails(id) {
   selectOrderTab('items');updatePiReadiness();
   el('detail').hidden=false;el('detail').scrollIntoView({behavior:'smooth'});
 }
-el('lineForm').onsubmit=async event=>{event.preventDefault();try{await api(`/api/orders/${current.order.id}/lines/${editingLine}`,json('PUT',{sku:el('lineSku').value,description:el('lineDescription').value,quantity:el('lineQuantity').value,unit_price:el('linePrice').value,currency:el('lineCurrency').value,hsn_code:el('lineHsn').value,item_condition:el('lineCondition').value,uom:el('lineUom').value}));await showDetails(current.order.id);message('Order line saved.');}catch(error){message(error.message,true);}};
+el('lineForm').onsubmit=async event=>{event.preventDefault();const button=el('lineForm').querySelector?.('button[type="submit"]');if(button?.disabled)return;if(button)button.disabled=true;try{await api(`/api/orders/${current.order.id}/lines/${editingLine}`,json('PUT',{sku:el('lineSku').value,description:el('lineDescription').value,quantity:el('lineQuantity').value,unit_price:el('linePrice').value,currency:el('lineCurrency').value,hsn_code:el('lineHsn').value,item_condition:el('lineCondition').value,uom:el('lineUom').value}));await showDetails(current.order.id);message('Order line saved.');}catch(error){message(error.message,true);}finally{if(button)button.disabled=false;}};
 el('addLine').onclick=()=>{lineDrafts.reset();el('lineDrafts').hidden=!el('lineDrafts').hidden;};
 el('cancelLine').onclick=()=>{el('lineForm').hidden=true;};
 el('manualToggle').onclick=()=>{el('initialDrafts').hidden=false;el('manualToggle').hidden=true;};

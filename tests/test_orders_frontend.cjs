@@ -7,7 +7,7 @@ const vm = require('node:vm');
 
 class Element {
   constructor(tag = 'div') {
-    this.tag = tag;this.children = [];this.value = '';this.hidden = true;
+    this.tag = tag;this.children = [];this.value = '';this.hidden = true;this.attributes={};
     this.classList = {add() {}};
   }
   append(...items) { this.children.push(...items); }
@@ -17,7 +17,7 @@ class Element {
   }
   get options() { return this.children; }
   add(item) { this.children.push(item); }
-  setAttribute() {}
+  setAttribute(key,value) {this.attributes[key]=value;}
   reset() {}
   scrollIntoView() {}
   focus(){this.focused=true;}
@@ -68,6 +68,7 @@ function setup(search = '?client_id=9') {
     },
   };
   vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/common/sku-feedback.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/common/order-locations.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/orders/orders.js'),'utf8'),context);
   return {context,element,requests,data,listing,deny(){denied=true;}};
@@ -282,16 +283,34 @@ test('linked parties stay compact; custom party edits reopen with saved data',as
   assert.equal(f.element('editingItemsHint').hidden,false);
 });
 
-test('save failure retains the draft and exposes an inline retry message',async()=>{
+test('save failure retains the draft and displays a dismissible popup instead of a top message',async()=>{
   const f=setup();await settle();await f.context.createOrder();
   f.element('consignee_primary').value='Unsaved recipient';f.element('consignee_primary').oninput();
   const realFetch=f.context.fetch;
   f.context.fetch=async(url,options)=>url==='/api/orders'?{ok:false,status:500,json:async()=>({error:'Please retry saving.'})}:realFetch(url,options);
   await f.element('orderForm').onsubmit({preventDefault(){}});
-  assert.equal(f.element('formError').hidden,false);assert.equal(f.element('formError').textContent,'Please retry saving.');
+  assert.equal(f.element('formError').hidden,true);assert.equal(f.element('message').textContent,'');
+  const notice=f.context.document.body.children.find(child=>child.className==='sku-feedback').children[1];
+  assert.equal(notice.hidden,false);assert.equal(notice.attributes.role,'alert');
+  assert.equal(notice.children[0].children[1].textContent,'Please retry saving.');
+  notice.children[1].onclick();assert.equal(notice.hidden,true);
   assert.equal(f.element('consignee_primary').value,'Unsaved recipient');assert.equal(f.element('save').disabled,false);
   f.context.fetch=realFetch;await f.element('orderForm').onsubmit({preventDefault(){}});
   assert.equal(f.element('editor').hidden,true);
+});
+
+test('stock save shows the reason for loading and always stops the spinner on failure',async()=>{
+  const f=setup();await settle();
+  let complete;
+  f.context.fetch=()=>new Promise(resolve=>{complete=resolve;});
+  const pending=f.context.api('/api/orders/7/lines/3',{method:'PUT',body:'{"quantity":"10"}'});
+  const progress=f.context.document.body.children.find(child=>child.className==='sku-feedback').children[0];
+  assert.equal(progress.hidden,false);assert.equal(progress.attributes['aria-busy'],'true');
+  assert.equal(progress.children[0].children[0].textContent,'Checking stock before saving');
+  assert.match(progress.children[0].children[1].textContent,/current stock.*requested quantity/);
+  complete({ok:false,status:400,json:async()=>({error:'SKU 3456: only 0 available.'})});
+  await assert.rejects(pending,/only 0 available/);
+  assert.equal(progress.hidden,true);assert.equal(progress.attributes['aria-busy'],'false');
 });
 
 test('pending drafts resume in the composer and enforce client scope',async()=>{

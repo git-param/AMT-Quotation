@@ -31,11 +31,14 @@ function creationScope() {
 }
 const initialSkuEditor=window.createSkuDraftEditor(byId('creationSkus'),creationScope,()=>byId('dealCurrency').value);
 byId('dealCurrency').onchange=()=>initialSkuEditor.currencyChanged();
-function message(text,error=false) { byId('message').textContent=text; byId('message').className=error?'error':''; }
+function message(text,error=false) { if(window.skuFeedback){byId('message').textContent='';window.skuFeedback.show(text,error);return;}byId('message').textContent=text; byId('message').className=error?'error':''; }
 async function api(path,options={}) {
+  const finish=window.skuFeedback?.startRequest(path,options);
+  try{
   const response=await fetch(path,options); const data=await response.json();
   if(!response.ok) { if(response.status===401){byId('editor').hidden=true;byId('detail').hidden=true;} throw new Error(data.error||'Unable to complete request.'); }
   return data;
+  }finally{finish?.();}
 }
 function cell(row,value){const td=document.createElement('td');td.textContent=value;row.append(td);}
 async function clients() {

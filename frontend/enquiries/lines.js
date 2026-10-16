@@ -3,14 +3,17 @@
   let editingLine = null;
   const bulkEditor=window.createSkuDraftEditor(document.getElementById('addSkus'),()=>({enquiry_id:enquiry.id}),()=>el('addCurrency').value,async lines=>{await call(`/api/enquiries/${enquiry.id}/lines/bulk`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lines})});await loadLines();});
   const el = id => document.getElementById(id);
-  function notice(text, error = false) { el('lineMessage').textContent = text; el('lineMessage').className = error ? 'line-error' : ''; }
+  function notice(text, error = false) { if(window.skuFeedback){el('lineMessage').textContent='';window.skuFeedback.show(text,error);return;}el('lineMessage').textContent = text; el('lineMessage').className = error ? 'line-error' : ''; }
   async function call(path, options = {}) {
+    const finish=window.skuFeedback?.startRequest(path,options);
+    try{
     const response = await fetch(path, options); const result = await response.json();
     if (!response.ok) {
       if ([401,403,404].includes(response.status)) el('lineForm').hidden = true;
       throw new Error(result.error || 'Unable to complete line operation.');
     }
     return result;
+    }finally{finish?.();}
   }
   function linePath(id = null) { return `/api/enquiries/${enquiry.id}/lines${id === null ? '' : '/' + id}`; }
   function reset() {
