@@ -304,7 +304,7 @@ def xlsx(doc):
                         if len(decimal.as_tuple().digits)<=15:sheet.write_number(row_index,col,float(decimal),fmt)
                         else:sheet.write_string(row_index,col,symbol+' '+cell['text'],fmt)
                     else:sheet.write_string(row_index,col,value,fmt)
-                    if chunk_index==0 and (cell.get('calculated') in ('subtotal','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
+                    if chunk_index==0 and (cell.get('calculated') in ('subtotal','goods_total','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
                         formula_cells.append((row_index,col,fmt,cell['calculated'],cell['text']))
                     height=max(height,len(lines)*(13 if cell['style'] in ('terms','final_term') else 16))
                     if cell.get('header_metadata'):height=max(height,len(lines)*16+2)
@@ -334,8 +334,12 @@ def xlsx(doc):
         if path.endswith('.line_total'):
             prefix=path.rsplit('.',1)[0]
             formula=f'=ROUND({coordinates[prefix+".quantity"]}*{coordinates[prefix+".unit_price"]},2)'
-        elif path=='subtotal':
+            line=doc['totals']['lines'][int(prefix.split('.')[1])]
+            if not line.get('net_unit_price'):
+                formula+='-'+line.get('discount_amount','0.00')
+        elif path in ('subtotal','goods_total'):
             formula='='+annexure_subtotal
+            if path=='goods_total':formula+='+'+doc['totals'].get('summary_discount','0.00')
         elif path=='tax':formula=f'=ROUND(({coordinates["subtotal"]}+N({coordinates["shipping_charges"]}))*{doc["totals"]["tax_rate"]},2)'
         else:formula=f'=ROUND({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("tax","0")},2)'
         sheet.write_formula(row,col,formula,fmt,float(Decimal(cached)))
@@ -427,12 +431,14 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row):
                     elif cell.get('field') and cell['field'].endswith('.line_total'):
                         quantity=xl_rowcol_to_cell(row,columns[3])
                         price=xl_rowcol_to_cell(row,columns[4])
-                        sheet.write_formula(row,col,f'=ROUND({quantity}*{price},2)',style,float(Decimal(value)))
+                        line=doc['totals']['lines'][int(cell['field'].split('.')[1])]
+                        deduction='0.00' if line.get('net_unit_price') else line.get('discount_amount','0.00')
+                        sheet.write_formula(row,col,f'=ROUND({quantity}*{price},2)-{deduction}',style,float(Decimal(value)))
                         item_rows.append(row)
                     elif cell.get('calculated')=='subtotal':
                         summary=xl_rowcol_to_cell(row,col)
                         refs=','.join(xl_rowcol_to_cell(r,columns[5]) for r in item_rows)
-                        sheet.write_formula(row,col,'=ROUND(SUM('+refs+'),2)',style,float(Decimal(value)))
+                        sheet.write_formula(row,col,'=ROUND(SUM('+refs+'),2)-'+doc['totals'].get('summary_discount','0.00'),style,float(Decimal(value)))
                     elif cell.get('calculated')=='grand_total':
                         sheet.write_formula(row,col,"='Proforma Invoice'!"+cover_coordinates['grand_total'],style,float(Decimal(value)))
                     else:

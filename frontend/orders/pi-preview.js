@@ -209,12 +209,13 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
             const amount = cell.style.includes("amount") && !cell.free;
             const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.free ? 'Free' : cell.value, cell.field, cell.multiline, cell.free ? 'text' : cell.type || "text");
             if(cell.calculated)calculated.push({path:cell.calculated,input});
-            if (cell.readonly) { input.readOnly = true; input.title = 'Shared HSN code managed in Configuration'; }
+            if (cell.readonly) { input.readOnly = true; input.title = cell.field?.endsWith('.line_total')?'Calculated after discount. Edit quantity or unit price to change this amount.':'Shared HSN code managed in Configuration'; }
             if (!cell.label && !amount) td.lastChild.classList.add("pi-unlabelled");
             if (cell.editor_rows) input.rows = 12;
             else if (cell.multiline) input.rows = cell.field.startsWith("delivery.") ? 5 : 2;
             if (cell.field === 'terms') input.rows = Math.max(5, String(cell.value).split('\n').length);
             if (cell.uom_field) {field(td, "UOM", cell.uom, cell.uom_field);td.classList.add("pi-quantity-cell");}
+            if (cell.discount_note) td.append(node('small',cell.discount_note));
           } else {
             const content=node('div',undefined,'pi-cell-text');let value=content;
             if(cell.accounting){

@@ -595,4 +595,5 @@ MIGRATIONS = (
     (19, 'shared_hsn_configuration', CONFIGURATION_SCHEMA),
     (20, 'order_soft_deletion', ORDER_DELETION_SCHEMA),
     (21, 'reusable_order_and_pi_references', REUSABLE_ORDER_REFERENCES_SCHEMA),
+    (22, 'order_discounts', ("ALTER TABLE client_orders ADD COLUMN discount_json TEXT",)),
 )

@@ -79,6 +79,15 @@ def layout(doc):
             editable(6,2,'',line['quantity'],prefix+'quantity','center',uom=line['uom'],uom_field=prefix+'uom',type='number'),
             editable(8,1,'',line['unit_price'],prefix+'unit_price','amount',type='number'),
             editable(9,2,'',line['line_total'],prefix+'line_total','amount',numeric=True,type='number',calculated=f'lines.{index}.line_total')])
+        if line.get('discount_label'):
+            items[-1][1]['discount_note'] = line['discount_label']
+            items[-1][1]['text'] += '\n' + line['discount_label']
+            items[-1][1]['display_text'] = items[-1][1]['text']
+        if line.get('net_unit_price'):
+            items[-1][-2]['text'] = line['net_unit_price']
+            items[-1][-2]['display_text'] = line['net_unit_price']
+        if Decimal(line.get('discount_amount', '0')):
+            items[-1][-1]['readonly'] = True
     # The original reserves four ruled item rows, even for a one-line invoice.
     while len(items)<5:items.append([c(cell['col'],cell['span']) for cell in item_header])
     bank=[c(0,8,'BANK DETAIL','bank_title')]+[c(0,8,value,'bold') for value in doc['company']['bank']]
@@ -87,6 +96,8 @@ def layout(doc):
     free=Decimal(total['shipping'])==0
     summaries=[(editable(9,2,'',total['shipping'],'shipping_charges','amount',type='number',free=free,display_text='Free' if free else total['shipping']),'Shipping'),
                (c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Sub Total')]
+    if Decimal(total.get('summary_discount', '0')):
+        summaries.insert(0, (c(9,2,'-'+total['summary_discount'],'amount',numeric=True), 'Discount'))
     if Decimal(total['tax_rate']):summaries.append((c(9,2,total['tax'],'amount',numeric=True,calculated='tax'),tax_label))
     count=max(len(bank),len(summaries)+1)
     bank_rows=[]

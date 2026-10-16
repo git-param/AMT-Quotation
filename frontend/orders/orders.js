@@ -58,6 +58,41 @@ async function api(url,options={}) {
   }finally{finish?.();}
 }
 const json = (method,data) => ({method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+let discountChoices=[];
+function discountControls(){
+  const amount=el('discountType').value==='amount',total=el('discountScope').value==='total';
+  el('discountValueLabel').textContent=amount?`Discount (${current.order.currency}${total?'':' per SKU line'})`:'Discount (%)';
+  el('discountValue').max=amount?'999999999.99':'100';
+  el('discountSkus').hidden=['all','total'].includes(el('discountScope').value);
+  el('discountHint').textContent=total?'Deducted once from the goods subtotal, before shipping and GST.':amount?'The amount is in order currency and applies once per selected SKU line, before shipping and GST.':'Percentage applies to each selected SKU line, before shipping and GST.';
+  for(const input of discountChoices)input.type=el('discountScope').value==='single'?'radio':'checkbox';
+}
+el('discountType').onchange=discountControls;
+el('discountScope').onchange=()=>{for(const input of discountChoices)input.checked=false;discountControls();};
+el('giveDiscount').onclick=()=>{
+  const discount=current.order.discount;
+  el('discountType').value=discount?.type||'percent';el('discountScope').value=discount?.scope||'all';
+  el('discountValue').value=discount?.value||'';el('discountShow').checked=discount?.show_on_pi??true;
+  el('discountSkuChoices').replaceChildren();discountChoices=[];
+  for(const line of current.lines){
+    const label=document.createElement('label'),input=document.createElement('input');input.name='discountSku';input.value=String(line.id);input.checked=Boolean(discount?.line_ids.includes(line.id));
+    const text=document.createElement('span');text.textContent=`${line.sku} (${line.currency} ${line.line_total})`;label.append(input,text);el('discountSkuChoices').append(label);discountChoices.push(input);
+  }
+  discountControls();el('discountError').hidden=true;el('removeDiscount').hidden=!discount;el('discountForm').hidden=false;el('giveDiscount').setAttribute('aria-expanded','true');el('discountValue').focus();
+};
+el('cancelDiscount').onclick=()=>{el('discountForm').hidden=true;el('giveDiscount').setAttribute('aria-expanded','false');};
+async function persistDiscount(remove=false){
+  el('applyDiscount').disabled=true;el('removeDiscount').disabled=true;
+  try{
+    const scope=el('discountScope').value;
+    const data={type:el('discountType').value,value:el('discountValue').value,scope,line_ids:['all','total'].includes(scope)?[]:discountChoices.filter(input=>input.checked).map(input=>Number(input.value)),show_on_pi:el('discountShow').checked};
+    await api(`/api/orders/${current.order.id}/discount`,remove?{method:'DELETE'}:json('PUT',data));
+    await showDetails(current.order.id);message(remove?'Discount removed.':'Discount saved. PI amounts will include this discount.');
+  }catch(error){el('discountError').textContent=error.message;el('discountError').hidden=false;}
+  finally{el('applyDiscount').disabled=false;el('removeDiscount').disabled=false;}
+}
+el('discountForm').onsubmit=event=>{event.preventDefault();persistDiscount();};
+el('removeDiscount').onclick=()=>persistDiscount(true);
 function action(label,callback,danger=false){
   const button=document.createElement('button');button.type='button';button.className='btn-sm'+(danger?' btn-del':'');
   const icons={Details:'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',Edit:'m16 3 5 5-12 12-6 1 1-6L16 3Z M13 6l5 5',Delete:'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7'};
@@ -261,6 +296,11 @@ async function showDetails(id) {
   if((clientScope&&String(data.order.client_id)!==clientScope)||(enquiryScope&&String(data.order.enquiry_id)!==enquiryScope))throw new Error('Order does not belong to the selected record.');
   current=data;commercialInputs=[];editingLine=null;el('editor').hidden=true;el('piError').hidden=true;el('lineForm').hidden=true;el('lineDrafts').hidden=true;el('copyPanel').hidden=true;lineDrafts.reset();
   const order=data.order;
+  el('discountForm').hidden=true;el('giveDiscount').hidden=!order.can_edit;el('giveDiscount').disabled=!data.lines.length&&!order.discount;el('giveDiscount').setAttribute('aria-expanded','false');
+  const discount=order.discount;
+  el('giveDiscount').textContent=discount?'Edit discount':'Give discount';
+  const target=discount?.scope==='total'?'order total':discount?.scope==='all'?'all SKUs':data.lines.filter(line=>discount?.line_ids.includes(line.id)).map(line=>line.sku).join(', ');
+  el('discountSummary').textContent=discount?`Discount: ${discount.type==='percent'?discount.value+'%':order.currency+' '+discount.value+(discount.scope==='total'?'':' per SKU line')} on ${target}. ${discount.show_on_pi?'Shown in PI.':'Hidden in PI; reduced amounts still apply.'}`:'';
   el('conversionHint').textContent='Choose the currency for this proforma invoice.';
   el('piForm').hidden=!order.can_edit||order.status==='cancelled';el('piCurrency').value='';
   el('bulkDescriptionField').hidden=data.lines.length<=4;
@@ -336,7 +376,7 @@ async function showDetails(id) {
     el('lineRows').append(row);
   });
   if(!data.lines.length){const row=document.createElement('tr');cell(row,'No active order items.').colSpan=7;el('lineRows').append(row);}
-  el('totals').replaceChildren();Object.entries(data.subtotals).forEach(([code,total])=>{const label=document.createElement('strong');label.textContent=`${code} subtotal: ${total}`;el('totals').append(label);});
+  el('totals').replaceChildren();Object.entries(data.subtotals).forEach(([code,total])=>{const label=document.createElement('strong');label.textContent=`${code} subtotal${order.discount?' before discount':''}: ${total}`;el('totals').append(label);});
   el('deliveryHistory').replaceChildren();data.delivery_history.forEach(item=>{const p=document.createElement('p');p.textContent=`${new Date(item.recorded_at).toLocaleString()} / version ${item.id}\nShipping: ${addressText(item.shipping_address)}\nBilling: ${addressText(item.billing_address)}`;el('deliveryHistory').append(p);});
   el('revisions').replaceChildren();data.revisions.forEach(item=>{const p=document.createElement('p');p.textContent=`${new Date(item.created_at).toLocaleString()} / ${item.action.replaceAll('_',' ')} / actor #${item.actor_user_id}`;el('revisions').append(p);});
   selectOrderTab('items');updatePiReadiness();

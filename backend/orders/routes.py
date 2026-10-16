@@ -378,6 +378,50 @@ def order_lines(order_id, line_id=None):
         connection.close()
 
 
+@bp.route('/api/orders/<int:order_id>/discount', methods=['PUT', 'DELETE'])
+@authenticated_required
+def save_discount(order_id):
+    from backend.orders.discounts import validate
+    from backend.orders.invoices import calculate
+    from decimal import Decimal
+    connection = get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        user = get_current_user()
+        order = read_order(connection, user, order_id)
+        if not order:
+            return jsonify(error='Order not found.'), 404
+        if not order['can_edit']:
+            return jsonify(error='Client access is read-only.'), 403
+        state = details(connection, order)
+        data = request.get_json(silent=True) if request.method == 'PUT' else None
+        if request.method == 'PUT' and data is None:
+            raise ValueError('Provide discount details.')
+        discount = validate(data, state['lines'])
+        state['order']['discount'] = discount
+        if discount:
+            rate = None
+            if any(line['currency'] != order['currency'] for line in state['lines']):
+                from backend.quotation_tool.shopify import get_inr_rate
+                quoted = get_inr_rate()
+                if quoted is None:
+                    raise ValueError('The quotation exchange rate is unavailable. Try again shortly.')
+                rate = format(Decimal(str(quoted)).quantize(Decimal('0.000001')), '.6f')
+            calculate(state, order['currency'], rate, Decimal(0))
+        connection.execute('UPDATE client_orders SET discount_json=?, updated_by=?, '
+            "updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+            (json.dumps(discount), user['id'], order_id))
+        record_revision(connection, order_id, user, 'edit')
+        result = details(connection, read_order(connection, user, order_id))
+        connection.commit()
+        return jsonify(result)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    finally:
+        connection.rollback()
+        connection.close()
+
+
 @bp.route('/api/orders/<int:order_id>/line-commercial-details', methods=['PUT'])
 @authenticated_required
 def save_commercial_details(order_id):

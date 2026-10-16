@@ -169,12 +169,26 @@
                             <p class="section-hint">Review quantities, agreed prices and the details printed on your PI.
                             </p>
                         </div>
-                        <div><button id="addLine" class="btn-sm btn-add" type="button">Add SKU lines</button></div>
+                        <div><button id="giveDiscount" class="btn-sm" type="button" aria-controls="discountForm" aria-expanded="false">Give discount</button><button id="addLine" class="btn-sm btn-add" type="button">Add SKU lines</button></div>
                     </div>
                     <div id="copyPanel" class="picker" hidden><select id="copySource"
                             aria-label="Enquiry item to copy"></select><button id="copySelected" class="btn-sm btn-add"
                             type="button">Copy selected item</button></div>
                     <div id="lineDrafts" hidden></div>
+                    <p id="discountSummary" role="status"></p>
+                    <form id="discountForm" class="discount-panel" hidden>
+                        <h3>Give discount</h3>
+                        <div class="fields">
+                            <div class="form-field"><label for="discountType">Discount type</label><select id="discountType"><option value="percent">Percentage (%)</option><option value="amount">Amount</option></select></div>
+                            <div class="form-field"><label id="discountValueLabel" for="discountValue">Discount (%)</label><input id="discountValue" type="number" min="0.01" max="100" step="0.01" required></div>
+                            <div class="form-field"><label for="discountScope">Apply discount to</label><select id="discountScope"><option value="all">All SKUs</option><option value="single">Single SKU</option><option value="multiple">Select multiple SKUs</option><option value="total">Order total</option></select></div>
+                        </div>
+                        <fieldset id="discountSkus" hidden><legend>Select SKU lines</legend><div id="discountSkuChoices"></div></fieldset>
+                        <p id="discountHint">Percentage applies to each selected SKU line, before shipping and GST.</p>
+                        <label class="same-party"><input id="discountShow" type="checkbox" checked> Show discount in the PI</label>
+                        <p id="discountError" class="error" role="alert" hidden></p>
+                        <div class="picker"><button id="applyDiscount" class="btn-sm btn-add" type="submit">Apply discount</button><button id="removeDiscount" class="btn-sm btn-del" type="button">Remove discount</button><button id="cancelDiscount" class="btn-sm" type="button">Cancel</button></div>
+                    </form>
                     <form id="lineForm" hidden>
                         <h3>Edit order line</h3>
                         <div class="fields">

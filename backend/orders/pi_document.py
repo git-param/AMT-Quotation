@@ -179,6 +179,16 @@ def edit(document, edits):
     state = {'order':{**doc['order'],'currency':doc['currency'],
                       'shipping_charges':format(Decimal(shipping_minor)/100,'.2f')},
              'lines':[{**line,'currency':doc['currency']} for line in lines]}
+    discount = state['order'].get('discount')
+    if discount and discount['type'] == 'amount':
+        discount = deepcopy(discount)
+        source = doc['source_state']['order']['currency']
+        if source != doc['currency']:
+            from backend.orders.invoices import money
+            rate = Decimal(doc['source_conversion']['usd_inr_rate'])
+            value = Decimal(discount['value'])
+            discount['value'] = format(money(value * rate if source == 'USD' else value / rate), '.2f')
+        state['order']['discount'] = discount
     doc['totals'] = calculate(state,doc['currency'],None,Decimal(doc['totals']['tax_rate']))
     return sync_locations(doc)
 

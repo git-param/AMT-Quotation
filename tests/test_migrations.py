@@ -134,7 +134,7 @@ class MigrationTests(unittest.TestCase):
                                "VALUES(1,'SKU','Part',1000,100,'USD',1,1)")
             connection.execute("UPDATE sqlite_sequence SET seq=100 WHERE name IN ('client_orders','order_invoices')")
             before = {table:connection.execute('SELECT * FROM '+table).fetchall() for table in tables}
-        self.assertEqual(migrate_database(self.path),[21])
+        self.assertEqual(migrate_database(self.path, MIGRATIONS[:21]),[21])
         with test_connection(self.path) as connection:
             for table, rows in before.items():
                 self.assertEqual(connection.execute('SELECT * FROM '+table).fetchall(),rows)

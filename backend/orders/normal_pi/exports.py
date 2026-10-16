@@ -279,9 +279,12 @@ def xlsx(doc):
         if path.endswith('.line_total'):
             prefix=path.rsplit('.',1)[0]
             formula=f'=ROUND({coordinates[prefix+".quantity"]}*{coordinates[prefix+".unit_price"]},2)'
+            line=doc['totals']['lines'][int(prefix.split('.')[1])]
+            if not line.get('net_unit_price'):
+                formula+='-'+line.get('discount_amount','0.00')
         elif path=='subtotal':
             refs=','.join(value for key,value in coordinates.items() if key.endswith('.line_total')) or '0'
-            formula=f'=ROUND(SUM({refs}),2)'
+            formula=f'=ROUND(SUM({refs}),2)-'+doc['totals'].get('summary_discount','0.00')
         elif path=='tax':formula=f'=ROUND(({coordinates["subtotal"]}+N({coordinates["shipping_charges"]}))*{doc["totals"]["tax_rate"]},2)'
         else:formula=f'=ROUND({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("tax","0")},2)'
         sheet.write_formula(row,col,formula,fmt,float(Decimal(cached)))

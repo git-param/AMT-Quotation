@@ -14,7 +14,29 @@ existing automatic unlink behavior. Saved custom parties reopen expanded.
 
 Delivery defaults, India/INR and GST behavior, SKU validation, server totals,
 PI references, permissions, snapshots and configured issuer/bank details use
-the existing implementation. No schema change is required.
+the existing implementation.
+
+## Order discounts
+
+After saving an order and adding its items, use **Give discount** in Items & PI.
+Percentage is the default; Amount uses the order currency. Choose All SKUs,
+Single SKU, Select multiple SKUs, or Order total. A fixed SKU discount is applied
+once per selected line; a total discount is deducted once from the goods subtotal.
+Discounts apply before shipping and GST. Values cannot exceed the selected amount
+or 100 percent. Edit discount reopens saved choices, and Remove discount restores
+the original prices.
+
+Show discount in the PI prints SKU discounts within the product description
+(including Annexure-1 for bulk PIs), or a total discount immediately above Shipping.
+When unchecked, discounts still apply and printed lines show reduced amounts
+without discount labels. Saved order prices are retained. Preview edits recalculate
+the discount; fixed amounts follow the PI exchange rate. Existing issued invoices
+remain immutable. Discount changes require order edit access and enter order history.
+
+Migration 22 adds the nullable `client_orders.discount_json` column. Startup applies
+pending migrations. `PUT /api/orders/<id>/discount` accepts `type` (`percent` or
+`amount`), `value`, `scope` (`all`, `single`, `multiple`, `total`), `line_ids`
+(empty for all/total), and boolean `show_on_pi`. DELETE removes the discount.
 
 Manual order items load the configured HSN before showing the editor using the
 read-only authenticated `/api/sku-defaults` endpoint. Configuration management

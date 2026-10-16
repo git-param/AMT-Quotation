@@ -209,6 +209,7 @@ def details(connection, order):
         'ORDER BY id DESC', (order['id'],),
     )]
     result = dict(order)
+    result['discount'] = json.loads(result.pop('discount_json', None) or 'null')
     result['shipping_charges'] = format(Decimal(result['shipping_minor']) / 100, '.2f')
     invoices = [dict(row) for row in connection.execute(
         'SELECT id, reference, currency, created_at, workbook_format, '

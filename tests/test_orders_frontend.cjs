@@ -58,6 +58,7 @@ function setup(search = '?client_id=9') {
       else if(url.startsWith('/api/orders?'))response=listing;
       else if(url==='/api/orders' && options.method==='POST')response=data;
       else if(url==='/api/orders/7')response=data;
+      else if(url==='/api/orders/7/discount'){data.order.discount=options.method==='DELETE'?null:JSON.parse(options.body);response=data;}
       else if(url==='/api/orders/7/line-commercial-details'){const body=JSON.parse(options.body);for(const item of body.lines)Object.assign(data.lines.find(line=>line.id===item.id),item);response=data;}
       else if(url.startsWith('/api/enquiries?'))response={enquiries:[enquiry],pages:1};
       else if(url==='/api/enquiries/1')response={enquiry};
@@ -329,4 +330,22 @@ test('bulk description is required only above four order products',async()=>{
   assert.equal(f.element('bulkDescriptionField').hidden,true);assert.equal(f.element('bulkDescription').required,false);
   f.data.lines.push({...line,id:5});await f.context.showDetails(7);
   assert.equal(f.element('bulkDescriptionField').hidden,false);assert.equal(f.element('bulkDescription').required,true);
+});
+
+test('discount form defaults to percentage and saves selected SKUs and PI visibility',async()=>{
+  const f=setup();await settle();
+  const line={id:1,sku:'PART',description:'Part',quantity:'1',unit_price:'10.00',currency:'USD',line_total:'10.00',hsn_code:'85371090',item_condition:'New',uom:'PCs'};
+  f.data.lines=[line,{...line,id:2,sku:'SECOND'}];await f.context.showDetails(7);
+  f.element('giveDiscount').onclick();
+  assert.equal(f.element('discountForm').hidden,false);assert.equal(f.element('discountType').value,'percent');
+  assert.equal(f.element('discountShow').checked,true);
+  f.element('discountScope').value='multiple';f.element('discountScope').onchange();
+  assert.equal(f.element('discountSkus').hidden,false);
+  f.element('discountSkuChoices').children.forEach(label=>{label.children[0].checked=true;});
+  f.element('discountValue').value='15';f.element('discountShow').checked=false;
+  await f.context.persistDiscount();
+  assert.deepEqual(JSON.parse(f.requests.find(request=>request.url.endsWith('/discount')).options.body),{type:'percent',value:'15',scope:'multiple',line_ids:[1,2],show_on_pi:false});
+  assert.match(f.element('discountSummary').textContent,/Hidden in PI/);
+  f.element('giveDiscount').onclick();assert.equal(f.element('discountValue').value,'15');
+  await f.context.persistDiscount(true);assert.equal(f.data.order.discount,null);
 });

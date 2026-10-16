@@ -26,8 +26,10 @@ def layout(doc):
         'description': doc.get('bulk_description', ''),
         'hsn_code': next(iter(codes)) if len(codes) == 1 else 'As per Annexure-1',
         'item_condition': next(iter(conditions)) if len(conditions) == 1 else 'As per Annexure-1',
-        'quantity': '1', 'uom': 'Lot', 'unit_price': doc['totals']['subtotal'],
-        'line_total': doc['totals']['subtotal']}]
+        'quantity': '1', 'uom': 'Lot', 'unit_price': doc['totals'].get('goods_total', doc['totals']['subtotal']),
+        'line_total': doc['totals'].get('goods_total', doc['totals']['subtotal'])}]
+    summary['totals']['lines'][0].pop('discount_label', None)
+    summary['totals']['lines'][0].pop('net_unit_price', None)
     model = normal_layout(summary)
     items = next(section for section in model['sections'] if section['name'] == 'items')
     for cell in items['rows'][0]:
@@ -45,7 +47,7 @@ def layout(doc):
                 cell.update(text='1 Lot')
                 cell.pop('uom', None)
             if cell['col'] in (8, 9):
-                cell.update(numeric=True, calculated='subtotal')
+                cell.update(numeric=True, calculated='goods_total' if 'goods_total' in doc['totals'] else 'subtotal')
     model['sections'].append(annexure_section(doc))
     model['annexure_widths'] = ANNEXURE_WIDTHS
     return model
@@ -79,9 +81,23 @@ def annexure_section(doc):
             cell(4, line['unit_price'], 'amount', field=prefix+'unit_price', value=line['unit_price'], type='number', accounting=True),
             cell(5, line['line_total'], 'amount', field=prefix+'line_total', value=line['line_total'], type='number',
                  accounting=True, calculated=prefix+'line_total')])
+        if line.get('discount_label'):
+            rows[-1][1]['discount_note'] = line['discount_label']
+            rows[-1][1]['text'] += '\n' + line['discount_label']
+            rows[-1][1]['display_text'] = rows[-1][1]['text']
+        if line.get('net_unit_price'):
+            rows[-1][4]['text'] = line['net_unit_price']
+            rows[-1][4]['display_text'] = line['net_unit_price']
+        if Decimal(line.get('discount_amount', '0')):
+            rows[-1][5]['readonly'] = True
     totals = doc['totals']
     # Two ruled blank rows precede the words/quantity/total row in the reference.
     rows.extend([blanks(), blanks()])
+    if Decimal(totals.get('summary_discount', '0')):
+        discount_row = blanks()
+        discount_row[4] = cell(4, 'Discount', 'bold')
+        discount_row[5] = cell(5, '-'+totals['summary_discount'], 'amount', accounting=True)
+        rows.insert(len(rows)-2, discount_row)
     # Retain these reserved rows even when charges apply; no extra borders.
     if Decimal(totals['shipping']):
         rows[-2][4] = cell(4, 'Shipping', 'bold')
@@ -106,5 +122,7 @@ def annexure_section(doc):
         total_cell.update(total_cell=True, rowspan=2)
     rows.extend([final, blanks()[:4]])
     heights = [22.5,36]+[21.95]*len(doc['totals']['lines'])+[14.1,14.1,40.9,14.1,14.1,14.1]
+    if Decimal(totals.get('summary_discount', '0')):
+        heights.insert(2+len(doc['totals']['lines']),14.1)
     return dict(name='annexure', annexure=True, widths=ANNEXURE_WIDTHS,
                 rows=rows, row_heights=heights, summary_row=summary_row)

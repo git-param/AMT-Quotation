@@ -304,3 +304,8 @@ body.embedded #orderForm .consignee-editor textarea {flex:1}
 .pi-paper .pi-grid-annexure td.pi-total-cell{border:2px solid #000;text-align:center;vertical-align:middle;font-weight:700}
 .pi-paper .pi-grid-annexure .pi-total-cell .pi-accounting{justify-content:center}
 .pi-paper .pi-grid-annexure .pi-nowrap .pi-cell-text{white-space:pre;font-size:10px}
+.discount-panel{margin:16px 0;padding:20px;border:1px solid #d6dce5;border-radius:12px;background:#f8fafc}
+.discount-panel .same-party{margin:12px 0;display:flex;align-items:center;gap:8px}
+#discountSkuChoices{display:flex;flex-wrap:wrap;gap:12px;padding:10px 0}
+#discountSkuChoices label{display:flex;align-items:center;gap:6px}
+#discountSummary{color:#166534;white-space:pre-line}
