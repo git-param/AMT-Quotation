@@ -169,7 +169,7 @@
                             <p class="section-hint">Review quantities, agreed prices and the details printed on your PI.
                             </p>
                         </div>
-                        <div><button id="giveDiscount" class="btn-sm" type="button" aria-controls="discountForm" aria-expanded="false">Give discount</button><button id="addLine" class="btn-sm btn-add" type="button">Add SKU lines</button></div>
+                        <div class="order-item-actions"><button id="giveDiscount" class="btn-sm" type="button" aria-controls="discountForm" aria-expanded="false">Give discount</button><button id="addLine" class="btn-sm btn-add" type="button">Add SKU lines</button></div>
                     </div>
                     <div id="copyPanel" class="picker" hidden><select id="copySource"
                             aria-label="Enquiry item to copy"></select><button id="copySelected" class="btn-sm btn-add"
@@ -177,42 +177,61 @@
                     <div id="lineDrafts" hidden></div>
                     <p id="discountSummary" role="status"></p>
                     <form id="discountForm" class="discount-panel" hidden>
-                        <h3>Give discount</h3>
-                        <div class="fields">
+                        <div class="discount-heading">
+                            <span class="discount-icon" aria-hidden="true">%</span>
+                            <div><span class="discount-eyebrow">Pricing adjustment</span><h3>Order discount</h3><p>Choose a discount and the items it applies to.</p></div>
+                        </div>
+                        <div class="fields discount-fields">
                             <div class="form-field"><label for="discountType">Discount type</label><select id="discountType"><option value="percent">Percentage (%)</option><option value="amount">Amount</option></select></div>
                             <div class="form-field"><label id="discountValueLabel" for="discountValue">Discount (%)</label><input id="discountValue" type="number" min="0.01" max="100" step="0.01" required></div>
                             <div class="form-field"><label for="discountScope">Apply discount to</label><select id="discountScope"><option value="all">All SKUs</option><option value="single">Single SKU</option><option value="multiple">Select multiple SKUs</option><option value="total">Order total</option></select></div>
                         </div>
-                        <fieldset id="discountSkus" hidden><legend>Select SKU lines</legend><div id="discountSkuChoices"></div></fieldset>
-                        <p id="discountHint">Percentage applies to each selected SKU line, before shipping and GST.</p>
-                        <label class="same-party"><input id="discountShow" type="checkbox" checked> Show discount in the PI</label>
+                        <p id="discountHint" class="discount-hint">Percentage applies to each selected SKU line, before shipping and GST.</p>
+                        <fieldset id="discountSkus" hidden><legend id="discountSkuLegend">Choose items</legend><p id="discountSelectionCount" class="discount-selection-count" role="status"></p><div id="discountSkuChoices"></div></fieldset>
+                        <label class="discount-visibility"><input id="discountShow" type="checkbox" checked><span><strong>Show discount in the PI</strong><small>Discounted prices apply even when discount details are hidden.</small></span></label>
                         <p id="discountError" class="error" role="alert" hidden></p>
-                        <div class="picker"><button id="applyDiscount" class="btn-sm btn-add" type="submit">Apply discount</button><button id="removeDiscount" class="btn-sm btn-del" type="button">Remove discount</button><button id="cancelDiscount" class="btn-sm" type="button">Cancel</button></div>
+                        <div class="discount-actions"><button id="removeDiscount" class="btn-sm btn-del" type="button">Remove discount</button><div><button id="cancelDiscount" class="btn-sm" type="button">Cancel</button><button id="applyDiscount" class="btn-sm btn-add" type="submit">Apply discount</button></div></div>
                     </form>
-                    <form id="lineForm" hidden>
-                        <h3>Edit order line</h3>
-                        <div class="fields">
+                    <form id="lineForm" class="line-editor" hidden>
+                        <div class="line-editor-heading">
+                            <span class="line-editor-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 5 5-12 12-6 1 1-6L16 3Z M13 6l5 5"/></svg></span>
+                            <div><span class="line-editor-eyebrow">Item details</span><h3>Edit order item</h3><p>Update this item's quantity, price and invoice details.</p></div>
+                        </div>
+                        <section class="line-editor-group" aria-labelledby="lineProductHeading">
+                        <h4 id="lineProductHeading">Product</h4>
+                        <div class="fields line-product-fields">
                             <div class="form-field"><label for="lineSku">SKU</label><input id="lineSku" type="text"
                                     required></div>
                             <div class="form-field"><label for="lineDescription">Description</label><input
                                     id="lineDescription" type="text" required></div>
+                        </div></section>
+                        <section class="line-editor-group" aria-labelledby="linePricingHeading">
+                        <h4 id="linePricingHeading">Quantity &amp; pricing</h4>
+                        <div class="fields line-pricing-fields">
                             <div class="form-field"><label for="lineQuantity">Quantity</label><input id="lineQuantity"
                                     type="number" min="1" step="1" max="999999" required></div>
                             <div class="form-field"><label for="linePrice">Unit price</label><input id="linePrice"
                                     type="number" min="0" step="0.01" max="999999999.99" required></div>
-                            <div class="form-field"><label for="lineHsn">HSN code</label><input
-                                    id="lineHsn" maxlength="20"></div>
-                            <div class="form-field"><label for="lineCondition">Item condition</label><input id="lineCondition" maxlength="100"></div>
                             <div class="form-field"><label for="lineUom">Unit of measure</label><select id="lineUom"><option>PCs</option><option>Lot</option><option>Kit</option><option>set</option></select></div>
                             <div class="form-field"><label for="lineCurrency">Currency</label><select id="lineCurrency">
                                     <option>USD</option>
                                     <option>INR</option>
                                 </select></div>
-                        </div><button class="btn-sm btn-add" type="submit">Save line</button><button id="cancelLine"
-                            class="btn-sm" type="button">Cancel</button>
+                        </div></section>
+                        <section class="line-editor-group" aria-labelledby="lineInvoiceHeading">
+                        <h4 id="lineInvoiceHeading">Invoice details</h4>
+                        <div class="fields line-invoice-fields">
+                            <div class="form-field"><label for="lineHsn">HSN code</label><input id="lineHsn" maxlength="20" placeholder="Enter HSN code"></div>
+                            <div class="form-field"><label for="lineCondition">Item condition</label><input id="lineCondition" maxlength="100" list="itemConditions" placeholder="Select or enter condition"></div>
+                        </div></section>
+                        <div class="line-editor-footer">
+                            <p><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z M8 12l3 3 5-6"/></svg>Current stock is checked before saving.</p>
+                            <div><button id="cancelLine" class="btn-sm" type="button">Cancel</button><button class="btn-sm btn-add" type="submit">Save changes</button></div>
+                        </div>
                     </form>
-                    <div class="source-table">
-                        <table class="tbl">
+                    <div class="source-table order-line-table">
+                        <table class="tbl order-lines-grid">
+                            <colgroup><col class="order-col-item"><col class="order-col-qty"><col class="order-col-price"><col class="order-col-amount"><col class="order-col-hsn"><col class="order-col-condition"><col class="order-col-actions"></colgroup>
                             <thead>
                                 <tr>
                                     <th>Item</th>
@@ -235,9 +254,10 @@
                         <option value="Used / Second Hand">
                         <option value="Refurbished">
                     </datalist>
-                    <div id="totals" class="line-totals"></div>
-                    <p class="history-note">Totals are calculated on the server, separately per currency. Changing deal
-                        currency does not convert saved prices.</p>
+                    <div class="order-items-footer">
+                        <p class="history-note">Subtotals are shown separately for each currency. Changing the deal currency does not convert saved item prices.</p>
+                        <div id="totals" class="line-totals"></div>
+                    </div>
                 </section>
                 <div id="legacyReview"></div>
                 <section class="order-items invoice-section">

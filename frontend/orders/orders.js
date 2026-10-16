@@ -58,7 +58,16 @@ async function api(url,options={}) {
   }finally{finish?.();}
 }
 const json = (method,data) => ({method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+function formattedAmount(value){
+  const [whole,decimal='']=String(value??'0').split('.');
+  return whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')+'.'+decimal.padEnd(2,'0');
+}
 let discountChoices=[];
+function updateDiscountSelection(){
+  const selected=discountChoices.filter(input=>input.checked).length;
+  el('discountSelectionCount').textContent=selected?`${selected} of ${discountChoices.length} items selected`:
+    el('discountScope').value==='single'?'Select one item to discount.':'Select the items you want to discount.';
+}
 function discountControls(){
   const amount=el('discountType').value==='amount',total=el('discountScope').value==='total';
   el('discountValueLabel').textContent=amount?`Discount (${current.order.currency}${total?'':' per SKU line'})`:'Discount (%)';
@@ -66,6 +75,8 @@ function discountControls(){
   el('discountSkus').hidden=['all','total'].includes(el('discountScope').value);
   el('discountHint').textContent=total?'Deducted once from the goods subtotal, before shipping and GST.':amount?'The amount is in order currency and applies once per selected SKU line, before shipping and GST.':'Percentage applies to each selected SKU line, before shipping and GST.';
   for(const input of discountChoices)input.type=el('discountScope').value==='single'?'radio':'checkbox';
+  el('discountSkuLegend').textContent=el('discountScope').value==='single'?'Choose one item':'Choose items';
+  updateDiscountSelection();
 }
 el('discountType').onchange=discountControls;
 el('discountScope').onchange=()=>{for(const input of discountChoices)input.checked=false;discountControls();};
@@ -76,7 +87,14 @@ el('giveDiscount').onclick=()=>{
   el('discountSkuChoices').replaceChildren();discountChoices=[];
   for(const line of current.lines){
     const label=document.createElement('label'),input=document.createElement('input');input.name='discountSku';input.value=String(line.id);input.checked=Boolean(discount?.line_ids.includes(line.id));
-    const text=document.createElement('span');text.textContent=`${line.sku} (${line.currency} ${line.line_total})`;label.append(input,text);el('discountSkuChoices').append(label);discountChoices.push(input);
+    label.className='discount-sku-card';input.onchange=updateDiscountSelection;
+    const details=document.createElement('span');details.className='discount-sku-details';
+    const sku=document.createElement('strong');sku.textContent=line.sku;
+    const description=document.createElement('small');description.textContent=line.description||'Order item';details.append(sku,description);
+    const amount=document.createElement('span');amount.className='discount-sku-amount';
+    const caption=document.createElement('small');caption.textContent='Line total';
+    const price=document.createElement('strong');price.textContent=`${line.currency} ${formattedAmount(line.line_total)}`;
+    amount.append(caption,price);label.append(input,details,amount);el('discountSkuChoices').append(label);discountChoices.push(input);
   }
   discountControls();el('discountError').hidden=true;el('removeDiscount').hidden=!discount;el('discountForm').hidden=false;el('giveDiscount').setAttribute('aria-expanded','true');el('discountValue').focus();
 };
@@ -352,10 +370,16 @@ async function showDetails(id) {
   el('lineRows').replaceChildren();
   data.lines.forEach(line=>{
     const row=document.createElement('tr');
-    const product=cell(row,'');product.setAttribute('data-label','Item');const sku=document.createElement('strong');sku.textContent=line.sku;
+    const product=cell(row,'');product.setAttribute('data-label','Item');const sku=document.createElement('strong');sku.className='order-item-sku';sku.textContent=line.sku;
     const description=document.createElement('span');description.className='item-description';description.textContent=line.description;product.append(sku,description);
     if(line.source_enquiry_line_id){const source=document.createElement('small');source.textContent=`Imported enquiry item #${line.source_enquiry_line_id}`;product.append(source);}
-    [line.quantity+' '+(line.uom||'PCs'),line.currency+' '+line.unit_price,line.currency+' '+line.line_total].forEach((value,index)=>cell(row,value).setAttribute('data-label',['Quantity','Unit price','Amount'][index]));
+    const quantity=cell(row,'');quantity.setAttribute('data-label','Quantity');
+    const badge=document.createElement('span');badge.className='order-item-quantity';badge.textContent=line.quantity+' '+(line.uom||'PCs');quantity.append(badge);
+    for(const [label,value]of [['Unit price',line.unit_price],['Amount',line.line_total]]){
+      const td=cell(row,'');td.setAttribute('data-label',label);td.className='order-item-money';
+      const code=document.createElement('span');code.className='order-item-currency';code.textContent=line.currency+' ';
+      const number=document.createElement('strong');number.textContent=formattedAmount(value);td.append(code,number);
+    }
     const inputs={id:line.id,originalHsn:line.hsn_code||'',originalCondition:line.item_condition||''};
     for(const [key,label,limit,slot]of [['hsn_code','HSN code',20,'hsn'],['item_condition','Item condition',100,'condition']]){
       const td=cell(row,'');td.setAttribute('data-label',label);
@@ -370,13 +394,18 @@ async function showDetails(id) {
       }else{td.textContent=line[key]||'Not set';}
     }
     if(order.can_edit)commercialInputs.push(inputs);
-    const actions=cell(row,'');actions.setAttribute('data-label','Actions');
+    const actions=cell(row,'');actions.className='order-item-row-actions';actions.setAttribute('data-label','Actions');
     if(order.can_edit)actions.append(action('Edit',async()=>{if(commercialDirty())throw new Error('Save item details before opening the full line editor.');const latest=(await api(`/api/orders/${id}/lines/${line.id}`)).line;if(!latest.is_active)throw new Error('This line was removed.');editingLine=line.id;for(const [key,value] of Object.entries({lineSku:latest.sku,lineDescription:latest.description,lineQuantity:latest.quantity,linePrice:latest.unit_price,lineCurrency:latest.currency,lineHsn:current.shared_hsn_code||latest.hsn_code||'',lineCondition:latest.item_condition||'',lineUom:latest.uom||'PCs'}))el(key).value=value;el('lineHsn').readOnly=Boolean(current.shared_hsn_code);el('lineForm').hidden=false;el('lineForm').scrollIntoView({behavior:'smooth'});}));
     if(order.can_delete)actions.append(action('Delete',async()=>{if(!window.confirm(`Delete SKU ${line.sku}? History will be retained.`))return;await api(`/api/orders/${id}/lines/${line.id}`,{method:'DELETE'});await showDetails(id);},true));
     el('lineRows').append(row);
   });
   if(!data.lines.length){const row=document.createElement('tr');cell(row,'No active order items.').colSpan=7;el('lineRows').append(row);}
-  el('totals').replaceChildren();Object.entries(data.subtotals).forEach(([code,total])=>{const label=document.createElement('strong');label.textContent=`${code} subtotal${order.discount?' before discount':''}: ${total}`;el('totals').append(label);});
+  el('totals').replaceChildren();Object.entries(data.subtotals).forEach(([code,total])=>{
+    const card=document.createElement('div');card.className='order-subtotal-card';
+    const label=document.createElement('span');label.textContent=order.discount?'Subtotal before discount':'Goods subtotal';
+    const amount=document.createElement('strong');amount.textContent=`${code} ${formattedAmount(total)}`;
+    card.append(label,amount);el('totals').append(card);
+  });
   el('deliveryHistory').replaceChildren();data.delivery_history.forEach(item=>{const p=document.createElement('p');p.textContent=`${new Date(item.recorded_at).toLocaleString()} / version ${item.id}\nShipping: ${addressText(item.shipping_address)}\nBilling: ${addressText(item.billing_address)}`;el('deliveryHistory').append(p);});
   el('revisions').replaceChildren();data.revisions.forEach(item=>{const p=document.createElement('p');p.textContent=`${new Date(item.created_at).toLocaleString()} / ${item.action.replaceAll('_',' ')} / actor #${item.actor_user_id}`;el('revisions').append(p);});
   selectOrderTab('items');updatePiReadiness();
