@@ -27,110 +27,191 @@
         ><a class="back-link" href="/logout">Sign Out</a>
       </nav>
     </header>
-    <main class="wrap">
-      <p id="message" role="status" aria-live="polite"></p>
+    <main class="wrap cl-page">
+      <p id="message" role="status" aria-live="polite" title="Click to dismiss"></p>
       <div id="content" hidden>
-        <div class="page-intro">
-          <div>
-            <span class="eyebrow">CLIENTS &amp; ORDERS</span>
-            <h1>Your clients. Every order. One workspace.</h1>
-            <p>Find a client to manage their profile, pending orders and generated invoices.</p>
-          </div>
-          <button class="btn-sm btn-add" id="addLead" type="button" aria-controls="leadEditor" aria-expanded="false">+ Add Client</button>
-        </div>
-        <section class="panel source-editor" id="leadEditor" hidden>
-          <div class="editor-heading">
+
+        <!-- ───────────── Directory ───────────── -->
+        <section id="directoryPanel" aria-labelledby="pageTitle">
+          <div class="cl-hero">
             <div>
-              <h2 id="formTitle">Add a client</h2>
-              <p>New clients are assigned to you automatically.</p>
+              <span class="cl-eyebrow">Clients &amp; Orders</span>
+              <h1 id="pageTitle">Your clients</h1>
+              <p>Open a client to manage their profile, pending orders and invoices.</p>
+            </div>
+            <button class="cl-btn cl-btn-primary" id="addLead" type="button" aria-controls="leadEditor" aria-expanded="false" aria-haspopup="dialog">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
+              New client
+            </button>
+          </div>
+
+          <div class="cl-card" id="directoryCard">
+            <form id="discoveryForm" class="cl-toolbar" role="search" autocomplete="off">
+              <div class="cl-search">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 21l-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"/></svg>
+                <label class="cl-sr" for="search">Search clients</label>
+                <input id="search" class="cl-input" type="search" placeholder="Search by company, contact, email or phone" maxlength="200" />
+              </div>
+
+              <div class="cl-seg-wrap">
+                <span class="cl-seg-label" id="availLabel">Status</span>
+                <div class="cl-seg" role="radiogroup" aria-labelledby="availLabel">
+                  <label><input type="radio" name="availability" value="all" checked /><span>All</span></label>
+                  <label><input type="radio" name="availability" value="active" /><span>Active</span></label>
+                  <label><input type="radio" name="availability" value="inactive" /><span>Inactive</span></label>
+                </div>
+              </div>
+
+              <div class="cl-seg-wrap">
+                <span class="cl-seg-label" id="ownerLabel">Owner</span>
+                <div class="cl-seg" role="radiogroup" aria-labelledby="ownerLabel">
+                  <label title="All accessible clients"><input type="radio" name="ownership" value="all" checked /><span>All</span></label>
+                  <label title="My clients"><input type="radio" name="ownership" value="own" /><span>Mine</span></label>
+                  <label title="Clients owned by other people"><input type="radio" name="ownership" value="others" /><span>Others</span></label>
+                </div>
+              </div>
+
+              <div class="cl-toolbar-end">
+                <button class="cl-btn" id="toggleFilters" type="button" aria-expanded="false" aria-controls="morePanel">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+                  Filters &amp; sort <span class="cl-count" id="moreCount" hidden></span>
+                </button>
+                <button class="cl-btn cl-btn-quiet" id="clearFilters" type="button" hidden>Clear all</button>
+                <button class="cl-btn cl-icon-btn" id="refresh" type="button" title="Refresh list" aria-label="Refresh client list">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
+                </button>
+              </div>
+
+              <div class="cl-more" id="morePanel" hidden>
+                <div class="cl-field"><label for="filterCreator">Creator / owner</label><select id="filterCreator" class="cl-input"><option value="">All accessible creators</option></select></div>
+                <div class="cl-field"><label for="filterAccess">Shared access</label><select id="filterAccess" class="cl-input"><option value="all">All access</option><option value="shared">Shared with me</option><option value="VIEW">VIEW shares</option><option value="EDIT">EDIT shares</option></select></div>
+                <div class="cl-field"><label for="filterSource">Enquiry source</label><select id="filterSource" class="cl-input"><option value="">All sources</option></select></div>
+                <div class="cl-field"><label for="sort">Sort by</label><select id="sort" class="cl-input"><option value="created">Created</option><option value="company">Company</option><option value="name">Client name</option></select></div>
+                <div class="cl-field"><label for="direction">Direction</label><select id="direction" class="cl-input"><option value="desc">Descending</option><option value="asc">Ascending</option></select></div>
+              </div>
+            </form>
+
+            <div id="filterChips" class="cl-chips" aria-label="Active filters"></div>
+
+            <div class="cl-list-meta"><p id="summary" aria-live="polite"></p></div>
+            <div class="cl-list-head" aria-hidden="true">
+              <span>Client</span><span>Contact</span><span>Owner</span><span>Orders</span><span>Status</span><span class="cl-head-actions">Actions</span>
+            </div>
+            <ul id="leads" class="cl-list" aria-busy="false"></ul>
+
+            <div class="pagination cl-pager">
+              <label class="cl-rows">Rows
+                <select id="pageSize" class="cl-input"><option>25</option><option>50</option><option>100</option></select>
+              </label>
+              <div class="cl-pager-nav">
+                <button class="cl-btn" id="previousPage" type="button">Previous</button>
+                <span id="pageInfo" aria-live="polite"></span>
+                <button class="cl-btn" id="nextPage" type="button">Next</button>
+              </div>
             </div>
           </div>
-          <form id="leadForm">
-            <div class="lead-fields">
-              <div class="form-field">
-                <label for="name">Client name</label
-                ><input id="name" name="name" maxlength="150" required />
-              </div>
+        </section>
 
-              <div class="form-field">
-                <label for="email">Email</label
-                ><input id="email" name="email" type="email" maxlength="254" />
-              </div>
-              <div class="form-field">
-                <label for="phone">Phone</label
-                ><input id="phone" name="phone" type="tel" maxlength="40" />
-              </div>
+        <!-- ───────────── Client profile ───────────── -->
+        <section id="clientDetail" hidden aria-labelledby="detailTitle">
+          <button class="cl-btn cl-btn-ghost" id="backDirectory" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+            All clients
+          </button>
+          <div class="cl-profile">
+            <div class="cl-avatar cl-avatar-lg" id="detailAvatar" aria-hidden="true"></div>
+            <div class="cl-profile-main">
+              <span class="cl-eyebrow">Client profile</span>
+              <h2 id="detailTitle" tabindex="-1">Client details</h2>
+              <p id="detailSubtitle"></p>
+              <div id="detailBadges" class="cl-badges"></div>
+            </div>
+            <div id="detailActions" class="cl-profile-actions"></div>
+          </div>
+          <div id="detailBody" class="cl-detail-grid"></div>
+        </section>
 
-              <div class="form-field">
-                <label for="emails"
-                  >Additional email addresses (one per line)</label
-                ><textarea id="emails" rows="3"></textarea>
+        <!-- ───────────── Create / edit drawer ───────────── -->
+        <dialog id="leadEditor" class="cl-drawer" aria-labelledby="formTitle">
+          <form id="leadForm" class="cl-drawer-form">
+            <header class="cl-drawer-head">
+              <div>
+                <h2 id="formTitle">Add a client</h2>
+                <p id="formHint">New clients are assigned to you automatically.</p>
               </div>
-              <div class="form-field">
-                <label for="phones"
-                  >Additional phone numbers (one per line)</label
-                ><textarea id="phones" rows="3"></textarea>
-              </div>
-              <div class="form-field"><label for="enquiry_source_id">Enquiry source</label><select id="enquiry_source_id"><option value="">Not specified</option></select></div>
-              <fieldset class="lead-notes">
+              <button class="cl-btn cl-icon-btn" id="closeEditor" type="button" title="Close" aria-label="Close client form">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg>
+              </button>
+            </header>
+
+            <div class="cl-drawer-body">
+              <p id="formError" class="cl-form-error" role="alert" hidden></p>
+
+              <fieldset class="cl-block">
+                <legend>Client</legend>
+                <div class="cl-field">
+                  <label for="name">Client name <span class="cl-req" aria-hidden="true">*</span></label>
+                  <input id="name" class="cl-input" name="name" maxlength="150" required autocomplete="off" placeholder="Company or person" />
+                </div>
+                <div class="cl-grid2">
+                  <div class="cl-field">
+                    <label for="email">Email</label>
+                    <input id="email" class="cl-input" name="email" type="email" maxlength="254" placeholder="name@company.com" />
+                  </div>
+                  <div class="cl-field">
+                    <label for="phone">Phone</label>
+                    <input id="phone" class="cl-input" name="phone" type="tel" maxlength="40" placeholder="+91 …" />
+                  </div>
+                </div>
+                <div class="cl-field">
+                  <label for="enquiry_source_id">Enquiry source</label>
+                  <select id="enquiry_source_id" class="cl-input"><option value="">Not specified</option></select>
+                </div>
+              </fieldset>
+
+              <details class="cl-disclosure" id="moreContact">
+                <summary><span>More ways to reach them</span><small>Extra emails and phone numbers</small></summary>
+                <div class="cl-disclosure-body">
+                  <div class="cl-field">
+                    <label for="emails">Additional email addresses</label>
+                    <textarea id="emails" class="cl-input" rows="3" placeholder="One address per line"></textarea>
+                  </div>
+                  <div class="cl-field">
+                    <label for="phones">Additional phone numbers</label>
+                    <textarea id="phones" class="cl-input" rows="3" placeholder="One number per line"></textarea>
+                  </div>
+                </div>
+              </details>
+
+              <fieldset class="cl-block">
                 <legend>Contact persons</legend>
-                <div id="contacts"></div>
-                <button class="btn-sm" id="addContact" type="button">
+                <p class="cl-block-hint" id="contactsHint">People you deal with directly. Add as many as you need.</p>
+                <div id="contacts" class="cl-contacts"></div>
+                <button class="cl-btn" id="addContact" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
                   Add contact person
                 </button>
               </fieldset>
             </div>
-            <button class="btn-sm btn-add" id="save" type="submit">
-              Create client
-            </button>
-            <button class="btn-sm" id="cancelEdit" type="button" hidden>
-              Cancel
-            </button>
+
+            <footer class="cl-drawer-foot">
+              <button class="cl-btn" id="cancelEdit" type="button">Cancel</button>
+              <button class="cl-btn cl-btn-primary" id="save" type="submit">Create client</button>
+            </footer>
           </form>
-        </section>
-        <section class="panel" id="directoryPanel">
-          <div class="source-toolbar">
-            <div>
-              <h2>Client directory</h2>
-              <p id="summary"></p>
+        </dialog>
+
+        <!-- ───────────── Confirmation dialog ───────────── -->
+        <dialog id="confirmDialog" class="cl-confirm" aria-labelledby="confirmTitle" aria-describedby="confirmBody">
+          <form method="dialog">
+            <h2 id="confirmTitle">Are you sure?</h2>
+            <p id="confirmBody"></p>
+            <div class="cl-confirm-actions">
+              <button class="cl-btn" value="cancel">Cancel</button>
+              <button class="cl-btn cl-btn-danger" id="confirmOk" value="confirm">Confirm</button>
             </div>
-            <button class="btn-sm" id="refresh">Refresh</button>
-          </div>
-          <form id="discoveryForm" class="discovery-controls">
-            <div class="form-field"><label for="search">Search clients</label><input id="search" placeholder="Company, contact, email or phone" maxlength="200"></div>
-            <div class="form-field"><label for="filterActive">Availability</label><select id="filterActive"><option value="all">All clients</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
-            <div class="form-field"><label for="filterOwnership">Ownership</label><select id="filterOwnership"><option value="all">All accessible</option><option value="own">My clients</option><option value="others">Other owners</option></select></div>
-            <details class="advanced-filters"><summary>More filters &amp; sorting</summary><div class="discovery-advanced">
-            <div class="form-field"><label for="filterCreator">Creator / owner</label><select id="filterCreator"><option value="">All accessible creators</option></select></div>
-            <div class="form-field"><label for="filterAccess">Shared access</label><select id="filterAccess"><option value="all">All access</option><option value="shared">Shared with me</option><option value="VIEW">VIEW shares</option><option value="EDIT">EDIT shares</option></select></div>
-            <div class="form-field"><label for="filterSource">Enquiry source</label><select id="filterSource"><option value="">All sources</option></select></div>
-            <div class="form-field"><label for="sort">Sort</label><select id="sort"><option value="created">Created</option><option value="company">Company</option><option value="name">Client name</option></select></div>
-            <div class="form-field"><label for="direction">Direction</label><select id="direction"><option value="desc">Descending</option><option value="asc">Ascending</option></select></div>
-            </div></details>
-            <button class="btn-sm btn-add" type="submit">Search / Apply</button><button class="btn-sm" id="clearFilters" type="button">Clear</button>
           </form>
-          <div class="source-table">
-            <table class="tbl">
-              <thead><tr><th>Client / company</th><th>Contact</th><th>Owner</th><th>Orders / pending</th><th>Availability</th><th>Access</th><th>Actions</th></tr></thead>
-              <tbody id="leads"></tbody>
-            </table>
-          </div>
-          <div class="pagination"><button class="btn-sm" id="previousPage" type="button">Previous</button><span id="pageInfo" aria-live="polite"></span><button class="btn-sm" id="nextPage" type="button">Next</button><label>Rows <select id="pageSize"><option>25</option><option>50</option><option>100</option></select></label></div>
-        </section>
-        <section id="clientDetail" class="panel" hidden aria-labelledby="detailTitle">
-          <button class="btn-sm" id="backDirectory" type="button">Back to client directory</button><div class="client-detail-header">
-            <div class="client-avatar" id="detailAvatar" aria-hidden="true"></div>
-            <div class="client-detail-heading">
-              <span class="eyebrow">CLIENT DETAILS</span>
-              <h2 id="detailTitle">Client details</h2>
-              <p id="detailSubtitle"></p>
-              <div id="detailBadges" class="client-detail-badges"></div>
-            </div>
-            <div id="detailActions" class="client-detail-actions"></div>
-            <button class="btn-sm" id="closeDetail" type="button">Close</button>
-          </div>
-          <div id="detailBody" class="detail-grid"></div>
-        </section>
+        </dialog>
       </div>
     </main>
     <script src="/static/orders/related.js"></script><script src="/static/client_leads/leads.js"></script>
