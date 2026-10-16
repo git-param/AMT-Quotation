@@ -97,6 +97,14 @@ completion status; pending includes orders not marked completed.
 
 ## Editable PI previews and native Excel/PDF generation
 
+The **Search PI** sidebar page (`/search-pi`) lists issued invoices in a paginated
+table with client and order links, generation dates, currency and saved Excel/PDF
+downloads. Search matches PI references, client names/companies, order references
+and PO references; currency can be filtered separately. `GET /api/pi-search`
+uses the same current client visibility as order downloads, including read-only
+shares and revocations, and excludes deleted orders. Reused PI numbers appear as
+separate issued records. Historical Excel-only invoices show PDF unavailable.
+
 The active UI uses **Preview PI** after selecting USD or INR and any required
 exchange rate. Users edit the PI date, PO/commercial fields, consignee/buyer/notify
 text, item descriptions/HSN/condition/quantity/rate/UOM, shipping, instructions and

@@ -568,3 +568,4 @@ def review_legacy_line(order_id, source_id):
 # Imported after blueprint and routes are defined to avoid a circular dependency.
 from backend.orders import invoices  # noqa: E402,F401
 from backend.orders import pi_preview  # noqa: E402,F401
+from backend.orders import pi_search  # noqa: E402,F401
