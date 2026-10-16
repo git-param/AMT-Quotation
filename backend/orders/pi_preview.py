@@ -56,8 +56,6 @@ def save_preview(order_id,preview_id=None):
             if doc['reference']!=order['pi_reference']:
                 if order['updated_at']!=doc['source_updated_at']:
                     return jsonify(error='The order changed after this preview was opened. Open a new PI preview.'),409
-                if connection.execute('SELECT 1 FROM order_invoices WHERE reference=?',(doc['reference'],)).fetchone():
-                    raise ValueError('This Proforma Invoice No. has already been issued. Enter a different number.')
                 connection.execute("UPDATE client_orders SET pi_reference=?,updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
                     (doc['reference'],user['id'],order_id))
                 doc['source_updated_at']=connection.execute('SELECT updated_at FROM client_orders WHERE id=?',(order_id,)).fetchone()[0]
@@ -154,8 +152,6 @@ def issue_preview(order_id):
             if order['updated_at']!=doc['source_updated_at']:
                 return jsonify(error='The order changed after this preview was opened. Open a new PI preview.'),409
             validate_ready(doc)
-            if connection.execute('SELECT 1 FROM order_invoices WHERE reference=?',(doc['reference'],)).fetchone():
-                return jsonify(error='This Proforma Invoice No. has already been issued. Use its existing downloads or enter a different number for a new order.'),409
             # Both files are issued together from exactly the approved document.
             workbook=pi_exports.xlsx(doc)
             pdf=pi_exports.pdf(doc)

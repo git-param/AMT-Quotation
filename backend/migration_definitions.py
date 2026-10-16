@@ -533,6 +533,46 @@ ORDER_DELETION_SCHEMA = (
     'CREATE INDEX idx_orders_not_deleted ON client_orders(client_id,deleted_at,id)',
 )
 
+# Replace the two parent tables transactionally, retaining IDs, children,
+# invoice files, indexes and AUTOINCREMENT high-water marks.
+REUSABLE_ORDER_REFERENCES_SCHEMA = (
+    'PRAGMA defer_foreign_keys = ON',
+    'CREATE TEMP TABLE reference_sequences AS SELECT name, seq FROM sqlite_sequence '
+    "WHERE name IN ('client_orders','order_invoices')",
+    ORDER_SCHEMA[1].replace('client_orders (', 'client_orders_new (', 1)
+        .replace('reference TEXT NOT NULL UNIQUE', 'reference TEXT NOT NULL')
+        .replace('enquiry_id INTEGER NOT NULL', 'enquiry_id INTEGER')
+        .replace('FOREIGN KEY (enquiry_id, client_id)',
+                 "destination TEXT NOT NULL DEFAULT '', "
+                 'shipping_minor INTEGER NOT NULL DEFAULT 0 '
+                 'CHECK (shipping_minor BETWEEN 0 AND 99999999999), '
+                 'deleted_at TEXT, deleted_by INTEGER REFERENCES users(id) ON DELETE RESTRICT, '
+                 'FOREIGN KEY (enquiry_id, client_id)'),
+    'INSERT INTO client_orders_new SELECT * FROM client_orders',
+    'DROP TABLE client_orders',
+    'ALTER TABLE client_orders_new RENAME TO client_orders',
+    *ORDER_SCHEMA[2:5],
+    ORDER_DELETION_SCHEMA[2],
+    'CREATE INDEX idx_orders_reference ON client_orders(reference)',
+    next(statement for statement in WORKSPACE_SCHEMA
+         if statement.startswith('CREATE TABLE order_invoices'))
+        .replace('order_invoices (', 'order_invoices_new (', 1)
+        .replace('reference TEXT NOT NULL UNIQUE', 'reference TEXT NOT NULL')
+        .replace("(strftime('%Y-%m-%dT%H:%M:%fZ','now'))\n    )",
+                 "(strftime('%Y-%m-%dT%H:%M:%fZ','now')), "
+                 "workbook_format TEXT NOT NULL DEFAULT 'xlsm' "
+                 "CHECK(workbook_format IN ('xlsm','xlsx')), pdf BLOB\n    )"),
+    'INSERT INTO order_invoices_new SELECT * FROM order_invoices',
+    'DROP TABLE order_invoices',
+    'ALTER TABLE order_invoices_new RENAME TO order_invoices',
+    'CREATE INDEX idx_order_invoices_order ON order_invoices(order_id, id)',
+    'CREATE INDEX idx_order_invoices_reference ON order_invoices(reference)',
+    'UPDATE sqlite_sequence SET seq = max(seq, COALESCE('
+    '(SELECT seq FROM reference_sequences WHERE name = sqlite_sequence.name), seq)) '
+    "WHERE name IN ('client_orders','order_invoices')",
+    'DROP TABLE reference_sequences',
+)
+
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
@@ -554,4 +594,5 @@ MIGRATIONS = (
     (18, 'native_pi_previews_exports', NATIVE_PI_SCHEMA),
     (19, 'shared_hsn_configuration', CONFIGURATION_SCHEMA),
     (20, 'order_soft_deletion', ORDER_DELETION_SCHEMA),
+    (21, 'reusable_order_and_pi_references', REUSABLE_ORDER_REFERENCES_SCHEMA),
 )

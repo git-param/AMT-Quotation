@@ -75,7 +75,7 @@ class NativePiTests(unittest.TestCase):
             self.assertEqual(len(self.client.get(f'/api/orders/{self.order_id}').json['invoices']),1)
             self.assertEqual(self.client.put(self.base+'/preview/'+preview['preview_id'],json={}).status_code,409)
 
-    def test_pi_number_is_entered_by_sales_and_duplicate_issuance_is_rejected(self):
+    def test_pi_number_is_required_and_reusable_with_fresh_previews(self):
         self.client.put(f'/api/orders/{self.order_id}',json={'pi_reference':''})
         missing=self.client.post(self.base+'/preview',json={'currency':'USD'})
         self.assertEqual(missing.status_code,400)
@@ -86,10 +86,39 @@ class NativePiTests(unittest.TestCase):
         issued=self.issue(first)
         self.assertEqual(issued.status_code,201,issued.json)
         self.assertEqual(issued.json['reference'],'SALES/2026/001')
-        # The stale preview must not produce a second invoice with the same number.
+        # Stale previews remain blocked; a fresh preview can reuse the number.
         self.assertEqual(self.issue(second).status_code,409)
+        repeated=self.issue(self.preview())
+        self.assertEqual(repeated.status_code,201,repeated.json)
+        self.assertNotEqual(repeated.json['id'],issued.json['id'])
+        self.assertEqual(repeated.json['reference'],issued.json['reference'])
+        self.assertEqual(self.issue(first).json['id'],issued.json['id'])
         with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
             self.assertIn('SALES/2026/001',book.read('xl/sharedStrings.xml').decode())
+
+    def test_other_order_can_edit_and_issue_an_already_used_pi_number(self):
+        first=self.issue(self.preview())
+        self.assertEqual(first.status_code,201,first.json)
+        other=self.direct(pi_reference='OTHER/001')
+        other_id=other['order']['id']
+        base=f'/api/orders/{other_id}/invoices'
+        preview=self.client.post(base+'/preview',json={'currency':'USD'}).json
+        saved=self.client.put(base+'/preview/'+preview['preview_id'],
+                              json={'order':{'pi_reference':'AMT/1234'}})
+        self.assertEqual(saved.status_code,200,saved.json)
+        issued=self.client.post(base+'/issue',json={'preview_id':preview['preview_id']})
+        self.assertEqual(issued.status_code,201,issued.json)
+        self.assertNotEqual(first.json['id'],issued.json['id'])
+        connection=database.get_db()
+        try:
+            with connection:
+                # Order identities and child records use IDs, even when labels match.
+                connection.execute('UPDATE client_orders SET reference=? WHERE id=?',
+                                   (other['order']['reference'],self.order_id))
+            self.assertEqual(connection.execute('PRAGMA foreign_key_check').fetchall(),[])
+        finally:connection.close()
+        for invoice in (first,issued):
+            self.assertEqual(self.client.get(invoice.json['pdf_url']).status_code,200)
 
     def test_print_preview_renders_unfinished_fields_without_saving_or_validation(self):
         preview=self.preview()

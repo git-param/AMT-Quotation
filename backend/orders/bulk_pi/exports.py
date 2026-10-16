@@ -18,7 +18,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, PageBreak, NextPageTemplate
 
-from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words
+from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words, WIDTHS
 
 
 def asset(doc,name):
@@ -49,7 +49,8 @@ def clip_workbook_header(raw):
                     fill.insert(1,ET.Element(art+'srcRect',b=str(round((1-visible/full_height)*100000))))
                     extent.set('cy',str(visible))
                     endpoint=anchor.find(drawing+'to')
-                    endpoint.find(drawing+'row').text='3'
+                    start_row=int(anchor.find(drawing+'from/'+drawing+'row').text)
+                    endpoint.find(drawing+'row').text=str(start_row+3)
                     endpoint.find(drawing+'rowOff').text=str(29*9525)
                 data=ET.tostring(root,encoding='utf-8',xml_declaration=True)
             target.writestr(entry,data)
@@ -323,13 +324,18 @@ def xlsx(doc):
             row_index+=1
         if part==0:image('address.png',row_index,0,950,92)
     sheet.print_area(0,0,row_index-1,10);sheet.set_footer('&CPage &P of &N')
-    annexure_subtotal = write_annexure(book, doc, coordinates)
+    annexure_start = row_index + 3
+    for gap_row in range(row_index, annexure_start):
+        sheet.set_row(gap_row, 15)
+    sheet.set_print_scale(70)
+    sheet.set_h_pagebreaks([annexure_start])
+    annexure_subtotal = write_annexure(book, doc, coordinates, sheet, annexure_start)
     for row,col,fmt,path,cached in formula_cells:
         if path.endswith('.line_total'):
             prefix=path.rsplit('.',1)[0]
             formula=f'=ROUND({coordinates[prefix+".quantity"]}*{coordinates[prefix+".unit_price"]},2)'
         elif path=='subtotal':
-            formula=f"='Annexure-1'!F{annexure_subtotal+1}"
+            formula='='+annexure_subtotal
         elif path=='tax':formula=f'=ROUND(({coordinates["subtotal"]}+N({coordinates["shipping_charges"]}))*{doc["totals"]["tax_rate"]},2)'
         else:formula=f'=ROUND({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("tax","0")},2)'
         sheet.write_formula(row,col,formula,fmt,float(Decimal(cached)))
@@ -339,18 +345,12 @@ def xlsx(doc):
 
 
 
-def write_annexure(book, doc, cover_coordinates):
-    """Reproduce the original six-column ruled grid and totals positions."""
+def write_annexure(book, doc, cover_coordinates, sheet, start_row):
+    """Append the six-column annexure below the cover on the same sheet."""
     import textwrap
-    sheet = book.add_worksheet('Annexure-1')
-    sheet.hide_gridlines(2)
-    sheet.set_paper(9)
-    sheet.set_portrait()
-    sheet.fit_to_pages(1, 0)
-    sheet.set_margins(.47, .47, .47, .47)
     model = annexure_section(doc)
-    for col, width in enumerate(ANNEXURE_WIDTHS):
-        sheet.set_column(col, col, width)
+    # Merge existing cover columns to retain both grids' column boundaries.
+    columns = [0, 1, 5, 6, 8, 9, 11]
     base = {'font_name':'Times New Roman','font_size':12,'border':1,
             'text_wrap':True,'valign':'vcenter','border_color':'#000000'}
     symbol = '\u20b9' if doc['currency']=='INR' else '$'
@@ -376,7 +376,7 @@ def write_annexure(book, doc, cover_coordinates):
                 if cell.get('accounting'):
                     options['num_format']='"'+symbol+'" #,##0.00'
             if cell.get('nowrap'):
-                options.update(text_wrap=True,font_size=10)
+                options.update(text_wrap=True,font_size=8)
             formats[key]=book.add_format(options)
         return formats[key]
     def image(name,row,col,width,height):
@@ -387,20 +387,20 @@ def write_annexure(book, doc, cover_coordinates):
         data.seek(0)
         sheet.insert_image(row,col,name,{'image_data':data,'x_scale':scale*dpi[0]/96,
             'y_scale':scale*dpi[1]/96,'object_position':1,'x_offset':6,'y_offset':4})
-    header_width=sum(width*7+5 for width in ANNEXURE_WIDTHS)
-    for row in range(4):
+    header_width=sum(width*7+5 for width in WIDTHS)
+    for row in range(start_row, start_row+4):
         sheet.set_row(row,24)
-        for col in range(6):
-            edge=book.add_format({'top':2 if row==0 else 0,'left':2 if col==0 else 0,
-                                 'right':2 if col==5 else 0})
+        for col in range(11):
+            edge=book.add_format({'top':2 if row==start_row else 0,'left':2 if col==0 else 0,
+                                 'right':2 if col==10 else 0})
             sheet.write_blank(row,col,None,edge)
-    image('header.png',0,0,header_width-12,125)
-    row=4
+    image('header.png',start_row,0,header_width-12,125)
+    row=start_row+4
     item_rows=[]
     summary=None
     for index,source in enumerate(model['rows']):
         if source[0]['span']==6:
-            sheet.merge_range(row,0,row,5,source[0]['text'],fmt(source[0]))
+            sheet.merge_range(row,0,row,10,source[0]['text'],fmt(source[0]))
             sheet.set_row(row,model['row_heights'][index]);row+=1;continue
         description=next((cell for cell in source if cell.get('field','') and cell['field'].endswith('.description')),None)
         if description:
@@ -410,24 +410,28 @@ def write_annexure(book, doc, cover_coordinates):
             chunks=[None]
         for chunk_index,chunk in enumerate(chunks):
             for cell in source:
-                col=cell['col'];value=cell['text'];style=fmt(cell)
-                if cell.get('rowspan',1)>1:
-                    sheet.merge_range(row,col,row+cell['rowspan']-1,col,'',style)
+                logical_col=cell['col'];col=columns[logical_col]
+                end_col=columns[logical_col+1]-1
+                value=cell['text'];style=fmt(cell)
+                if cell.get('rowspan',1)>1 or end_col>col:
+                    sheet.merge_range(row,col,row+cell.get('rowspan',1)-1,end_col,'',style)
                 if chunk_index:
-                    sheet.write_string(row,col,'\n'.join(chunk) if col==1 else '',style)
+                    sheet.write_string(row,col,'\n'.join(chunk) if logical_col==1 else '',style)
                     continue
-                if description and col==1:value='\n'.join(chunk)
+                if description and logical_col==1:value='\n'.join(chunk)
                 if cell.get('field') and cell['field'].endswith('.quantity'):
                     sheet.write_number(row,col,float(Decimal(value)),style)
                 elif cell.get('accounting'):
                     if cell.get('field') and cell['field'].endswith('.unit_price'):
                         sheet.write_number(row,col,float(Decimal(value)),style)
                     elif cell.get('field') and cell['field'].endswith('.line_total'):
-                        sheet.write_formula(row,col,f'=ROUND(D{row+1}*E{row+1},2)',style,float(Decimal(value)))
+                        quantity=xl_rowcol_to_cell(row,columns[3])
+                        price=xl_rowcol_to_cell(row,columns[4])
+                        sheet.write_formula(row,col,f'=ROUND({quantity}*{price},2)',style,float(Decimal(value)))
                         item_rows.append(row)
                     elif cell.get('calculated')=='subtotal':
-                        summary=row
-                        refs=','.join('F'+str(r+1) for r in item_rows)
+                        summary=xl_rowcol_to_cell(row,col)
+                        refs=','.join(xl_rowcol_to_cell(r,columns[5]) for r in item_rows)
                         sheet.write_formula(row,col,'=ROUND(SUM('+refs+'),2)',style,float(Decimal(value)))
                     elif cell.get('calculated')=='grand_total':
                         sheet.write_formula(row,col,"='Proforma Invoice'!"+cover_coordinates['grand_total'],style,float(Decimal(value)))
@@ -443,10 +447,9 @@ def write_annexure(book, doc, cover_coordinates):
             row+=1
     # One undivided payment/signature box, exactly beneath the final blank row.
     footer=book.add_format({'border':2})
-    sheet.merge_range(row,0,row+4,5,'',footer)
+    sheet.merge_range(row,0,row+4,10,'',footer)
     for offset in range(5):sheet.set_row(row+offset,18)
     image('payment_options.png',row,0,header_width*.5,110)
-    image('signature.png',row,3,header_width*.47-10,110)
-    sheet.repeat_rows(0,5)
-    sheet.print_area(0,0,row+4,5)
+    image('signature.png',row,6,header_width*.47-10,110)
+    sheet.print_area(0,0,row+4,10)
     return summary

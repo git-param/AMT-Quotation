@@ -35,15 +35,16 @@ Company identity, bank details, signatures and payment configuration remain the
 existing issuer snapshot; users do not re-enter bank details.
 
 The PDF starts Annexure-1 on a new page and repeats the annexure headings for
-long lists. The XLSX has `Proforma Invoice` and `Annexure-1` worksheets, printable
-independently. Cover subtotal/rate formulas reference the annexure subtotal;
+long lists. The XLSX places the cover and Annexure-1 on the same `Proforma Invoice`
+worksheet, separated by three blank rows and a print page break. Cover subtotal/rate formulas reference the annexure subtotal;
 annexure line and total formulas have cached server amounts. No macros or
 external reference workbooks are required at runtime.
 
 Opening and issuance require a nonblank bulk description. In-progress print preview
 retains the existing ability to print unsaved/unfinished text. Preview edits
 apply to the invoice snapshot, not source order products. Permissions, stale
-snapshot checks, unique references and idempotent issuance use the same APIs.
+snapshot checks and idempotent issuance use the same APIs. PI and order
+references may be reused; records and downloads remain identified by their IDs.
 
 ## Verification
 

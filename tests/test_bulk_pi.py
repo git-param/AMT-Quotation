@@ -66,7 +66,7 @@ class BulkPiTests(unittest.TestCase):
         self.assertTrue(annexure['annexure'])
         self.assertEqual(len(annexure['rows']), 13)
 
-    def test_bulk_usd_and_inr_export_two_sheets_and_linked_amounts(self):
+    def test_bulk_usd_and_inr_export_one_sheet_with_annexure_and_linked_amounts(self):
         self.items(9)
         for currency in ('USD', 'INR'):
             with self.subTest(currency=currency):
@@ -76,16 +76,24 @@ class BulkPiTests(unittest.TestCase):
                 self.assertEqual(len(re.findall(rb'/Type /Page\b', raw)), 2)
                 with ZipFile(BytesIO(pi_exports.xlsx(doc))) as book:
                     names = [x.get('name') for x in ET.fromstring(book.read('xl/workbook.xml')).findall('.//{*}sheet')]
-                    self.assertEqual(names, ['Proforma Invoice', 'Annexure-1'])
+                    self.assertEqual(names, ['Proforma Invoice'])
                     strings = book.read('xl/sharedStrings.xml').decode()
                     self.assertIn(doc['bulk_description'], strings)
                     self.assertIn('Annexure product 8', strings)
                     self.assertIn('Fixture bank', strings)
                     summary = ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
                     formulas = [f.text for f in summary.findall('.//{*}f')]
-                    self.assertTrue(any("'Annexure-1'!F" in f for f in formulas))
-                    annexure = ET.fromstring(book.read('xl/worksheets/sheet2.xml'))
-                    self.assertTrue(any('ROUND(D' in f.text and '*E' in f.text for f in annexure.findall('.//{*}f')))
+                    annexure = summary
+                    start = int(annexure.find('.//{*}rowBreaks/{*}brk').get('id'))
+                    self.assertTrue(any(f == f'J{start+18}' for f in formulas))
+                    self.assertTrue(any('ROUND(G' in f.text and '*I' in f.text for f in annexure.findall('.//{*}f')))
+                    strings_xml = ET.fromstring(book.read('xl/sharedStrings.xml'))
+                    labels = [''.join(si.itertext()) for si in strings_xml]
+                    title = next(c for c in annexure.findall('.//{*}c')
+                                 if c.get('t')=='s' and labels[int(c.find('{*}v').text)]=='Annexure-1')
+                    self.assertEqual(title.get('r'), f'A{start+5}')
+                    for gap in range(start-2,start+1):
+                        self.assertFalse(annexure.findall(f'.//{{*}}row[@r="{gap}"]/{{*}}c'))
                     self.assertTrue(any(f.text.startswith('ROUND(SUM(') for f in annexure.findall('.//{*}f')))
                     cached = [cell.find('{*}v').text for cell in annexure.findall('.//{*}c') if cell.find('{*}f') is not None]
                     self.assertIn(float(doc['totals']['grand_total']), [float(v) for v in cached])
@@ -140,10 +148,10 @@ class BulkPiTests(unittest.TestCase):
         with ZipFile(BytesIO(pi_exports.xlsx(doc))) as book:
             strings = book.read('xl/sharedStrings.xml').decode()
             self.assertIn('Annexure product 49', strings)
-            self.assertIn('_xlnm.Print_Titles', book.read('xl/workbook.xml').decode())
-            sheet = ET.fromstring(book.read('xl/worksheets/sheet2.xml'))
+            sheet = ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
+            self.assertIsNotNone(sheet.find('.//{*}rowBreaks/{*}brk'))
             formulas = [f.text for f in sheet.findall('.//{*}f')]
-            self.assertEqual(sum(f.startswith('ROUND(D') for f in formulas), 50)
+            self.assertEqual(sum(f.startswith('ROUND(G') for f in formulas), 50)
 
     def test_legacy_snapshots_still_use_original_renderer(self):
         preview = self.client.post(self.base+'/preview', json={'currency':'USD'}).json
@@ -183,16 +191,18 @@ class BulkPiTests(unittest.TestCase):
         with ZipFile(BytesIO(pi_exports.xlsx(doc))) as book:
             strings = book.read('xl/sharedStrings.xml').decode()
             self.assertNotIn('Annexure-1 |', strings)
-            sheet = ET.fromstring(book.read('xl/worksheets/sheet2.xml'))
-            self.assertTrue(all(int(col.get('max'))<=6 for col in sheet.findall('.//{*}col')))
-            self.assertEqual(sheet.find('.//{*}row[@r="18"]').get('ht'), '40.9')
-            self.assertTrue(any('A22:F26'==merge.get('ref') for merge in sheet.findall('.//{*}mergeCell')))
+            sheet = ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
+            start = int(sheet.find('.//{*}rowBreaks/{*}brk').get('id'))
+            self.assertTrue(all(int(col.get('max'))<=11 for col in sheet.findall('.//{*}col')))
+            self.assertEqual(sheet.find(f'.//{{*}}row[@r="{start+18}"]').get('ht'), '40.9')
+            self.assertTrue(any(f'A{start+22}:K{start+26}'==merge.get('ref') for merge in sheet.findall('.//{*}mergeCell')))
             merges = {merge.get('ref') for merge in sheet.findall('.//{*}mergeCell')}
-            self.assertTrue({'E20:E21','F20:F21'} <= merges)
+            self.assertTrue({f'I{start+20}:I{start+21}',f'J{start+20}:K{start+21}'} <= merges)
             styles = ET.fromstring(book.read('xl/styles.xml'))
             formats = styles.find('{*}cellXfs')
             borders = styles.find('{*}borders')
-            for address in ('A18','B18','C18','D18','E18','F18','E20','F20'):
+            for column, offset in (('A',18),('B',18),('F',18),('G',18),('I',18),('J',18),('I',20),('J',20)):
+                address = f'{column}{start+offset}'
                 cell = sheet.find(f'.//{{*}}c[@r="{address}"]')
                 style = formats[int(cell.get('s'))]
                 alignment = style.find('{*}alignment')
