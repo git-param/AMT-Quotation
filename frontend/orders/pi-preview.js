@@ -22,7 +22,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         for(const item of calculated){
           const value=item.path.split('.').reduce((target,key)=>target[key],result.totals);
           if(item.input)item.input.value=value;
-          else item.node.textContent=(item.amount?(state.document.currency==='INR'?'\u20b9 ':'$ '):'')+value;
+          else item.node.textContent=item.accounting?Number(value).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):(item.amount?(state.document.currency==='INR'?'\u20b9 ':'$ '):'')+value;
         }
         status.textContent='Totals updated in '+state.document.currency+'. Use Update preview to save your changes.';
       }catch(error){if(version===calculationVersion)status.textContent=error.message;}
@@ -151,7 +151,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     }
     for(const format of ['xlsx','pdf'])button('Generate '+format.toUpperCase(),async()=>{
       if(!issued){await save(true);issued=await api(state.base.replace('/preview','/issue'),json('POST',{preview_id:state.preview_id}));await onIssued(issued);render();}
-      const link=node('a');link.href=issued[format+'_url'];link.download='';host.append(link);link.click();link.remove();
+      const link=node('a');link.href=issued[format+'_url'];link.download=issued[format+'_filename']||issued.reference.replace(/[<>:"/\\|?*\u0000-\u001f]/g,'-')+'.'+format;host.append(link);link.click();link.remove();
     },true);
     status=node('p',issued?'PI '+issued.reference+' issued. Both downloads use this saved invoice.':'Edit fields directly below, then review the PDF print preview. Changes apply to this PI only.','pi-preview-status');
     status.role='status';status.tabIndex=-1;host.append(status);
@@ -182,13 +182,15 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       }
       const table = node("table", undefined, "pi-company-grid pi-grid-" + section.name + (section.name === "bank" ? " pi-preview-totals" : ""));
       const columns = node("colgroup");
-      const width = state.layout.widths.reduce((a, b) => a + b, 0);
-      for (const size of state.layout.widths) { const col = node("col"); col.style.width = (100 * size / width) + "%"; columns.append(col); }
+      const widths=section.widths||state.layout.widths;
+      const width = widths.reduce((a, b) => a + b, 0);
+      for (const size of widths) { const col = node("col"); col.style.width = (100 * size / width) + "%"; columns.append(col); }
       table.append(columns);
       const body = node("tbody");
-      for (const row of section.rows) {
+      for (const [rowIndex,row] of section.rows.entries()) {
         if (row.every(cell => cell.preview_hidden)) continue;
         const tr = node("tr");
+        if(section.row_heights)tr.style.height=section.row_heights[rowIndex]*1.1+'px';
         for (const cell of row) {
           if (section.name === "parties" && cell.placeholder) continue;
           const td = node("td", undefined, "pi-cell-" + (cell.style || "normal")); td.colSpan = cell.span;
@@ -210,7 +212,16 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
             else if (cell.multiline) input.rows = cell.field.startsWith("delivery.") ? 5 : 2;
             if (cell.field === 'terms') input.rows = Math.max(5, String(cell.value).split('\n').length);
             if (cell.uom_field) {field(td, "UOM", cell.uom, cell.uom_field);td.classList.add("pi-quantity-cell");}
-          } else {const content=node("div", (cell.style.includes("amount") ? symbol + " " : "") + cell.text, "pi-cell-text");td.append(content);if(cell.calculated)calculated.push({path:cell.calculated,node:content,amount:cell.style.includes('amount')});}
+          } else {
+            const content=node('div',undefined,'pi-cell-text');let value=content;
+            if(cell.accounting){
+              content.classList.add('pi-accounting');
+              value=node('span',Number(cell.text).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+              content.append(node('span',symbol),value);
+            }else content.textContent=(cell.style.includes('amount')?symbol+' ':'')+cell.text;
+            td.append(content);
+            if(cell.calculated)calculated.push({path:cell.calculated,node:value,amount:!cell.accounting&&cell.style.includes('amount'),accounting:cell.accounting});
+          }
           tr.append(td);
         }
         body.append(tr);

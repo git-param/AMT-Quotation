@@ -294,3 +294,10 @@ body.embedded #orderForm .consignee-editor textarea {flex:1}
 .pi-annexure-page{margin-top:28px;padding-top:18px;border-top:12px solid #edf1f6}
 .pi-grid-annexure tr:nth-child(2){border-bottom:1.5px solid #000}
 .pi-grid-annexure_totals{font-size:12px}
+/* Annexure-1 follows the reference's six columns and fully ruled totals grid. */
+.pi-paper .pi-grid-annexure{font-family:"Times New Roman",Times,serif;font-size:12px;line-height:1.15;border:2px solid #000}
+.pi-paper .pi-grid-annexure td{border:1px solid #000;padding:2px 3px;vertical-align:middle}
+.pi-paper .pi-grid-annexure .pi-cell-annexure_title{font:700 8px Arial,sans-serif;text-align:center;vertical-align:bottom;border-bottom:2px solid #000}
+.pi-paper .pi-grid-annexure .pi-cell-head{border-top:2px solid #000;border-bottom:2px solid #000}
+.pi-paper .pi-grid-annexure .pi-cell-bold_center{font-weight:700;text-align:center}
+.pi-paper .pi-grid-annexure .pi-accounting{display:flex;justify-content:space-between;gap:4px}

@@ -18,7 +18,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, PageBreak, NextPageTemplate
 
-from backend.orders.bulk_pi.layout import layout, terms, quantity_summary
+from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words
 
 
 def asset(doc,name):
@@ -100,27 +100,46 @@ def pdf(doc):
         PageTemplate(id='Annexure',frames=frame(height-margin-header_height-2,'annexure'),onPage=first_page)])
     story=[]
     symbol='₹' if doc['currency']=='INR' else '$'
-    def paragraph(cell):
+    annexure_scale=usable/(sum(w*7+5 for w in ANNEXURE_WIDTHS)*.75)
+    annex_regular,annex_bold=regular,bold
+    for font_path,bold_path in [(Path('C:/Windows/Fonts/times.ttf'),Path('C:/Windows/Fonts/timesbd.ttf'))]:
+        if font_path.is_file() and bold_path.is_file():
+            if 'PIAnnexure' not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont('PIAnnexure',str(font_path)))
+                pdfmetrics.registerFont(TTFont('PIAnnexureBold',str(bold_path)))
+            annex_regular,annex_bold='PIAnnexure','PIAnnexureBold'
+    def paragraph(cell,available_width):
         kind=cell['style'];text=cell.get('display_text',cell['text'])
-        is_bold=kind in ('bold','head','bank_title','warning','final_term','title','bold_amount')
+        is_bold=kind in ('bold','head','bank_title','warning','final_term','title','bold_amount','bold_center','annexure_title')
         size=14 if kind=='title' else 7 if kind in ('terms','final_term') else 8
-        alignment=2 if 'amount' in kind else 1 if kind in ('title','head','center') else 0
-        style=ParagraphStyle('cell',fontName=bold if is_bold else regular,fontSize=size,
+        alignment=2 if 'amount' in kind else 1 if kind in ('title','head','center','bold_center','annexure_title') else 0
+        face=bold if is_bold else regular
+        if cell.get('annexure'):
+            face=annex_bold if is_bold else annex_regular
+            size=(8 if kind=='annexure_title' else 12)*annexure_scale
+            if kind=='annexure_title':face='Helvetica-Bold'
+        style=ParagraphStyle('cell',fontName=face,fontSize=size,
             leading=size+2,alignment=alignment,textColor=colors.red if kind=='warning' else colors.black)
+        if cell.get('accounting'):
+            left=Paragraph(escape(symbol),ParagraphStyle('currency',parent=style,alignment=0))
+            right=Paragraph(format(Decimal(text),',.2f'),ParagraphStyle('money',parent=style,alignment=2))
+            money=Table([[left,right]],colWidths=[10,available_width-10])
+            money.setStyle(TableStyle([('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
+            return money
         if 'uom' in cell:text+=' '+cell['uom']
         if 'amount' in kind and not cell.get('free'):text=symbol+' '+text
         content=escape(text).replace('\n','<br/>')
         if kind=='bank_title':content='<u>'+content+'</u>'
         return Paragraph(content,style)
-    def physical_rows(rows):
+    def physical_rows(rows,section_columns):
         # ReportLab cannot split a very tall cell across merged columns. Split
         # its paragraph first, keeping the original text, style and column grid.
         result=[]
         for row in rows:
             chunks=[]
             for cell in row:
-                w=sum(columns[cell['col']:cell['col']+cell['span']])-6
-                pending=[paragraph(cell)];parts=[]
+                w=sum(section_columns[cell['col']:cell['col']+cell['span']])-6
+                pending=[paragraph(cell,w)];parts=[]
                 while pending:
                     part=pending.pop(0)
                     if part.wrap(w,10000)[1]>160:
@@ -134,9 +153,11 @@ def pdf(doc):
         return result
     def append_sections(sections):
         for section in sections:
+            section_weights=section.get('widths',weights)
+            section_columns=[usable*w/sum(section_weights) for w in section_weights]
             rows=[];commands=[];heights=[]
-            for index,source in enumerate(physical_rows(section['rows'])):
-                row=['']*11;min_height=12
+            for index,source in enumerate(physical_rows(section['rows'],section_columns)):
+                row=['']*len(section_columns);min_height=12
                 for cell in source:
                     col,span=cell['col'],cell['span'];kind=cell['style']
                     content=cell['_paragraph'];row[col]=content
@@ -148,16 +169,18 @@ def pdf(doc):
                     if kind=='final_term':commands.append(('BACKGROUND',(col,index),(col+span-1,index),colors.HexColor('#FFF2CC')))
                     if cell.get('line_top'):commands.append(('LINEABOVE',(col,index),(col+span-1,index),.8,colors.black))
                     if cell.get('line_bottom'):commands.append(('LINEBELOW',(col,index),(col+span-1,index),.8,colors.black))
-                    _,h=content.wrap(sum(columns[col:col+span])-6,10000)
+                    _,h=content.wrap(sum(section_columns[col:col+span])-6,10000)
                     min_height=max(min_height,h+3)
                     if cell.get('header_metadata'):min_height=max(min_height,h+3)
                 if section['name']=='parties' and index==1:min_height=max(min_height,30)
                 if section['name']=='parties' and index==3:min_height=max(min_height,30)
                 if section['name']=='items' and index>0:min_height=max(min_height,19)
                 if section['name']=='annexure':
-                    commands.append(('LINEBELOW',(0,index),(-1,index),.45,colors.black))
+                    reference_height=22.5 if index==0 else 36 if index==1 else 40.9 if any(c.get('calculated')=='annexure_amount_in_words' for c in source) else 21.95 if any((c.get('field') or '').startswith('lines.') for c in source) else 14.1
+                    min_height=max(min_height,reference_height*annexure_scale)
+                    commands.extend([('LINEBELOW',(0,index),(-1,index),.8,colors.black),('VALIGN',(0,index),(-1,index),'MIDDLE')])
                 rows.append(row);heights.append(min_height)
-            table=LongTable(rows,colWidths=columns,rowHeights=heights,
+            table=LongTable(rows,colWidths=section_columns,rowHeights=heights,
                 repeatRows=2 if section['name']=='annexure' else 1 if section['name']=='items' else 0,splitInRow=1,hAlign='LEFT')
             table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),
                 ('LEFTPADDING',(0,0),(-1,-1),3),('RIGHTPADDING',(0,0),(-1,-1),3),
@@ -289,13 +312,13 @@ def xlsx(doc):
             row_index+=1
         if part==0:image('address.png',row_index,0,950,92)
     sheet.print_area(0,0,row_index-1,10);sheet.set_footer('&CPage &P of &N')
-    annexure_subtotal = write_annexure(book, doc)
+    annexure_subtotal = write_annexure(book, doc, coordinates)
     for row,col,fmt,path,cached in formula_cells:
         if path.endswith('.line_total'):
             prefix=path.rsplit('.',1)[0]
             formula=f'=ROUND({coordinates[prefix+".quantity"]}*{coordinates[prefix+".unit_price"]},2)'
         elif path=='subtotal':
-            formula=f"='Annexure-1'!G{annexure_subtotal+1}"
+            formula=f"='Annexure-1'!F{annexure_subtotal+1}"
         elif path=='tax':formula=f'=ROUND(({coordinates["subtotal"]}+N({coordinates["shipping_charges"]}))*{doc["totals"]["tax_rate"]},2)'
         else:formula=f'=ROUND({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("tax","0")},2)'
         sheet.write_formula(row,col,formula,fmt,float(Decimal(cached)))
@@ -303,8 +326,10 @@ def xlsx(doc):
     book.close();return clip_workbook_header(output.getvalue())
 
 
-def write_annexure(book, doc):
-    """An independently printable list; formulas link back to the summary PI."""
+
+
+def write_annexure(book, doc, cover_coordinates):
+    """Reproduce the original six-column ruled grid and totals positions."""
     import textwrap
     sheet = book.add_worksheet('Annexure-1')
     sheet.hide_gridlines(2)
@@ -312,88 +337,97 @@ def write_annexure(book, doc):
     sheet.set_portrait()
     sheet.fit_to_pages(1, 0)
     sheet.set_margins(.47, .47, .47, .47)
-    widths = [7, 49, 13, 18, 13, 20, 23]
-    for col, width in enumerate(widths):
+    model = annexure_section(doc)
+    for col, width in enumerate(ANNEXURE_WIDTHS):
         sheet.set_column(col, col, width)
-    base = {'font_name': 'Cambria', 'font_size': 11, 'border': 1,
-            'text_wrap': True, 'valign': 'top'}
-    normal = book.add_format(base)
-    heading = book.add_format({**base, 'bold': True, 'align': 'center'})
-    symbol = '\u20b9' if doc['currency'] == 'INR' else '$'
-    money = book.add_format({**base, 'num_format': '"'+symbol+'" #,##0.00', 'align': 'right'})
-    final = book.add_format({**base, 'bold': True, 'num_format': '"'+symbol+'" #,##0.00'})
-
-    def image(name, row, col, width, height):
-        data = asset(doc, name)
+    base = {'font_name':'Times New Roman','font_size':12,'border':1,
+            'text_wrap':True,'valign':'vcenter','border_color':'#000000'}
+    symbol = '\u20b9' if doc['currency']=='INR' else '$'
+    formats = {}
+    def fmt(cell):
+        kind = cell['style']
+        key = (kind,cell['col'],cell.get('accounting',False))
+        if key not in formats:
+            options = {**base,'left':2 if cell['col']==0 else 1,
+                       'right':2 if cell['col']==5 or cell['span']==6 else 1}
+            if kind in ('bold','bold_center','bold_amount','head','annexure_title'):
+                options['bold']=True
+            if kind in ('head','center','bold_center','annexure_title'):
+                options['align']='center'
+            if kind=='annexure_title':
+                options.update(font_name='Arial',font_size=8,valign='bottom',bottom=2)
+            if kind=='head':
+                options.update(top=2,bottom=2)
+            if cell.get('accounting'):
+                options.update(num_format='"'+symbol+'"* #,##0.00',align='right')
+            formats[key]=book.add_format(options)
+        return formats[key]
+    def image(name,row,col,width,height):
+        data=asset(doc,name)
         with PILImage.open(data) as im:
-            scale = width/im.width if name == 'header.png' else min(width/im.width, height/im.height)
-            dpi = im.info.get('dpi', (96, 96))
+            scale=width/im.width if name=='header.png' else min(width/im.width,height/im.height)
+            dpi=im.info.get('dpi',(96,96))
         data.seek(0)
-        sheet.insert_image(row, col, name, {'image_data': data,
-            'x_scale': scale*dpi[0]/96, 'y_scale': scale*dpi[1]/96, 'object_position': 1})
-
+        sheet.insert_image(row,col,name,{'image_data':data,'x_scale':scale*dpi[0]/96,
+            'y_scale':scale*dpi[1]/96,'object_position':1,'x_offset':6,'y_offset':4})
+    header_width=sum(width*7+5 for width in ANNEXURE_WIDTHS)
     for row in range(4):
-        sheet.set_row(row, 24)
-    image('header.png', 0, 0, 950, 125)
-    sheet.merge_range(4, 0, 4, 6, 'Annexure-1 | '+doc['reference'], heading)
-    sheet.set_row(4, 26)
-    for col, title in enumerate(['Sr No.', 'Item Description', 'HSN Code', 'Condition',
-                                  'Qty / UOM', 'Unit Price ('+doc['currency']+')',
-                                  'Total Price ('+doc['currency']+')']):
-        sheet.write_string(5, col, title, heading)
-    sheet.set_row(5, 32)
-    sheet.repeat_rows(0, 5)
-    row = 6
-    amount_cells = []
-    for index, line in enumerate(doc['totals']['lines']):
-        chunks = [part for raw in line['description'].splitlines()
-                  for part in (textwrap.wrap(raw, 45) or [''])] or ['']
-        start = row
-        for offset in range(0, len(chunks), 15):
-            part = chunks[offset:offset+15]
-            for col in range(7):
-                sheet.write_blank(row, col, None, normal)
-            sheet.write_string(row, 1, '\n'.join(part), normal)
-            sheet.set_row(row, max(26, len(part)*14))
-            row += 1
-        qty = book.add_format({**base, 'num_format': '0 "'+line['uom']+'"'})
-        sheet.write_number(start, 0, index+1, normal)
-        sheet.write_string(start, 2, line['hsn_code'], normal)
-        sheet.write_string(start, 3, line['item_condition'], normal)
-        sheet.write_number(start, 4, float(Decimal(line['quantity'])), qty)
-        sheet.write_number(start, 5, float(Decimal(line['unit_price'])), money)
-        sheet.write_formula(start, 6, f'=ROUND(E{start+1}*F{start+1},2)', money,
-                            float(Decimal(line['line_total'])))
-        amount_cells.append('G'+str(start+1))
-    subtotal = row
-    sheet.merge_range(row, 0, row, 4, 'Total quantity: '+quantity_summary(doc), normal)
-    sheet.write_string(row, 5, 'Subtotal', heading)
-    sheet.write_formula(row, 6, '=ROUND(SUM('+','.join(amount_cells)+'),2)', money,
-                        float(Decimal(doc['totals']['subtotal'])))
-    row += 1
-    shipping = row
-    sheet.merge_range(row, 0, row, 4, '', normal)
-    sheet.write_string(row, 5, 'Shipping', heading)
-    sheet.write_number(row, 6, float(Decimal(doc['totals']['shipping'])), money)
-    row += 1
-    tax_cell = '0'
-    if Decimal(doc['totals']['tax_rate']):
-        tax_cell = 'G'+str(row+1)
-        sheet.merge_range(row, 0, row, 4, '', normal)
-        sheet.write_string(row, 5, f'GST {Decimal(doc["totals"]["tax_rate"])*100:g}%', heading)
-        sheet.write_formula(row, 6, f'=ROUND((G{subtotal+1}+G{shipping+1})*{doc["totals"]["tax_rate"]},2)',
-                            money, float(Decimal(doc['totals']['tax'])))
-        row += 1
-    sheet.merge_range(row, 0, row, 4, 'Amount in words: '+doc['totals']['amount_in_words'], heading)
-    sheet.write_string(row, 5, 'Grand Total', heading)
-    sheet.write_formula(row, 6, f'=ROUND(G{subtotal+1}+G{shipping+1}+{tax_cell},2)', final,
-                        float(Decimal(doc['totals']['grand_total'])))
-    sheet.set_row(row, 42)
-    row += 1
-    image('payment_options.png', row, 0, 440, 90)
-    image('signature.png', row, 4, 440, 90)
-    for offset in range(5):
-        sheet.set_row(row+offset, 20)
-    sheet.print_area(0, 0, row+4, 6)
-    sheet.set_footer('&CAnnexure-1 | Page &P of &N')
-    return subtotal
+        sheet.set_row(row,24)
+        for col in range(6):
+            edge=book.add_format({'top':2 if row==0 else 0,'left':2 if col==0 else 0,
+                                 'right':2 if col==5 else 0})
+            sheet.write_blank(row,col,None,edge)
+    image('header.png',0,0,header_width-12,125)
+    row=4
+    item_rows=[]
+    summary=None
+    for index,source in enumerate(model['rows']):
+        if source[0]['span']==6:
+            sheet.merge_range(row,0,row,5,source[0]['text'],fmt(source[0]))
+            sheet.set_row(row,model['row_heights'][index]);row+=1;continue
+        description=next((cell for cell in source if cell.get('field','') and cell['field'].endswith('.description')),None)
+        if description:
+            wrapped=[part for raw in description['text'].splitlines() for part in (textwrap.wrap(raw,53) or [''])] or ['']
+            chunks=[wrapped[i:i+20] for i in range(0,len(wrapped),20)]
+        else:
+            chunks=[None]
+        for chunk_index,chunk in enumerate(chunks):
+            for cell in source:
+                col=cell['col'];value=cell['text'];style=fmt(cell)
+                if chunk_index:
+                    sheet.write_string(row,col,'\n'.join(chunk) if col==1 else '',style)
+                    continue
+                if description and col==1:value='\n'.join(chunk)
+                if cell.get('field') and cell['field'].endswith('.quantity'):
+                    sheet.write_number(row,col,float(Decimal(value)),style)
+                elif cell.get('accounting'):
+                    if cell.get('field') and cell['field'].endswith('.unit_price'):
+                        sheet.write_number(row,col,float(Decimal(value)),style)
+                    elif cell.get('field') and cell['field'].endswith('.line_total'):
+                        sheet.write_formula(row,col,f'=ROUND(D{row+1}*E{row+1},2)',style,float(Decimal(value)))
+                        item_rows.append(row)
+                    elif cell.get('calculated')=='subtotal':
+                        summary=row
+                        refs=','.join('F'+str(r+1) for r in item_rows)
+                        sheet.write_formula(row,col,'=ROUND(SUM('+refs+'),2)',style,float(Decimal(value)))
+                    elif cell.get('calculated')=='grand_total':
+                        sheet.write_formula(row,col,"='Proforma Invoice'!"+cover_coordinates['grand_total'],style,float(Decimal(value)))
+                    else:
+                        path=cell.get('calculated')
+                        if path in ('shipping','tax'):
+                            key='shipping_charges' if path=='shipping' else 'tax'
+                            sheet.write_formula(row,col,"='Proforma Invoice'!"+cover_coordinates[key],style,float(Decimal(value)))
+                        else:sheet.write_number(row,col,float(Decimal(value)),style)
+                else:
+                    sheet.write_string(row,col,value,style)
+            sheet.set_row(row,max(model['row_heights'][index],len(chunk)*14 if chunk else 0))
+            row+=1
+    # One undivided payment/signature box, exactly beneath the final blank row.
+    footer=book.add_format({'border':2})
+    sheet.merge_range(row,0,row+4,5,'',footer)
+    for offset in range(5):sheet.set_row(row+offset,18)
+    image('payment_options.png',row,0,header_width*.5,110)
+    image('signature.png',row,3,header_width*.47-10,110)
+    sheet.repeat_rows(0,5)
+    sheet.print_area(0,0,row+4,5)
+    return summary

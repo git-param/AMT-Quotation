@@ -12,6 +12,7 @@ from backend.orders.service import details,read_order,record_revision
 from backend.orders.pi_document import prepare,edit,validate_ready,print_document,recalculate
 from backend.orders import pi_exports
 from backend.orders.pi_layout import layout
+from backend.orders.filenames import invoice_filename
 
 
 def authorized(connection,order_id):
@@ -90,8 +91,9 @@ def preview_pdf(order_id,preview_id):
         if error:return error
         row=preview_row(connection,order_id,preview_id,user)
         if not row:return jsonify(error='PI preview not found.'),404
-        return send_file(BytesIO(pi_exports.pdf(json.loads(row['document_json']))),mimetype='application/pdf',
-                         download_name='pi-preview.pdf',max_age=0)
+        doc=json.loads(row['document_json'])
+        return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',
+                         download_name=invoice_filename(doc['reference'],'pdf'),max_age=0)
     finally:connection.close()
 
 
@@ -107,7 +109,7 @@ def print_preview(order_id,preview_id):
         data=request.get_json(silent=True)
         if not isinstance(data,dict):return jsonify(error='Provide PI preview fields.'),400
         doc=print_document(json.loads(row['document_json']),data)
-        return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',download_name='pi-preview.pdf',max_age=0)
+        return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',download_name=invoice_filename(doc['reference'],'pdf'),max_age=0)
     finally:connection.close()
 
 
@@ -122,7 +124,12 @@ def calculate_preview(order_id,preview_id):
         if not row:return jsonify(error='PI preview not found.'),404
         if row['issued_invoice_id']:return jsonify(error='This PI has already been issued.'),409
         doc=recalculate(json.loads(row['document_json']),request.get_json(silent=True))
-        return jsonify(totals=doc['totals'])
+        totals=doc['totals']
+        if doc.get('pi_format')=='bulk':
+            from backend.orders.bulk_pi.layout import annexure_words, quantity_summary
+            totals={**totals,'annexure_amount_in_words':annexure_words(doc),
+                    'annexure_quantity':quantity_summary(doc)}
+        return jsonify(totals=totals)
     except ValueError as error:return jsonify(error=str(error)),400
     finally:connection.close()
 
@@ -164,6 +171,7 @@ def issue_preview(order_id):
                  'reference':doc['reference'],'currency':doc['currency'],'preview_id':row['id'],'formats':['xlsx','pdf']})))
         connection.commit()
         base=f'/api/orders/{order_id}/invoices/{invoice_id}/download'
-        return jsonify(id=invoice_id,reference=doc['reference'],xlsx_url=base+'?format=xlsx',pdf_url=base+'?format=pdf'),201
+        return jsonify(id=invoice_id,reference=doc['reference'],xlsx_url=base+'?format=xlsx',pdf_url=base+'?format=pdf',
+                       xlsx_filename=invoice_filename(doc['reference'],'xlsx'),pdf_filename=invoice_filename(doc['reference'],'pdf')),201
     except ValueError as error:return jsonify(error=str(error)),400
     finally:connection.rollback();connection.close()

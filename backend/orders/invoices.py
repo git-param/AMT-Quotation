@@ -434,6 +434,7 @@ def generate_invoice(order_id):
 @bp.route('/api/orders/<int:order_id>/invoices/<int:invoice_id>/download')
 @authenticated_required
 def download_invoice(order_id, invoice_id):
+    from backend.orders.filenames import invoice_filename
     connection = get_db()
     try:
         if not read_order(connection, get_current_user(), order_id):
@@ -447,11 +448,11 @@ def download_invoice(order_id, invoice_id):
             if invoice['pdf'] is None:
                 return jsonify(error='This historical PI does not have a saved PDF.'),404
             return send_file(BytesIO(invoice['pdf']),as_attachment=True,
-                download_name=invoice['reference'].replace('/','-')+'.pdf',mimetype='application/pdf')
+                download_name=invoice_filename(invoice['reference'],'pdf'),mimetype='application/pdf')
         if output_format!=invoice['workbook_format']:
             return jsonify(error='The requested PI format is not available.'),400
         return send_file(BytesIO(invoice['workbook']), as_attachment=True,
-                         download_name=invoice['reference'].replace('/', '-') + '.'+output_format,
+                         download_name=invoice_filename(invoice['reference'],output_format),
                          mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if output_format=='xlsx'
                          else 'application/vnd.ms-excel.sheet.macroEnabled.12')
     finally:

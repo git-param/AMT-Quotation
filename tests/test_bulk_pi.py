@@ -62,7 +62,7 @@ class BulkPiTests(unittest.TestCase):
         self.assertEqual(fields, ['bulk_description'])
         annexure = next(section for section in preview['layout']['sections'] if section['name']=='annexure')
         self.assertTrue(annexure['annexure'])
-        self.assertEqual(len(annexure['rows']), 7)
+        self.assertEqual(len(annexure['rows']), 13)
 
     def test_bulk_usd_and_inr_export_two_sheets_and_linked_amounts(self):
         self.items(9)
@@ -81,9 +81,9 @@ class BulkPiTests(unittest.TestCase):
                     self.assertIn('Fixture bank', strings)
                     summary = ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
                     formulas = [f.text for f in summary.findall('.//{*}f')]
-                    self.assertTrue(any("'Annexure-1'!G" in f for f in formulas))
+                    self.assertTrue(any("'Annexure-1'!F" in f for f in formulas))
                     annexure = ET.fromstring(book.read('xl/worksheets/sheet2.xml'))
-                    self.assertTrue(any('ROUND(E' in f.text and '*F' in f.text for f in annexure.findall('.//{*}f')))
+                    self.assertTrue(any('ROUND(D' in f.text and '*E' in f.text for f in annexure.findall('.//{*}f')))
                     self.assertTrue(any(f.text.startswith('ROUND(SUM(') for f in annexure.findall('.//{*}f')))
                     cached = [cell.find('{*}v').text for cell in annexure.findall('.//{*}c') if cell.find('{*}f') is not None]
                     self.assertIn(float(doc['totals']['grand_total']), [float(v) for v in cached])
@@ -141,7 +141,7 @@ class BulkPiTests(unittest.TestCase):
             self.assertIn('_xlnm.Print_Titles', book.read('xl/workbook.xml').decode())
             sheet = ET.fromstring(book.read('xl/worksheets/sheet2.xml'))
             formulas = [f.text for f in sheet.findall('.//{*}f')]
-            self.assertEqual(sum(f.startswith('ROUND(E') for f in formulas), 50)
+            self.assertEqual(sum(f.startswith('ROUND(D') for f in formulas), 50)
 
     def test_legacy_snapshots_still_use_original_renderer(self):
         preview = self.client.post(self.base+'/preview', json={'currency':'USD'}).json
@@ -151,6 +151,62 @@ class BulkPiTests(unittest.TestCase):
         doc['totals']['lines'] *= 5
         self.assertEqual(layout(doc), normal_layout(doc))
         self.assertEqual(pi_exports.renderer(doc), normal_exports)
+
+    def test_reference_grid_matches_six_columns_blanks_and_totals_locations(self):
+        self.items(9)
+        self.client.put(f'/api/orders/{self.order_id}', json={'shipping_charges':'0'})
+        preview = self.preview()
+        doc = preview['document']
+        section = next(section for section in preview['layout']['sections'] if section['name']=='annexure')
+        self.assertEqual(section['widths'], [8.5703125,53,14,14.140625,15,16.140625])
+        self.assertEqual(section['rows'][0][0]['text'], 'Annexure-1')
+        self.assertEqual(section['rows'][0][0]['span'], 6)
+        self.assertEqual([cell['text'] for cell in section['rows'][1]],
+                         ['Sr No.','Item Description','Condition','Qty','Unit Price\n(USD)','Total Price\n(USD)'])
+        self.assertTrue(all(len(row)==6 for row in section['rows'][1:]))
+        self.assertTrue(all(not cell['text'] for row in section['rows'][11:13] for cell in row))
+        summary = section['rows'][13]
+        self.assertEqual(summary[0]['text'], 'Amount\nin\nWord:')
+        self.assertTrue(summary[1]['text'].startswith('USD '))
+        self.assertEqual([cell['text'] for cell in summary[2:5]], ['Total','47PCs','Total (USD)'])
+        self.assertEqual(summary[5]['text'], doc['totals']['subtotal'])
+        self.assertEqual(section['rows'][15][4]['text'], 'Final Price')
+        self.assertEqual(section['rows'][15][5]['text'], doc['totals']['grand_total'])
+        self.assertTrue(all(not cell['text'] for cell in section['rows'][14]))
+        self.assertTrue(all(not cell['text'] for cell in section['rows'][16]))
+        with ZipFile(BytesIO(pi_exports.xlsx(doc))) as book:
+            strings = book.read('xl/sharedStrings.xml').decode()
+            self.assertNotIn('Annexure-1 |', strings)
+            sheet = ET.fromstring(book.read('xl/worksheets/sheet2.xml'))
+            self.assertTrue(all(int(col.get('max'))<=6 for col in sheet.findall('.//{*}col')))
+            self.assertEqual(sheet.find('.//{*}row[@r="18"]').get('ht'), '40.9')
+            self.assertTrue(any('A22:F26'==merge.get('ref') for merge in sheet.findall('.//{*}mergeCell')))
+
+    def test_bulk_calculation_refreshes_annexure_words_and_total_quantity(self):
+        self.items(5)
+        preview = self.preview()
+        lines = [{'id':line['id'],'quantity':'2','unit_price':'100'} for line in preview['document']['totals']['lines']]
+        result = self.client.post(self.base+'/preview/'+preview['preview_id']+'/calculate', json={'lines':lines})
+        self.assertEqual(result.status_code,200,result.json)
+        self.assertEqual(result.json['totals']['annexure_quantity'],'10PCs')
+        self.assertEqual(result.json['totals']['annexure_amount_in_words'],'USD One thousand dollars Only')
+
+    def test_downloads_and_print_use_the_exact_portable_pi_reference_filename(self):
+        self.items(5)
+        self.client.put(f'/api/orders/{self.order_id}',json={'pi_reference':'AMT 12938721'})
+        preview=self.preview()
+        for response in (self.client.get(preview['pdf_url']),
+                         self.client.post(self.base+'/preview/'+preview['preview_id']+'/print',json={})):
+            self.assertIn('filename="AMT 12938721.pdf"',response.headers['Content-Disposition'])
+        issued=self.client.post(self.base+'/issue',json={'preview_id':preview['preview_id']})
+        self.assertEqual(issued.status_code,201,issued.json)
+        for extension in ('xlsx','pdf'):
+            self.assertEqual(issued.json[extension+'_filename'],'AMT 12938721.'+extension)
+            response=self.client.get(issued.json[extension+'_url'])
+            self.assertIn('filename="AMT 12938721.'+extension+'"',response.headers['Content-Disposition'])
+        from backend.orders.filenames import invoice_filename
+        self.assertEqual(invoice_filename('AMT/12938721','pdf'),'AMT-12938721.pdf')
+
 
 
 if __name__ == '__main__':
