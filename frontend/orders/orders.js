@@ -108,13 +108,13 @@ function updatePiReadiness(){
   if(!current)return;
   const missing=current.lines.filter(line=>!line.hsn_code||!line.item_condition);
   const dirty=commercialDirty(),empty=!current.lines.length,legacy=Boolean(current.legacy_lines_requiring_review?.length);
-  el('generatePi').disabled=dirty||empty||legacy||savingCommercial;
+  el('generatePi').disabled=dirty||savingCommercial;
   el('saveItemDetails').hidden=!current.order.can_edit;el('saveItemDetails').disabled=!dirty||savingCommercial;
   el('completeItemDetails').hidden=!current.order.can_edit||!missing.length;
   el('piReadiness').className='pi-readiness'+(dirty||missing.length||empty||legacy?' needs-attention':' is-ready');
   el('readinessTitle').textContent=dirty?'Save your item changes':empty?'Add items to this order':missing.length?`${missing.length} item${missing.length===1?' needs':'s need'} PI details`:legacy?'Review historical quantities':'Item details are complete';
-  el('readinessHint').textContent=dirty?'Save item details below before generating your PI.':empty?'Add SKU lines, quantities and agreed prices to get started.':missing.length?`Enter the missing HSN code and item condition in the highlighted fields (${missing.slice(0,3).map(line=>line.sku).join(', ')}${missing.length>3?' and '+(missing.length-3)+' more':''}).`:legacy?'Complete the outstanding historical quantity review below.':'Choose the invoice currency below. Amounts use your saved order prices and the quotation tool exchange rate.';
-  el('itemDetailsHint').textContent=dirty?'You have unsaved item details.':current.shared_hsn_code?'HSN code is shared across all SKUs and managed by TLs/admins in Configuration. Review each item condition before saving.':'HSN code and item condition are required for PI generation. TLs/admins can set a shared HSN code in Configuration.';
+  el('readinessHint').textContent=dirty?'Save item details below before generating your PI.':empty?'You can add SKU lines, quantities and agreed prices, or generate an invoice using the PI and purchase order numbers.':missing.length?`Optional: complete HSN code and item condition in the highlighted fields (${missing.slice(0,3).map(line=>line.sku).join(', ')}${missing.length>3?' and '+(missing.length-3)+' more':''}).`:legacy?'Historical quantities are available to review below.':'Choose the invoice currency below. Amounts use your saved order prices and the quotation tool exchange rate.';
+  el('itemDetailsHint').textContent=dirty?'You have unsaved item details.':current.shared_hsn_code?'HSN code is shared across all SKUs and managed by TLs/admins in Configuration. Review each item condition before saving.':'TLs/admins can set a shared HSN code in Configuration. Only PI number and purchase order number are required for generation.';
 }
 el('completeItemDetails').onclick=()=>{
   selectOrderTab('items');const first=commercialInputs.flatMap(item=>[item.hsn,item.condition]).find(input=>!input.value.trim());
@@ -330,7 +330,7 @@ const invoicePreview=window.createPiPreview(el('piPreview'),api,json,async resul
 });
 el('piForm').onsubmit=async event=>{
   event.preventDefault();
-  if(commercialDirty()||!current.lines.length){updatePiReadiness();el('completeItemDetails').onclick();return;}
+  if(commercialDirty()){updatePiReadiness();el('completeItemDetails').onclick();return;}
   el('piError').hidden=true;el('generatePi').disabled=true;
   try{
     const data={currency:el('piCurrency').value};

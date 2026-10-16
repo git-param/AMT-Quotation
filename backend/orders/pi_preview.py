@@ -48,7 +48,10 @@ def save_preview(order_id,preview_id=None):
             if not row:return jsonify(error='PI preview not found.'),404
             if row['issued_invoice_id']:
                 return jsonify(error='This PI has already been issued. Open a new preview for further changes.'),409
-            doc=edit(json.loads(row['document_json']),data)
+            if request.args.get('for_generation')=='1':
+                doc=print_document(json.loads(row['document_json']),data)
+                validate_ready(doc)
+            else:doc=edit(json.loads(row['document_json']),data)
             if doc['reference']!=order['pi_reference']:
                 if order['updated_at']!=doc['source_updated_at']:
                     return jsonify(error='The order changed after this preview was opened. Open a new PI preview.'),409

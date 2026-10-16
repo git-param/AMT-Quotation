@@ -226,8 +226,40 @@ class NativePiTests(unittest.TestCase):
             self.assertEqual(self.client.put(url,json=changes).status_code,400)
         changes['lines'][0].update(quantity='2',hsn_code='')
         self.assertEqual(self.client.put(url,json=changes).status_code,200)
-        self.assertEqual(self.issue(preview).status_code,400)
-        self.assertEqual(len(self.client.get(f'/api/orders/{self.order_id}').json['invoices']),0)
+        self.assertEqual(self.issue(preview).status_code,201)
+        self.assertEqual(len(self.client.get(f'/api/orders/{self.order_id}').json['invoices']),1)
+
+    def test_generation_requires_only_pi_and_purchase_order_numbers(self):
+        preview=self.preview();url=self.base+'/preview/'+preview['preview_id']+'?for_generation=1'
+        for field,label in [('pi_reference','Proforma Invoice No.'),('po_reference','Purchase Order No.')]:
+            result=self.client.put(url,json={'order':{field:''}})
+            self.assertEqual(result.status_code,400,result.json)
+            self.assertIn(label,result.json['error'])
+        changes=self.edits(preview['document'])
+        changes['lines'][0].update(hsn_code='',item_condition='',description='',uom='')
+        changes.update(date='',prepared_phone='unfinished phone',order={'payment_terms':'','delivery_terms':'',
+            'delivery_time':'','dispatch_method':''},delivery={'consignee_text':'','buyer_text':'Buyer\nEmail: unfinished',
+            'notify_text':''})
+        saved=self.client.put(url,json=changes)
+        self.assertEqual(saved.status_code,200,saved.json)
+        issued=self.issue(saved.json)
+        self.assertEqual(issued.status_code,201,issued.json)
+        self.assertTrue(self.client.get(issued.json['pdf_url']).data.startswith(b'%PDF-'))
+
+    def test_issuance_rejects_missing_purchase_order_number(self):
+        preview=self.preview()
+        self.assertEqual(self.client.put(self.base+'/preview/'+preview['preview_id'],json={'order':{'po_reference':''}}).status_code,200)
+        result=self.issue(preview)
+        self.assertEqual(result.status_code,400)
+        self.assertIn('Purchase Order No.',result.json['error'])
+
+    def test_numbered_invoice_can_be_generated_without_sku_items(self):
+        self.order_id=self.direct(pi_reference='AMT/EMPTY',po_reference='PO-EMPTY',lines=[])['order']['id']
+        self.base=f'/api/orders/{self.order_id}/invoices'
+        preview=self.preview()
+        issued=self.issue(preview)
+        self.assertEqual(issued.status_code,201,issued.json)
+        self.assertTrue(self.client.get(issued.json['pdf_url']).data.startswith(b'%PDF-'))
 
     def test_permissions_preview_ownership_and_revocation(self):
         preview=self.preview()

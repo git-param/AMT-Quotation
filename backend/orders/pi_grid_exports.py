@@ -280,7 +280,7 @@ def xlsx(doc):
             prefix=path.rsplit('.',1)[0]
             formula=f'=ROUND({coordinates[prefix+".quantity"]}*{coordinates[prefix+".unit_price"]},2)'
         elif path=='subtotal':
-            refs=','.join(value for key,value in coordinates.items() if key.endswith('.line_total'))
+            refs=','.join(value for key,value in coordinates.items() if key.endswith('.line_total')) or '0'
             formula=f'=ROUND(SUM({refs}),2)'
         elif path=='tax':formula=f'=ROUND(({coordinates["subtotal"]}+N({coordinates["shipping_charges"]}))*{doc["totals"]["tax_rate"]},2)'
         else:formula=f'=ROUND({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("tax","0")},2)'

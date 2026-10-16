@@ -117,9 +117,9 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     if(String(data.shipping_charges).trim().toLowerCase()==='free')data.shipping_charges='0.00';
     return data;
   }
-  async function save(){
+  async function save(forGeneration=false){
     const base=state.base;
-    state={...await api(base+'/'+state.preview_id,json('PUT',collect())),base};
+    state={...await api(base+'/'+state.preview_id+(forGeneration?'?for_generation=1':''),json('PUT',collect())),base};
     onSaved(state.document);
     render();
   }
@@ -150,7 +150,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       });
     }
     for(const format of ['xlsx','pdf'])button('Generate '+format.toUpperCase(),async()=>{
-      if(!issued){await save();issued=await api(state.base.replace('/preview','/issue'),json('POST',{preview_id:state.preview_id}));await onIssued(issued);render();}
+      if(!issued){await save(true);issued=await api(state.base.replace('/preview','/issue'),json('POST',{preview_id:state.preview_id}));await onIssued(issued);render();}
       const link=node('a');link.href=issued[format+'_url'];link.download='';host.append(link);link.click();link.remove();
     },true);
     status=node('p',issued?'PI '+issued.reference+' issued. Both downloads use this saved invoice.':'Edit fields directly below, then review the PDF print preview. Changes apply to this PI only.','pi-preview-status');

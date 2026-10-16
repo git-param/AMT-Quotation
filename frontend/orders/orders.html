@@ -197,10 +197,9 @@
                                     type="number" min="1" step="1" max="999999" required></div>
                             <div class="form-field"><label for="linePrice">Unit price</label><input id="linePrice"
                                     type="number" min="0" step="0.01" max="999999999.99" required></div>
-                            <div class="form-field"><label for="lineHsn">HSN code (required for PI)</label><input
+                            <div class="form-field"><label for="lineHsn">HSN code</label><input
                                     id="lineHsn" maxlength="20"></div>
-                            <div class="form-field"><label for="lineCondition">Item condition (required for
-                                    PI)</label><input id="lineCondition" maxlength="100"></div>
+                            <div class="form-field"><label for="lineCondition">Item condition</label><input id="lineCondition" maxlength="100"></div>
                             <div class="form-field"><label for="lineUom">Unit of measure</label><select id="lineUom"><option>PCs</option><option>Lot</option><option>Kit</option><option>set</option></select></div>
                             <div class="form-field"><label for="lineCurrency">Currency</label><select id="lineCurrency">
                                     <option>USD</option>
@@ -217,8 +216,8 @@
                                     <th>Qty / UOM</th>
                                     <th>Unit price</th>
                                     <th>Amount</th>
-                                    <th>HSN code <span class="required-mark">*</span></th>
-                                    <th>Item condition <span class="required-mark">*</span></th>
+                                    <th>HSN code</th>
+                                    <th>Item condition</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -226,7 +225,7 @@
                         </table>
                     </div>
                     <div class="item-commercial-toolbar">
-                        <p id="itemDetailsHint">HSN code and item condition are required for PI generation.</p><button
+                        <p id="itemDetailsHint">Only the PI number and purchase order number are required for PDF generation.</p><button
                             id="saveItemDetails" type="button" class="btn-sm btn-add">Save item details</button>
                     </div><datalist id="itemConditions">
                         <option value="New">
@@ -242,7 +241,7 @@
                     <div class="source-toolbar">
                         <div>
                             <h2>Proforma invoice</h2>
-                            <p class="section-hint">Select the PI currency after completing your order items.</p>
+                            <p class="section-hint">Select the PI currency. PI number and purchase order number are required to generate the invoice.</p>
                         </div>
                     </div>
                     <p id="piError" class="error" role="alert" hidden></p>

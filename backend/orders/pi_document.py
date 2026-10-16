@@ -74,10 +74,6 @@ def prepare(state, user, currency, rate):
     reference = text(state['order']['pi_reference'],100,'Proforma Invoice No.')
     if not reference:
         raise ValueError('Enter the Proforma Invoice No. in order details before opening a PI preview.')
-    if not state['lines']:
-        raise ValueError('Add order items before opening a PI preview.')
-    if state['legacy_lines_requiring_review']:
-        raise ValueError('Complete the historical quantity review before previewing a PI.')
     tax = Decimal(company['tax_rates'][currency])
     if not tax.is_finite() or not 0 <= tax <= 1:
         raise ValueError('Company PI tax configuration is invalid.')
@@ -238,9 +234,7 @@ def print_document(document, edits):
 
 
 def validate_ready(doc):
-    if any(not line.get('hsn_code') or not line.get('item_condition') for line in doc['totals']['lines']):
-        raise ValueError('Complete HSN code and item condition on every preview item.')
-    for key in ('payment_terms','delivery_terms','destination','delivery_time','dispatch_method'):
-        if not doc['order'][key]:
-            raise ValueError('Complete '+key.replace('_',' ')+' in the PI preview.')
-    text_delivery(doc['delivery'],{},doc['order']['destination'],False)
+    if not str(doc.get('reference','')).strip():
+        raise ValueError('Enter the Proforma Invoice No.')
+    if not str(doc['order'].get('po_reference','')).strip():
+        raise ValueError('Enter the Purchase Order No.')

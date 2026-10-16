@@ -37,7 +37,7 @@
     tools.append(fetchButton,manual,status); lookup.append(hint,input,tools); host.append(heading,lookup,tableBox);
     const editBox = document.createElement('div'); editBox.className='draft-item-editor'; host.append(editBox);
     const note = document.createElement('p'); note.className='draft-note'; note.textContent='Checked items will be saved. Click a row or choose an item below to edit its details. Catalog prices are shown above; the agreed deal price is set below.'; host.append(note);
-    if(commercial)note.textContent+=' HSN code and item condition must be completed before generating a PI.';
+    if(commercial)note.textContent+=' HSN code is filled from the shared configuration when available.';
     const save = onSave ? document.createElement('button') : null;
     if (save) { save.type='button'; save.className='btn-sm btn-add'; save.textContent='Save all SKU lines'; host.append(save); }
     function priceCell(row, code) {
