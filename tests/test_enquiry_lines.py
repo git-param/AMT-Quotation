@@ -409,5 +409,29 @@ class LineTests(unittest.TestCase):
             connection.close()
 
 
+    def test_bulk_lookup_keeps_successes_and_distinguishes_missing_from_network_failures(self):
+        def product(sku):
+            if sku == 'AVAILABLE':
+                return {'found': True, 'title': 'Available part', 'price': 10, 'qty': 5}
+            if sku == 'MISSING':
+                return {'found': False}
+            raise RuntimeError('Catalog unavailable')
+        with patch('backend.enquiries.lines.lookup_product', side_effect=product), \
+                patch('backend.enquiries.lines.lookup_rate', return_value=90):
+            response = self.client.post('/api/enquiries/sku-lookup', json={
+                'client_id': self.parent, 'skus': ['AVAILABLE', 'MISSING', 'OFFLINE'], 'currency': 'USD',
+            })
+        self.assertEqual(response.status_code, 200)
+        available, missing, offline = response.json['drafts']
+        self.assertEqual(available['lookup_status'], 'found')
+        self.assertEqual(available['unit_price'], '10.00')
+        self.assertEqual(available['stock'], 5)
+        self.assertEqual(missing['lookup_status'], 'not_found')
+        self.assertIn('manually', missing['error'])
+        self.assertEqual(offline['lookup_status'], 'unavailable')
+        self.assertFalse(offline['found'])
+        self.assertEqual(self.client.get(self.path).json['lines'], [])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -12,6 +12,7 @@ import threading
 import time
 import sys
 from uuid import uuid4
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path.cwd()))
 from werkzeug.security import generate_password_hash
@@ -39,10 +40,23 @@ application.SECRET_KEY_PATH = scratch / 'fixture-secret.key'
 app = application.create_app()
 connection = database.get_db()
 with connection:
+    connection.execute("UPDATE app_settings SET value='85371090' WHERE key='hsn_code'")
     connection.execute('INSERT INTO company_pi_settings(id,profile_json) VALUES(1,?)',(company_profile,))
     connection.execute('INSERT OR IGNORE INTO users(username,password_hash,role) VALUES(?,?,?)',
                        ('browser-fixture', generate_password_hash('local-fixture-only'), 'sales_executive'))
 connection.close()
+
+# Deterministic catalog responses exercise mixed lookup results without external calls.
+def fixture_product(sku):
+    if sku == 'LOOKUP-AVAILABLE':
+        return {'found': True, 'title': 'Available lookup fixture', 'price': 12.50,
+                'qty': 8, 'condition': 'New'}
+    return {'found': False}
+
+product_patch = patch('backend.enquiries.lines.lookup_product', side_effect=fixture_product)
+rate_patch = patch('backend.enquiries.lines.lookup_rate', return_value=80)
+product_patch.start()
+rate_patch.start()
 
 class QuietHandler(WSGIRequestHandler):
     def log_request(self, *args, **kwargs):
@@ -75,6 +89,8 @@ try:
                              f'http://127.0.0.1:{server.server_port}', port], timeout=160, env={**os.environ, 'CDP_TARGETS':targets_json})
     sys.exit(result.returncode)
 finally:
+    product_patch.stop()
+    rate_patch.stop()
     server.shutdown()
     edge.terminate()
     edge.wait(timeout=10)

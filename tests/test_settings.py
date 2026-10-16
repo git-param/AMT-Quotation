@@ -35,3 +35,22 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM audit_logs WHERE action='settings_update'").fetchone()[0],3)
         finally:
             connection.close()
+
+    def test_sales_can_read_item_defaults_without_configuration_access(self):
+        connection = database.get_db()
+        with connection:
+            connection.execute("UPDATE app_settings SET value='85371090' WHERE key='hsn_code'")
+        connection.close()
+        self.as_user(None)
+        self.assertEqual(self.client.get('/api/sku-defaults').status_code, 401)
+        self.as_user('exec1')
+        response = self.client.get('/api/sku-defaults')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {'shared_hsn_code': '85371090'})
+        self.assertEqual(self.client.get('/api/settings').status_code, 403)
+        self.assertEqual(self.client.put('/api/sku-defaults', json={'shared_hsn_code': '1234'}).status_code, 405)
+        connection = database.get_db()
+        with connection:
+            connection.execute('UPDATE users SET is_active=0 WHERE id=?', (self.ids['exec1'],))
+        connection.close()
+        self.assertEqual(self.client.get('/api/sku-defaults').status_code, 401)

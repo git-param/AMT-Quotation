@@ -116,3 +116,13 @@
   .enquiry-detail-header>.enquiry-action-icon { margin-left:auto; }
   #skuLines { padding:14px; }
 }
+/* Partial lookup results remain usable while missing SKUs offer manual entry. */
+.draft-lookup-notice{margin-top:16px;padding:14px 16px;border:1px solid #efd49b;border-radius:10px;background:#fffaf0;color:#79521c;font-size:12px;line-height:1.7}
+.draft-lookup-notice[hidden]{display:none}
+.draft-lookup-notice>strong{display:block;font-size:13px;margin-bottom:6px}
+.draft-lookup-notice>div{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:8px 0}
+.draft-lookup-notice>div+div{border-top:1px solid #f1e4c7}
+.draft-lookup-notice p{margin:0;overflow-wrap:anywhere}
+.draft-lookup-notice .btn-sm{flex-shrink:0;background:#fff;border:1px solid #e2c387;color:#79521c;white-space:normal}
+.draft-lookup-notice button:focus-visible{outline:3px solid #e8bf6d;outline-offset:3px}
+@media(max-width:650px){.draft-lookup-notice>div{align-items:flex-start;flex-direction:column;gap:8px}}
