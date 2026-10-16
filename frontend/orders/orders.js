@@ -257,6 +257,8 @@ async function showDetails(id) {
   const order=data.order;
   el('conversionHint').textContent='Choose the currency for this proforma invoice.';
   el('piForm').hidden=!order.can_edit||order.status==='cancelled';el('piCurrency').value='';
+  el('bulkDescriptionField').hidden=data.lines.length<=4;
+  el('bulkDescription').required=data.lines.length>4;el('bulkDescription').value='';
   el('invoiceList').replaceChildren();
   invoicePreview.reset();
   for(const invoice of data.invoices||[])appendInvoice(invoice,id);
@@ -363,6 +365,7 @@ const invoicePreview=window.createPiPreview(el('piPreview'),api,json,async resul
 },doc=>{
   if(current)current.order.pi_reference=doc.reference;
   el('pi_reference').value=doc.reference;
+  if(doc.pi_format==='bulk')el('bulkDescription').value=doc.bulk_description;
 });
 el('piForm').onsubmit=async event=>{
   event.preventDefault();
@@ -370,6 +373,7 @@ el('piForm').onsubmit=async event=>{
   el('piError').hidden=true;el('generatePi').disabled=true;
   try{
     const data={currency:el('piCurrency').value};
+    if(current.lines.length>4)data.bulk_description=el('bulkDescription').value;
     const base=`/api/orders/${current.order.id}/invoices/preview`;
     const result=await api(base,json('POST',data));
     invoicePreview.open(result,base);

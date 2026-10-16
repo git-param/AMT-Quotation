@@ -165,7 +165,21 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     const headerBox = node("div", undefined, "pi-header-box");
     const branding = node("div", undefined, "pi-branding");
     image(branding, "header.png");headerBox.append(branding);paper.append(headerBox);
+    let annexurePaper=null;
+    function footer(parent,includeAddress=true){
+      const signatures=node('div',undefined,'pi-signatures');
+      image(signatures,'payment_options.png');image(signatures,'signature.png');
+      const box=node('div',undefined,'pi-footer-box');box.append(signatures);
+      if(includeAddress)image(box,'address.png');parent.append(box);
+    }
     for (const section of state.layout.sections) {
+      if(section.annexure&&!annexurePaper){
+        footer(paper);
+        annexurePaper=node('div',undefined,'pi-annexure-page');
+        annexurePaper.setAttribute('role','region');annexurePaper.setAttribute('aria-label','Annexure-1 product list');
+        const annexureBranding=node('div',undefined,'pi-branding');image(annexureBranding,'header.png');
+        annexurePaper.append(annexureBranding);paper.append(annexurePaper);
+      }
       const table = node("table", undefined, "pi-company-grid pi-grid-" + section.name + (section.name === "bank" ? " pi-preview-totals" : ""));
       const columns = node("colgroup");
       const width = state.layout.widths.reduce((a, b) => a + b, 0);
@@ -201,12 +215,9 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         }
         body.append(tr);
       }
-      table.append(body);(section.name === "header" ? headerBox : paper).append(table);
+      table.append(body);(section.annexure?annexurePaper:section.name === "header" ? headerBox : paper).append(table);
     }
-    const signatures = node("div", undefined, "pi-signatures");
-    image(signatures, "payment_options.png");image(signatures, "signature.png");
-    const footerBox=node("div",undefined,"pi-footer-box");footerBox.append(signatures);
-    image(footerBox, "address.png");paper.append(footerBox);
+    footer(annexurePaper||paper,!annexurePaper);
     for(const textarea of host.querySelectorAll('textarea'))fitText(textarea);
     if (issued) for (const { input, primaryInput } of inputs) {input.disabled = true;if(primaryInput)primaryInput.disabled=true;}
   }

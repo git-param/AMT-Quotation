@@ -9,6 +9,7 @@ class Element {
   constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.style={};this.attributes={};this.classList={add(){}};}
   append(...items){this.children.push(...items);}
   replaceChildren(...items){this.children=items;}
+  get lastChild(){return this.children.at(-1);}
   setAttribute(key,value){this.attributes[key]=value;}
   querySelectorAll(tag){return this.children.flatMap(child=>[...(child.tag===tag?[child]:[]),...child.querySelectorAll(tag)]);}
   scrollIntoView(){}
@@ -86,4 +87,26 @@ test('PI numeric edits refresh displayed totals and UOM uses fixed choices',asyn
   price.value='25.00';price.oninput();await pending();
   const total=host.querySelectorAll('input').find(input=>input.dataset.piField==='lines.0.line_total');assert.equal(total.value,'50.00');
   assert.ok(host.querySelectorAll('div').some(node=>node.textContent==='₹ 59.00'));
+});
+
+test('bulk PI summary and annexure remain independently editable in save and print',async()=>{
+  const host=new Element('section'),requests=[],printed=[];
+  const lines=Array.from({length:5},(_,index)=>({id:index+1,sku:'PART-'+index,description:'Product '+index,hsn_code:'85371090',item_condition:'New',uom:'PCs',quantity:'1',unit_price:'10.00',line_total:'10.00'}));
+  const state={preview_id:'bulk',document:{pi_format:'bulk',bulk_description:'Original cover description',date:'2026-10-16',currency:'USD',order:{},delivery:{},assets:{},totals:{shipping:'0',lines}},layout:{widths:[1],sections:[
+    {name:'items',rows:[[{span:1,style:'',field:'bulk_description',value:'Original cover description',multiline:true,aria:'First-page description'}]]},
+    {name:'annexure',annexure:true,rows:[[{span:1,style:'',field:'lines.4.description',value:'Product 4',multiline:true}]]}
+  ]}};
+  const context={window:{},document:{createElement:tag=>new Element(tag)},Date,URL:{createObjectURL:()=> 'blob:bulk',revokeObjectURL(){}},fetch:async(url,options)=>{printed.push(JSON.parse(options.body));return {ok:true,blob:async()=>({})};}};
+  vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/orders/pi-preview.js'),'utf8'),context);
+  const preview=context.window.createPiPreview(host,async(url,options)=>{requests.push(JSON.parse(options.body));state.document.bulk_description=requests.at(-1).bulk_description;return state;},(method,data)=>({method,body:JSON.stringify(data)}),async()=>{});
+  preview.open(state,'/bulk-preview');
+  let cover=host.querySelectorAll('textarea').find(input=>input.dataset.piField==='bulk_description');
+  let product=host.querySelectorAll('textarea').find(input=>input.dataset.piField==='lines.4.description');
+  cover.value='Edited cover summary';cover.oninput();product.value='Edited fifth product';product.oninput();
+  await host.querySelectorAll('button').find(button=>button.textContent==='Update preview').onclick();
+  assert.equal(requests[0].bulk_description,'Edited cover summary');assert.equal(requests[0].lines[4].description,'Edited fifth product');assert.equal(requests[0].lines.length,5);
+  cover=host.querySelectorAll('textarea').find(input=>input.dataset.piField==='bulk_description');cover.value='Unsaved print description';cover.oninput();
+  await host.querySelectorAll('button').find(button=>button.textContent==='PDF print preview').onclick();
+  assert.equal(printed[0].bulk_description,'Unsaved print description');
+  assert.ok(host.querySelectorAll('div').some(node=>node.className==='pi-annexure-page'));
 });

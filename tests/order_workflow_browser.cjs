@@ -142,7 +142,31 @@ await inFrame("for(const [label,value] of Object.entries({'Description':'Missing
 await until("document.querySelector('iframe').contentWindow.document.querySelector('#lineRows').textContent.includes('LOOKUP-MISSING')");
 mixed=await inFrame("return w.fetch('/api/orders/'+w.eval('current.order.id')).then(r=>r.json())");
 assert.equal(mixed.lines.length,2);assert.ok(mixed.lines.every(line=>line.hsn_code==='85371090'));
+
+// Five products switch to the separate bulk PI workflow and remain editable.
+await inFrame("const id=w.eval('current.order.id');const response=await w.fetch('/api/orders/'+id+'/lines/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lines:Array.from({length:3},(_,i)=>({sku:'BULK-BROWSER-'+i,description:'Bulk browser product '+i,quantity:'1',unit_price:'50',currency:'INR',item_condition:'New',uom:'PCs'}))})});if(!response.ok)throw Error(await response.text());d.getElementById('editOrder').click()");
+await until("!document.querySelector('iframe').contentWindow.document.getElementById('editor').hidden");
+await inFrame("d.getElementById('pi_reference').value='BULK/2026/001';d.getElementById('po_reference').value='BULK-PO-001';d.getElementById('save').click()");
+await until("!document.querySelector('iframe').contentWindow.document.getElementById('detail').hidden");
+assert.equal(await inFrame("return d.getElementById('bulkDescriptionField').hidden"),false);
+assert.equal(await inFrame("return d.getElementById('bulkDescription').required"),true);
+await inFrame("d.getElementById('piCurrency').value='INR';d.getElementById('bulkDescription').value='Electronic spare parts for Annexure-1';d.getElementById('piForm').requestSubmit()");
+await until("document.querySelector('iframe').contentWindow.document.querySelector('[data-pi-field=\"bulk_description\"]')");
+assert.equal(await inFrame("return d.querySelectorAll('.pi-annexure-page').length"),1);
+await inFrame("const summary=d.querySelector('[data-pi-field=\"bulk_description\"]');summary.value='Bulk cover edited in preview';summary.dispatchEvent(new w.Event('input'));const line=d.querySelector('[data-pi-field=\"lines.4.description\"]');line.value='Fifth product edited in annexure';line.dispatchEvent(new w.Event('input'));[...d.querySelectorAll('#piPreview button')].find(b=>b.textContent==='Update preview').click()");
+await until("document.querySelector('iframe').contentWindow.document.querySelector('[data-pi-field=\"bulk_description\"]')?.value==='Bulk cover edited in preview' && !document.querySelector('iframe').contentWindow.document.querySelector('#piPreview button').disabled");
+await shot('bulk-pi-editable-cover-browser');
+await inFrame("d.querySelector('.pi-annexure-page').scrollIntoView({block:'start'})");
+await shot('bulk-pi-editable-annexure-browser');
+await inFrame("[...d.querySelectorAll('#piPreview button')].find(b=>b.textContent==='PDF print preview').click()");
+await until("!document.querySelector('iframe').contentWindow.document.querySelector('.pi-print-frame').hidden");
+await inFrame("[...d.querySelectorAll('#piPreview button')].find(b=>b.textContent==='Generate XLSX').click()");
+await until("document.querySelector('iframe').contentWindow.document.querySelector('#invoiceList a')");
+const bulkDownloads=await inFrame("return Promise.all([...d.querySelectorAll('#invoiceList a')].map(async a=>{const response=await w.fetch(a.href);return {ok:response.ok,size:(await response.arrayBuffer()).byteLength};}))");
+assert.equal(bulkDownloads.length,2);assert.ok(bulkDownloads.every(result=>result.ok&&result.size>100));
+const bulkOrder=await inFrame("return w.fetch('/api/orders/'+w.eval('current.order.id')).then(r=>r.json())");
+assert.equal(bulkOrder.lines.length,5);assert.notEqual(bulkOrder.lines[4].description,'Fifth product edited in annexure');
 assert.deepEqual(errors,[]);
-console.log('Browser workflow passed: draft creation, single-form field order, required validation, save failure/retry, party synchronization, country/GST, reopen/edit, SKU persistence, automatic manual HSN, mixed lookup/manual recovery, INR PI XLSX/PDF, desktop/mobile and embedded layout.');
+console.log('Browser workflow passed: draft creation, single-form field order, required validation, save failure/retry, party synchronization, country/GST, reopen/edit, SKU persistence, automatic manual HSN, mixed lookup/manual recovery, five-item bulk cover/annexure edits and issuance, INR PI XLSX/PDF, desktop/mobile and embedded layout.');
 }finally{ws.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

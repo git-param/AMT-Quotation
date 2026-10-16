@@ -287,3 +287,10 @@ body.embedded #orderForm .consignee-editor textarea {flex:1}
   body.embedded #orderForm .composer-parties {flex:0}
   .composer-fields--shipping {margin-top:18px}
 }
+.bulk-description-field{max-width:760px;margin:18px 0;display:flex;flex-direction:column;gap:8px}
+.bulk-description-field label{font-size:13px;font-weight:600;color:#334155}
+.bulk-description-field textarea{width:100%;box-sizing:border-box;min-height:90px;padding:12px;font:inherit;font-size:13px;line-height:1.7;border:1px solid #cbd5e1;border-radius:8px;resize:vertical}
+.bulk-description-field small{font-size:12px;color:#64748b;line-height:1.7}
+.pi-annexure-page{margin-top:28px;padding-top:18px;border-top:12px solid #edf1f6}
+.pi-grid-annexure tr:nth-child(2){border-bottom:1.5px solid #000}
+.pi-grid-annexure_totals{font-size:12px}

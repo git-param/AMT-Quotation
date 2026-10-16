@@ -65,8 +65,8 @@ def save_preview(order_id,preview_id=None):
             connection.execute("UPDATE invoice_previews SET document_json=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
                                (json.dumps(doc),preview_id))
         else:
-            if set(data)-{'currency','usd_inr_rate'}:raise ValueError('Invalid PI preview fields.')
-            doc=prepare(details(connection,order),user,data.get('currency'),data.get('usd_inr_rate'))
+            if set(data)-{'currency','usd_inr_rate','bulk_description'}:raise ValueError('Invalid PI preview fields.')
+            doc=prepare(details(connection,order),user,data.get('currency'),data.get('usd_inr_rate'),data.get('bulk_description'))
             preview_id=uuid4().hex
             connection.execute('INSERT INTO invoice_previews(id,order_id,created_by,document_json) VALUES(?,?,?,?)',
                                (preview_id,order_id,user['id'],json.dumps(doc)))
