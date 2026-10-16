@@ -11,7 +11,7 @@
   function pager(prefix,page,pages,total){el(prefix+'Previous').disabled=page<=1;el(prefix+'Next').disabled=page>=pages;el(prefix+'Page').textContent=`Page ${page} of ${Math.max(1,pages)}`;el(prefix+'Count').textContent=`${total} ${prefix==='tlPi'?'invoices':'user / SKU combinations'}`;}
   function parameters(extra={}){return new URLSearchParams({...filters,...extra});}
   async function summary(){
-    const version=++summaryVersion;el('tlTeamResults').setAttribute('aria-busy','true');state('tlTeamRows','Loading team performance...',5,true);
+    const version=++summaryVersion;el('tlTeamResults').setAttribute('aria-busy','true');el('tlClients').textContent='...';el('tlPis').textContent='...';el('tlTeamCount').textContent='';state('tlTeamRows','Loading team performance...',5,true);
     try{
       const data=await api('/api/tl-dashboard/summary?'+parameters());if(version!==summaryVersion)return;
       el('tlScope').textContent=data.scope;el('tlCleanup').hidden=!data.can_cleanup;el('tlCleanupBefore').max=data.today;
@@ -25,18 +25,18 @@
         const action=node('td'),button=node('button','See PI list','tl-pi-button');button.type='button';button.disabled=!user.pis;button.setAttribute('aria-label','See PI list for '+user.username);button.onclick=()=>openPis(user);action.append(button);row.append(action);el('tlTeamRows').append(row);
       }
       if(!data.rows.length)state('tlTeamRows','No users match these filters.',5);
-    }catch(error){if(version===summaryVersion){state('tlTeamRows','Could not load team performance. Apply filters to retry.',5);notify(error);}}
+    }catch(error){if(version===summaryVersion){el('tlClients').textContent='—';el('tlPis').textContent='—';state('tlTeamRows','Could not load team performance. Apply filters to retry.',5);notify(error);}}
     finally{if(version===summaryVersion)el('tlTeamResults').setAttribute('aria-busy','false');}
   }
   async function lookups(){
-    const version=++lookupVersion;el('tlLookupResults').setAttribute('aria-busy','true');el('tlLookupPrevious').disabled=true;el('tlLookupNext').disabled=true;state('tlLookupRows','Loading SKU lookup history...',4,true);
+    const version=++lookupVersion;el('tlLookupResults').setAttribute('aria-busy','true');el('tlRequests').textContent='...';el('tlSkus').textContent='...';el('tlLookupCount').textContent='';el('tlLookupPrevious').disabled=true;el('tlLookupNext').disabled=true;state('tlLookupRows','Loading SKU lookup history...',4,true);
     try{
       const data=await api('/api/tl-dashboard/lookups?'+parameters({page:lookupPage,sku:el('tlSkuSearch').value.trim()}));if(version!==lookupVersion)return;
       lookupPages=data.pages;if(lookupPage>Math.max(1,lookupPages)){lookupPage=Math.max(1,lookupPages);return lookups();}
       el('tlRequests').textContent=data.requests.toLocaleString();el('tlSkus').textContent=data.unique_skus.toLocaleString();el('tlLookupRows').replaceChildren();
       for(const item of data.rows){const row=node('tr');row.append(node('td',item.user_name));const sku=node('td');sku.append(node('span',item.sku,'tl-sku'));row.append(sku,node('td',item.searches.toLocaleString(),'tl-number'),node('td',timestamp(item.last_lookup,true)));el('tlLookupRows').append(row);}
       if(!data.rows.length)state('tlLookupRows','No SKU lookups match these filters.',4);pager('tlLookup',lookupPage,lookupPages,data.total);
-    }catch(error){if(version===lookupVersion){state('tlLookupRows','Could not load lookup history. Search again to retry.',4);notify(error);}}
+    }catch(error){if(version===lookupVersion){el('tlRequests').textContent='—';el('tlSkus').textContent='—';state('tlLookupRows','Could not load lookup history. Search again to retry.',4);notify(error);}}
     finally{if(version===lookupVersion)el('tlLookupResults').setAttribute('aria-busy','false');}
   }
   async function load(){const version=++filterVersion;el('tlApply').disabled=true;await Promise.all([summary(),lookups()]);if(version===filterVersion)el('tlApply').disabled=false;}
@@ -46,7 +46,7 @@
     try{
       const data=await api('/api/tl-dashboard/pis?'+parameters({user_id:piUser.id,page:piPage}));if(version!==piVersion||!piOpen)return;
       piPages=data.pages;if(piPage>Math.max(1,piPages)){piPage=Math.max(1,piPages);return loadPis();}
-      el('tlPiTitle').textContent=data.username+' · PI list';el('tlPiSummary').textContent=`${data.total} invoices across ${data.clients} clients`;el('tlPiRows').replaceChildren();let lastClient=null;
+      el('tlPiTitle').textContent=data.username+' · PI list';el('tlPiSummary').textContent=`${data.total} ${data.total===1?'invoice':'invoices'} across ${data.clients} ${data.clients===1?'client':'clients'}`;el('tlPiRows').replaceChildren();let lastClient=null;
       for(const item of data.rows){
         if(item.client_id!==lastClient){lastClient=item.client_id;const group=node('tr',null,'tl-client-group'),cell=node('td');cell.colSpan=4;const link=node('a',item.client_name);link.href='/clients-orders?'+new URLSearchParams({client_id:item.client_id});cell.append(link,node('small',[item.client_company,`${item.client_pis} PIs`].filter(Boolean).join(' · ')));group.append(cell);el('tlPiRows').append(group);}
         const row=node('tr'),ref=node('td');ref.append(node('strong',item.reference),node('small',' · '+item.currency));const order=node('td'),link=node('a',item.order_reference);link.href='/orders?'+new URLSearchParams({client_id:item.client_id,order_id:item.order_id});order.append(link);row.append(ref,order,node('td',timestamp(item.created_at)));

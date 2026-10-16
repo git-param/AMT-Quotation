@@ -641,6 +641,31 @@ deletion operations are transactional. Deactivated clients remain distinct
 from deleted clients; the activation endpoint cannot restore deleted records.
 Unsaved draft items can still be adjusted or removed before submission.
 
+### TL Dashboard
+
+The separate **TL Dashboard** sidebar page (`/tl-dashboard`) is available to
+Sales TLs, admins and legacy managers with `management.view`. TL reports cover
+the TL and their assigned active executives; admins and managers see all users.
+The existing Dashboard page remains available separately.
+
+User and inclusive date filters apply to client creation counts, saved PI counts
+and SKU lookup history. Clients are attributed to their creator and PIs to the
+user who generated them. Removed clients/orders/PIs are excluded from available
+PI lists. **See PI list** opens invoices grouped by client, with the original
+Excel and available PDF downloads, under current client access permissions.
+
+SKU history includes quotation lookups and manual enquiry/order item lookups,
+including missing SKUs. Automatic stock checks when saving items are excluded.
+Each SKU counts once per lookup request; legacy comma-separated batches are
+included. New lookup timestamps use IST explicitly; historical local lookup
+timestamps are interpreted as IST. Other record timestamps are converted from
+UTC for date filtering and display.
+
+Admins and legacy managers can preview and delete lookup records strictly older
+than a cutoff date. Cleanup covers all users regardless of dashboard filters,
+requires confirmation of the current matching count, and records an audit entry.
+Records on the selected date, client/order records and generated PIs are retained.
+
 Application startup applies migration 13 using the existing migration runner.
 Follow the backup instructions above before upgrading. No automatic purge or
 restore endpoint is included. Tests cover management permissions, cross-team

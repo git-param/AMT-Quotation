@@ -74,3 +74,13 @@ test('mobile menu opens accessibly and Escape closes it',async()=>{
   assert.equal(view.sidebar.inert,true);
   assert.equal(toggle.attributes['aria-expanded'],'false');
 });
+
+test('TL workspace requires both a management grant and a TL/admin role',async()=>{
+  for(const [role,permissions,hidden] of [
+    ['sales_tl',['management.view'],false],['admin',['management.view'],false],
+    ['sales_executive',['management.view'],true],['sales_tl',[],true],
+  ]){
+    const view=await setup({role,permissions});
+    assert.equal(view.sidebar.children[1].children.find(row=>row.children[0].href==='/tl-dashboard').hidden,hidden);
+  }
+});
