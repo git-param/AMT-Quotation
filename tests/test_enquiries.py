@@ -3,6 +3,7 @@
 from pathlib import Path
 import sqlite3
 import unittest
+from unittest.mock import patch
 
 import test_leads
 from backend import database
@@ -21,6 +22,9 @@ class EnquiryTests(unittest.TestCase):
 
     def setUp(self):
         test_leads.LeadTests.setUp(self)
+        stock_patch = patch('backend.orders.catalog.lookup_stock',
+                            return_value={'found':True,'qty':1000000})
+        stock_patch.start();self.addCleanup(stock_patch.stop)
         self.client.application.register_blueprint(access_bp)
         self.client.application.register_blueprint(bp)
 

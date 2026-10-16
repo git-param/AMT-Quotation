@@ -341,6 +341,25 @@ class LineTests(unittest.TestCase):
                 self.assertIn('Duplicate SKUs: part-a',response.json['error'])
                 lookup.assert_not_called();rate.assert_not_called()
 
+    def test_quantity_save_checks_fresh_stock_and_aggregates_existing_sku_lines(self):
+        line=self.add(quantity='1').json['line']
+        self.add(quantity='1')
+        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'qty':2}) as lookup:
+            response=self.client.put(self.path+'/'+str(line['id']),json={'quantity':'2'})
+            self.assertEqual(response.status_code,400,response.json)
+            self.assertIn('SKU-001: requested 3, but only 2 available',response.json['error'])
+            lookup.assert_called_once_with('SKU-001')
+        self.assertEqual(self.client.get(self.path+'/'+str(line['id'])).json['line']['quantity'],'1')
+
+    def test_bulk_save_reports_every_short_sku_without_partial_writes(self):
+        items=[{'sku':sku,'description':'Part','quantity':'2','unit_price':'10','currency':'USD'} for sku in ('LOW-A','LOW-B')]
+        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'qty':1}) as lookup:
+            response=self.client.post(self.path+'/bulk',json={'lines':items})
+            self.assertEqual(response.status_code,400,response.json)
+            self.assertIn('LOW-A',response.json['error']);self.assertIn('LOW-B',response.json['error'])
+            self.assertEqual(lookup.call_count,2)
+        self.assertEqual(self.client.get(self.path).json['lines'],[])
+
     def test_bulk_add_is_atomic_and_keeps_enquiry_items_independent(self):
         endpoint = self.path + '/bulk'
         item = {'sku': 'BULK', 'description': 'Part', 'quantity': '1',

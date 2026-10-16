@@ -332,12 +332,11 @@ def order_lines(order_id, line_id=None):
                     (order_id,line_id,values['sku'].strip())).fetchone():
                 raise ValueError(f"SKU {values['sku']} is already in the draft. "
                                  'Increase the quantity of the existing draft item instead.')
-            if values['sku']!=row['sku'] or values['quantity_milli']!=row['quantity_milli']:
-                from decimal import Decimal
-                from backend.orders.catalog import validate_stock
-                existing_quantity=connection.execute('SELECT COALESCE(SUM(quantity_milli),0) FROM order_sku_lines WHERE order_id=? AND id!=? AND sku=? COLLATE NOCASE AND is_active=1',
-                    (order_id,line_id,values['sku'])).fetchone()[0]
-                validate_stock(values['sku'],Decimal(existing_quantity+values['quantity_milli'])/1000)
+            from decimal import Decimal
+            from backend.orders.catalog import validate_stock
+            existing_quantity=connection.execute('SELECT COALESCE(SUM(quantity_milli),0) FROM order_sku_lines WHERE order_id=? AND id!=? AND trim(sku)=? COLLATE NOCASE AND is_active=1',
+                (order_id,line_id,values['sku'])).fetchone()[0]
+            validate_stock(values['sku'],Decimal(existing_quantity+values['quantity_milli'])/1000)
             connection.execute(
                 'UPDATE order_sku_lines SET '
                 + ', '.join(key + ' = ?' for key in values)

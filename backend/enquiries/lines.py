@@ -194,6 +194,7 @@ def save_line(enquiry_id, line_id=None):
             action = 'remove'
         else:
             values = validated(request.get_json(silent=True), existing)
+            validate_enquiry_stock(connection, enquiry_id, [values], line_id)
             if existing is None:
                 columns = ', '.join(values)
                 placeholders = ', '.join('?' for _ in values)
@@ -286,8 +287,20 @@ def sku_lookup(enquiry_id):
         connection.close()
 
 
+def validate_enquiry_stock(connection, enquiry_id, values, exclude_id=None):
+    from backend.orders.catalog import validate_stock_batch
+    keys = {item['sku'].strip().casefold() for item in values}
+    items = [(item['sku'], Decimal(item['quantity_milli'])/1000) for item in values]
+    for row in connection.execute('SELECT id,sku,quantity_milli FROM enquiry_sku_lines '
+                                  'WHERE enquiry_id=? AND is_active=1', (enquiry_id,)):
+        if row['id'] != exclude_id and row['sku'].strip().casefold() in keys:
+            items.append((row['sku'], Decimal(row['quantity_milli'])/1000))
+    validate_stock_batch(items)
+
+
 def create_lines(connection, enquiry_id, values, actor):
     """Insert reviewed drafts under the caller's enquiry transaction."""
+    validate_enquiry_stock(connection, enquiry_id, values)
     for item in values:
         columns = ', '.join(item)
         marks = ', '.join('?' for _ in item)

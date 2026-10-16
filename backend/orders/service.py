@@ -280,11 +280,9 @@ def insert_lines(connection, order_id, lines, actor):
             raise ValueError(f"SKU {line['sku']} is already in the draft. "
                              'Increase the quantity of the existing draft item instead.')
         existing_skus.add(key)
+    from backend.orders.catalog import validate_stock_batch
+    validate_stock_batch((line['sku'], Decimal(line['quantity_milli'])/1000) for line in lines)
     for line in lines:
-        from backend.orders.catalog import validate_stock
-        existing_quantity=connection.execute('SELECT COALESCE(SUM(quantity_milli),0) FROM order_sku_lines WHERE order_id=? AND sku=? COLLATE NOCASE AND is_active=1',
-            (order_id,line['sku'])).fetchone()[0]
-        validate_stock(line['sku'],Decimal(existing_quantity+line['quantity_milli'])/1000)
         columns = ', '.join(line)
         marks = ', '.join('?' for _ in line)
         connection.execute(

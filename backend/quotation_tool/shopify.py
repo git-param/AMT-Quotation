@@ -51,11 +51,11 @@ def _get_token():
         _token_cache.update(token=data['access_token'], expires=now + 3600)
     return _token_cache['token']
 
-def fetch_sku(sku_raw):
+def fetch_sku(sku_raw, *, refresh=False):
     sku = sku_raw.strip()
     key = sku.upper()
     with _sku_lock:
-        if key in _sku_cache:
+        if not refresh and key in _sku_cache:
             cached, ts = _sku_cache[key]
             if time.time() - ts < 900:
                 return cached

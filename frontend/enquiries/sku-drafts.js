@@ -17,11 +17,11 @@
       if(index>=0){activeRow=index;render();editBox.querySelector?.('[aria-label="Quantity"]')?.focus();}
       showError(existingSkuMessage(row.sku));
     }
-    function stockIssue(row){
+    function stockIssue(row, checkAvailability=true){
       if(!commercial)return '';
       const quantity=Number(row.quantity);
       if(!Number.isInteger(quantity)||quantity<=0)return `SKU ${row.sku}: enter a quantity of at least 1 (whole numbers only).`;
-      if(row.found&&row.stock!=null&&Number.isFinite(Number(row.stock))){
+      if(checkAvailability&&row.found&&row.stock!=null&&Number.isFinite(Number(row.stock))){
         const available=Number(row.stock);
         if(available<=0)return `SKU ${row.sku} cannot be added: out of stock (0 available).`;
         if(quantity>available)return `SKU ${row.sku} cannot be added: requested ${quantity}, but only ${available} available.`;
@@ -125,7 +125,6 @@
         if(key==='uom')for(const unit of uoms){const option=document.createElement('option');option.value=unit;option.textContent=unit;control.append(option);}
         control.value=row[key]||(key==='uom'?'PCs':'');control.required=row.included!==false&&(!commercial||!['hsn_code','item_condition'].includes(key));control.disabled=row.included===false;if(max)control.maxLength=max;
         if(type==='number'){control.min=key==='quantity'?'1':'0';control.step=key==='quantity'?'1':'0.01';}
-        if(commercial&&key==='quantity'&&row.found&&row.stock!=null&&Number.isFinite(Number(row.stock)))control.max=String(row.stock);
         if(key==='hsn_code'&&sharedHsn){control.readOnly=true;control.title='Shared HSN code managed in Configuration';}
         control.setAttribute('aria-label',title);control.oninput=()=>{
           if(key==='sku'){
@@ -248,7 +247,9 @@
         const savedDuplicate=savedRows().find(row=>selected.some(item=>skuKey(item.sku)===skuKey(row.sku)));
         if(savedDuplicate){const message=existingSkuMessage(savedDuplicate.sku);showError(message);throw new Error(message);}
         if(selected.some(row=>row.currency!==currency()))throw new Error('Currency changed. Fetch again or review the draft prices.');
-        for(const row of selected){const issue=stockIssue(row);if(issue){activeRow=rows.indexOf(row);renderEditor();status.className='draft-status error';status.textContent=issue;throw new Error(issue);}}
+        // Save endpoints refresh stock; an earlier lookup must not block a
+        // replenished SKU from reaching that authoritative check.
+        for(const row of selected){const issue=stockIssue(row,false);if(issue){activeRow=rows.indexOf(row);renderEditor();status.className='draft-status error';status.textContent=issue;throw new Error(issue);}}
         for(const control of editBox.querySelectorAll('input,textarea,select'))if(!control.reportValidity())throw new Error('Complete all SKU row fields.');
         const invalid = selected.find(row =>
           !row.sku.trim() || !row.description.trim() ||
@@ -266,7 +267,7 @@
       currencyChanged() { rows.forEach(row=>{row.currency=currency();row.unit_price='';});render();status.textContent='Currency changed. Fetch again or enter unit prices in the chosen currency.'; },
       reset() { revision++;rows=[];unresolved=[];activeRow=0;input.value='';status.textContent='';renderLookupNotice();render(); }
     };
-    if(save)save.onclick=async()=>{save.disabled=true;try{await onSave(editor.values());editor.reset();status.textContent='SKU lines saved.';}catch(error){status.textContent=error.message;}finally{save.disabled=false;}};
+    if(save)save.onclick=async()=>{save.disabled=true;try{const lines=editor.values();status.className='draft-status';status.textContent='Checking current stock and saving SKU items...';await onSave(lines);editor.reset();status.textContent='SKU lines saved.';}catch(error){showError(error.message);}finally{save.disabled=false;}};
     render();return editor;
   };
 })();

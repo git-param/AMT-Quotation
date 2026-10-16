@@ -18,7 +18,7 @@ class Element {
   querySelectorAll() { return []; }
 }
 
-function setup(scope, fetch, currency = 'USD', commercial = false, savedRows = () => []) {
+function setup(scope, fetch, currency = 'USD', commercial = false, savedRows = () => [], onSave = null) {
   const context = {
     window: {}, document: {createElement: tag => new Element(tag)}, fetch,
   };
@@ -26,7 +26,7 @@ function setup(scope, fetch, currency = 'USD', commercial = false, savedRows = (
   const file = path.join(__dirname, '../frontend/enquiries/sku-drafts.js');
   vm.runInContext(fs.readFileSync(file, 'utf8'), context);
   const host = new Element('div');
-  const drafts = context.window.createSkuDraftEditor(host, scope, () => currency, null, commercial, savedRows);
+  const drafts = context.window.createSkuDraftEditor(host, scope, () => currency, onSave, commercial, savedRows);
   const lookup = host.children[1];
   const input = lookup.children[1];
   input.value = '1258\n4657';
@@ -151,15 +151,37 @@ test('order lookup fills shared HSN and offers the four supported UOM choices',a
   assert.equal(uom.tag,'select');assert.deepEqual(uom.children.map(option=>option.value),['PCs','Lot','Kit','set']);
 });
 
-test('order lookup explains zero stock, zero quantity and excess quantity before adding',async()=>{
+test('stock hints explain shortages while allowing saves to recheck fresh availability',async()=>{
   for(const [stock,quantity,message]of [[0,'1',/out of stock.*0 available/],[2,'0',/at least 1/],[2,'3',/requested 3.*only 2 available/]]){
     const editor=setup(()=>({client_id:7}),async()=>({ok:true,json:async()=>({drafts:[{
       sku:'1258',description:'Part',quantity:'1',unit_price:'10.00',currency:'USD',found:true,stock,catalog_prices:{}
     }]})}),'USD',true);
     await editor.button.onclick();
     const control=editor.host.children[3].children[1].children[2].children[0];control.value=quantity;control.oninput();
-    assert.throws(()=>editor.drafts.values(),message);assert.match(editor.status.textContent,message);
+    assert.match(editor.status.textContent,message);
+    if(quantity==='0')assert.throws(()=>editor.drafts.values(),message);
+    else assert.equal(editor.drafts.values()[0].quantity,quantity);
+    assert.equal(control.max,undefined);
   }
+});
+
+test('failed fresh stock check keeps edited quantities available for correction and retry',async()=>{
+  let fail=true;
+  const editor=setup(()=>({client_id:7}),async()=>({ok:true,json:async()=>({drafts:[{
+    sku:'PART',description:'Part',quantity:'1',unit_price:'10.00',currency:'USD',found:true,stock:10,catalog_prices:{}
+  }]})}),'USD',true,()=>[],async lines=>{
+    assert.equal(lines[0].quantity,'3');
+    if(fail)throw new Error('SKU PART: requested 3, but only 2 available.');
+  });
+  await editor.button.onclick();
+  const quantity=editor.host.children[3].children[1].children[2].children[0];
+  quantity.value='3';quantity.oninput();
+  const save=editor.host.children.at(-1);await save.onclick();
+  assert.match(editor.status.textContent,/PART.*requested 3.*only 2 available/);
+  assert.equal(editor.status.className,'draft-status error');
+  assert.equal(editor.drafts.values()[0].quantity,'3');assert.equal(save.disabled,false);
+  fail=false;await save.onclick();assert.match(editor.status.textContent,/SKU lines saved/);
+  assert.throws(()=>editor.drafts.values(),/Select at least one/);
 });
 
 test('repeated lookup is blocked and preserves user edits', async () => {

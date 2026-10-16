@@ -4,6 +4,7 @@ import sqlite3
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest.mock import patch
 
 import test_enquiries
 from backend import database
@@ -88,20 +89,59 @@ class OrderTests(unittest.TestCase):
                     'created_at'):
             self.assertEqual(updated.json['order'][key], first['order'][key])
 
-    def test_recent_lookup_stock_blocks_out_of_stock_and_excess_order_quantities(self):
+    def test_fresh_lookup_stock_blocks_out_of_stock_and_excess_order_quantities(self):
         from backend.orders.catalog import remember_stock
         state=self.order();base=f'/api/orders/{state["order"]["id"]}/lines'
         data={'sku':'STOCK-CHECK','description':'Stock checked part','quantity':'1','unit_price':'10.00','currency':'USD',
               'hsn_code':'85371090','item_condition':'Used','uom':'Kit'}
-        remember_stock('STOCK-CHECK',0)
-        result=self.client.post(base,json=data)
-        self.assertEqual(result.status_code,400);self.assertIn('out of stock',result.json['error'])
-        remember_stock('STOCK-CHECK',2)
-        result=self.client.post(base,json={**data,'quantity':'3'})
-        self.assertEqual(result.status_code,400);self.assertIn('only 2 available',result.json['error'])
-        self.assertEqual(self.client.post(base,json={**data,'quantity':'2'}).status_code,201)
+        remember_stock('STOCK-CHECK',100)
+        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'qty':0}):
+            result=self.client.post(base,json=data)
+        self.assertEqual(result.status_code,400);self.assertIn('Out of stock',result.json['error'])
+        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'qty':2}):
+            result=self.client.post(base,json={**data,'quantity':'3'})
+            self.assertEqual(result.status_code,400);self.assertIn('only 2 available',result.json['error'])
+            self.assertEqual(self.client.post(base,json={**data,'quantity':'2'}).status_code,201)
         self.assertEqual(self.client.post(base,json=data).status_code,400)
         self.assertEqual(self.client.post(base,json={**data,'uom':'unsupported'}).status_code,400)
+
+    def test_quantity_save_uses_fresh_stock_and_preserves_line_when_short(self):
+        from backend.orders.catalog import remember_stock
+        state=self.order();line=state['lines'][0]
+        path=f'/api/orders/{state["order"]["id"]}/lines/{line["id"]}'
+        remember_stock(line['sku'],100)
+        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'qty':2}) as lookup:
+            response=self.client.put(path,json={'quantity':'3'})
+            self.assertEqual(response.status_code,400,response.json)
+            self.assertIn(f'SKU {line["sku"]}: requested 3, but only 2 available',response.json['error'])
+            lookup.assert_called_once_with(line['sku'])
+        self.assertEqual(self.client.get(path).json['line']['quantity'],line['quantity'])
+        remember_stock(line['sku'],0)
+        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'qty':3}):
+            self.assertEqual(self.client.put(path,json={'quantity':'3'}).status_code,200)
+
+    def test_bulk_save_lists_all_short_skus_and_saves_nothing(self):
+        state=self.order();base=f'/api/orders/{state["order"]["id"]}/lines'
+        items=[{'sku':sku,'description':'Part','quantity':'3','unit_price':'10','currency':'USD'}
+               for sku in ('ENOUGH','LOW-A','LOW-B')]
+        def stock(sku):return {'found':True,'qty':{'ENOUGH':3,'LOW-A':2,'LOW-B':0}[sku]}
+        with patch('backend.orders.catalog.lookup_stock',side_effect=stock) as lookup:
+            response=self.client.post(base+'/bulk',json={'lines':items})
+            self.assertEqual(response.status_code,400,response.json)
+            self.assertIn('LOW-A: requested 3, but only 2 available',response.json['error'])
+            self.assertIn('LOW-B: requested 3, but only 0 available',response.json['error'])
+            self.assertEqual(lookup.call_count,3)
+        self.assertEqual(len(self.client.get(base).json['lines']),1)
+
+    def test_save_blocks_when_stock_cannot_be_verified(self):
+        state=self.order();line=state['lines'][0]
+        path=f'/api/orders/{state["order"]["id"]}/lines/{line["id"]}'
+        for stock in ({'found':False},{'found':True,'qty':None},RuntimeError('Offline')):
+            with patch('backend.orders.catalog.lookup_stock',side_effect=[stock]):
+                response=self.client.put(path,json={'quantity':'2'})
+                self.assertEqual(response.status_code,400,response.json)
+                self.assertIn(line['sku'],response.json['error'])
+        self.assertEqual(self.client.get(path).json['line']['quantity'],line['quantity'])
 
     def test_duplicate_sku_additions_are_blocked_and_existing_quantity_can_increase(self):
         state=self.order();order_id=state['order']['id'];base=f'/api/orders/{order_id}/lines'
