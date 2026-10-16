@@ -28,7 +28,7 @@ def search_pi():
         if currency not in ('all', 'USD', 'INR'):
             raise ValueError('Choose all currencies, USD or INR.')
         scoped, parameters = order_query(get_current_user())
-        query = ' FROM order_invoices i JOIN ('+scoped+') o ON o.id=i.order_id WHERE 1=1'
+        query = ' FROM order_invoices i JOIN ('+scoped+') o ON o.id=i.order_id WHERE i.deleted_at IS NULL'
         if term:
             pattern = '%'+term.replace('!', '!!').replace('%', '!%').replace('_', '!_')+'%'
             columns = ('i.reference', 'o.reference', 'o.po_reference', 'o.client_name', 'o.client_company')

@@ -244,6 +244,9 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       render();
       host.scrollIntoView({ behavior: "smooth", block: "start" });
     },
+    removeIssued(invoiceId) {
+      if(issued?.id===invoiceId)this.reset();
+    },
     reset() {
       if(calculationTimer)clearTimeout(calculationTimer);calculationVersion++;
       clearPrintUrl();

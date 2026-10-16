@@ -105,6 +105,13 @@ uses the same current client visibility as order downloads, including read-only
 shares and revocations, and excludes deleted orders. Reused PI numbers appear as
 separate issued records. Historical Excel-only invoices show PDF unavailable.
 
+Generated PI rows include a minus button for users with order EDIT and deletion
+access. After confirmation, `DELETE /api/orders/{id}/invoices/{invoice_id}` removes
+that PI from active lists, Search PI, downloads and its issued preview. The order
+and other invoices stay intact. Invoice files and the removal actor/time remain
+stored for history, with a `pi_remove` audit event. An old preview cannot reissue
+the removed invoice; use a new preview when another PI is needed.
+
 The active UI uses **Preview PI** after selecting USD or INR and any required
 exchange rate. Users edit the PI date, PO/commercial fields, consignee/buyer/notify
 text, item descriptions/HSN/condition/quantity/rate/UOM, shipping, instructions and

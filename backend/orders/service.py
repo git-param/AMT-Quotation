@@ -214,7 +214,7 @@ def details(connection, order):
     invoices = [dict(row) for row in connection.execute(
         'SELECT id, reference, currency, created_at, workbook_format, '
         '(pdf IS NOT NULL) AS has_pdf FROM order_invoices '
-        'WHERE order_id = ? ORDER BY id DESC', (order['id'],))]
+        'WHERE order_id = ? AND deleted_at IS NULL ORDER BY id DESC', (order['id'],))]
     legacy_review = []
     if order['reference'] == 'LEGACY-ENQ-' + str(order['enquiry_id']):
         legacy_review = [serialize(row) for row in connection.execute(

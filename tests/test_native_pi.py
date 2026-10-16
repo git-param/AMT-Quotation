@@ -119,6 +119,35 @@ class NativePiTests(unittest.TestCase):
         self.assertEqual(saved['order']['status'],'draft')
         self.assertEqual(saved['invoices'],[])
 
+    def test_remove_pi_hides_record_and_downloads_but_retains_files_and_audit(self):
+        preview=self.preview();issued=self.issue(preview)
+        invoice_id=issued.json['id'];path=f'/api/orders/{self.order_id}'
+        response=self.client.delete(path+f'/invoices/{invoice_id}')
+        self.assertEqual(response.status_code,200,response.json)
+        saved=self.client.get(path).json
+        self.assertEqual(saved['invoices'],[])
+        self.assertEqual(saved['order']['status'],'completed')
+        self.assertEqual(self.client.get(issued.json['xlsx_url']).status_code,404)
+        self.assertEqual(self.client.get(issued.json['pdf_url']).status_code,404)
+        self.assertEqual(self.client.get('/api/pi-search').json['total'],0)
+        self.assertEqual(self.issue(preview).status_code,404)
+        self.assertEqual(self.client.get(preview['pdf_url']).status_code,404)
+        connection=database.get_db()
+        try:
+            record=connection.execute('SELECT * FROM order_invoices WHERE id=?',(invoice_id,)).fetchone()
+            self.assertIsNotNone(record['deleted_at']);self.assertTrue(record['workbook']);self.assertTrue(record['pdf'])
+            audit=connection.execute("SELECT details FROM audit_logs WHERE action='pi_remove'").fetchone()
+            self.assertEqual(json.loads(audit['details'])['invoice_id'],invoice_id)
+            self.assertEqual(connection.execute('PRAGMA foreign_key_check').fetchall(),[])
+        finally:connection.close()
+
+    def test_remove_pi_requires_order_visibility_and_delete_permission(self):
+        issued=self.issue(self.preview());path=f'/api/orders/{self.order_id}/invoices/{issued.json["id"]}'
+        self.as_user('exec2');self.assertEqual(self.client.delete(path).status_code,404)
+        self.share('VIEW');self.as_user('exec2')
+        self.assertEqual(self.client.delete(path).status_code,403)
+        self.as_user(None);self.assertEqual(self.client.delete(path).status_code,401)
+
     def test_other_order_can_edit_and_issue_an_already_used_pi_number(self):
         first=self.issue(self.preview())
         self.assertEqual(first.status_code,201,first.json)
@@ -201,6 +230,46 @@ class NativePiTests(unittest.TestCase):
             'buyer_text':doc['delivery']['buyer_text']+'\nTel: +919999999999\nPIC: Buyer\nEmail: buyer@example.com'}})
         self.assertEqual(saved.status_code,200,saved.json)
         self.assertIn('Email: buyer@example.com',saved.json['document']['delivery']['buyer_text'])
+
+    def test_same_as_consignee_prints_reference_in_buyer_and_notify_for_both_formats(self):
+        block='Client company\nStreet address\nCountry: USA\nTel: +919876543210\nEmail: client@example.com'
+        response=self.client.put(f'/api/orders/{self.order_id}',json={'delivery':{
+            'consignee_text':block,'buyer_text':'Client company\nStreet address','notify_text':'Client company\nStreet address'}})
+        self.assertEqual(response.status_code,200,response.json)
+        for count in (1,5):
+            if count==5:
+                result=self.client.post(f'/api/orders/{self.order_id}/lines/bulk',json={'lines':[
+                    {'sku':f'LINKED-{index}','description':'Part','quantity':'1','unit_price':'10','currency':'USD'} for index in range(4)]})
+                self.assertEqual(result.status_code,201,result.json)
+            preview=self.preview(**({'bulk_description':'Electrical spare parts'} if count==5 else {}))
+            parties=next(section for section in preview['layout']['sections'] if section['name']=='parties')
+            linked=[cell for row in parties['rows'] for cell in row if cell.get('field') in ('delivery.buyer_text','delivery.notify_text')]
+            self.assertEqual([cell['text'] for cell in linked],['(Same as consignee)']*2)
+            self.assertEqual([cell['value'] for cell in linked],['(Same as consignee)']*2)
+            with ZipFile(BytesIO(pi_exports.xlsx(preview['document']))) as book:
+                self.assertIn('(Same as consignee)',book.read('xl/sharedStrings.xml').decode())
+            self.assertTrue(pi_exports.pdf(preview['document']).startswith(b'%PDF-'))
+        stored=self.client.get(f'/api/orders/{self.order_id}').json['delivery']
+        self.assertEqual(stored['buyer_text'],'Client company\nStreet address')
+        self.assertEqual(stored['notify_text'],'Client company\nStreet address')
+
+    def test_custom_party_and_contacts_are_retained_beside_linked_notify(self):
+        block='Client company\nStreet address\nCountry: USA'
+        buyer='Client company\nStreet address\nEmail: buyer@example.com'
+        self.client.put(f'/api/orders/{self.order_id}',json={'delivery':{
+            'consignee_text':block,'buyer_text':buyer,'notify_text':'Client company\nStreet address'}})
+        preview=self.preview()
+        parties=next(section for section in preview['layout']['sections'] if section['name']=='parties')
+        cells={cell.get('field'):cell for row in parties['rows'] for cell in row}
+        self.assertIn('Email: buyer@example.com',cells['delivery.buyer_text']['text'])
+        self.assertEqual(cells['delivery.notify_text']['text'],'(Same as consignee)')
+        saved=self.client.put(self.base+'/preview/'+preview['preview_id'],json={'delivery':{
+            'buyer_text':'Separate buyer\nDifferent address','notify_text':'(Same as consignee)'}})
+        self.assertEqual(saved.status_code,200,saved.json)
+        parties=next(section for section in saved.json['layout']['sections'] if section['name']=='parties')
+        cells={cell.get('field'):cell for row in parties['rows'] for cell in row}
+        self.assertIn('Separate buyer',cells['delivery.buyer_text']['text'])
+        self.assertEqual(cells['delivery.notify_text']['text'],'(Same as consignee)')
 
     def test_party_address_and_contacts_have_export_spacing(self):
         preview=self.preview()

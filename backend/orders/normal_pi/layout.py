@@ -5,7 +5,7 @@ is a layout definition only; it never opens a workbook or changes PI amounts.
 """
 from decimal import Decimal
 import re
-from backend.orders.locations import party_parts
+from backend.orders.locations import party_parts, address_only
 
 WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
           15.7109375,8.7109375,8,16,8.7109375,8.140625]
@@ -28,6 +28,11 @@ def layout(doc):
     def editable(col,span,label,value,path,style='',**extra):
         return c(col,span,label+str(value),style,path,label,value,**extra)
     def party_cell(col,span,value,path,**extra):
+        if path in ('delivery.buyer_text','delivery.notify_text'):
+            normalize=lambda text:'\n'.join(line.strip() for line in text.splitlines() if line.strip())
+            consignee=normalize(address_only(doc['delivery']['consignee_text']))
+            if (consignee and normalize(value)==consignee) or value.strip()=='(Same as consignee)':
+                value='(Same as consignee)'
         primary,secondary=party_parts(value)
         return c(col,span,'\n\n'.join(part for part in (primary,secondary) if part),field=path,value=value,
                  multiline=True,party=True,**extra)

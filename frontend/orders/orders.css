@@ -3,6 +3,8 @@
 .order-status-actions{display:flex;align-items:center;gap:8px}
 .order-status-toggle{border:1px solid #bbf7d0!important;background:#f0fdf4!important;color:#166534!important;white-space:nowrap}
 .order-status-toggle:disabled{opacity:.55;cursor:wait}
+.pi-remove-button{display:inline-flex;align-items:center;justify-content:center;flex:0 0 30px;width:30px;height:30px;padding:0;margin-left:6px;border:1px solid #fecdd3;border-radius:7px;background:#fff7f8;color:#be123c;font-size:22px;line-height:1;cursor:pointer}
+.pi-remove-button:hover{background:#ffe4e6;border-color:#fda4af}.pi-remove-button:focus-visible{outline:3px solid #fda4af;outline-offset:2px}.pi-remove-button:disabled{opacity:.5;cursor:wait}
 .panel { margin-bottom:24px; }
 #editor,#detail { scroll-margin-top:20px; }
 .order-parties { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }

@@ -465,6 +465,20 @@ function appendInvoice(invoice,id){
   const row=document.createElement('div');row.className='pi-download-row';
   const title=document.createElement('span');title.textContent=`${invoice.reference} / ${invoice.currency} / ${(invoice.created_at||'').slice(0,10)}`;row.append(title);
   for(const format of [invoice.workbook_format||'xlsm',...(invoice.has_pdf?['pdf']:[])]){const link=document.createElement('a');link.textContent='Download '+format.toUpperCase();link.href=`/api/orders/${id}/invoices/${invoice.id}/download?format=${format}`;row.append(link);}
+  if(current?.order.can_edit&&current.order.can_delete_order){
+    const remove=document.createElement('button');remove.type='button';remove.className='pi-remove-button';remove.textContent='\u2212';remove.title='Remove PI';remove.setAttribute('aria-label','Remove PI '+invoice.reference);
+    remove.onclick=async()=>{
+      if(!window.confirm(`Remove PI ${invoice.reference} from the invoice records?`))return;
+      remove.disabled=true;
+      try{
+        await api(`/api/orders/${id}/invoices/${invoice.id}`,{method:'DELETE'});
+        row.remove();if(current?.order.id===id)current.invoices=(current.invoices||[]).filter(item=>item.id!==invoice.id);
+        invoicePreview.removeIssued?.(invoice.id);
+        message('PI removed.');
+      }catch(error){remove.disabled=false;message(error.message,true);}
+    };
+    row.append(remove);
+  }
   el('invoiceList').append(row);
 }
 const invoicePreview=window.createPiPreview(el('piPreview'),api,json,async result=>{

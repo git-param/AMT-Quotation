@@ -439,6 +439,31 @@ def generate_invoice(order_id):
         connection.close()
 
 
+@bp.route('/api/orders/<int:order_id>/invoices/<int:invoice_id>',methods=['DELETE'])
+@authenticated_required
+def remove_invoice(order_id, invoice_id):
+    connection=get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        user=get_current_user()
+        order=read_order(connection,user,order_id)
+        if not order:return jsonify(error='Order not found.'),404
+        if not order['can_edit'] or not order['can_delete_order']:
+            return jsonify(error='PI removal is not permitted.'),403
+        invoice=connection.execute('SELECT id,reference,currency FROM order_invoices '
+            'WHERE id=? AND order_id=? AND deleted_at IS NULL',(invoice_id,order_id)).fetchone()
+        if not invoice:return jsonify(error='PI not found.'),404
+        connection.execute("UPDATE order_invoices SET deleted_by=?,deleted_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+            (user['id'],invoice_id))
+        record_revision(connection,order_id,user,'edit')
+        connection.execute('INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
+            "VALUES(?,?,'pi_remove','order',?,?)",(user['id'],user['username'],str(order_id),
+                json.dumps({'invoice_id':invoice_id,'reference':invoice['reference'],'currency':invoice['currency']})))
+        connection.commit()
+        return jsonify(message='PI removed.')
+    finally:connection.rollback();connection.close()
+
+
 @bp.route('/api/orders/<int:order_id>/invoices/<int:invoice_id>/download')
 @authenticated_required
 def download_invoice(order_id, invoice_id):
@@ -447,7 +472,7 @@ def download_invoice(order_id, invoice_id):
     try:
         if not read_order(connection, get_current_user(), order_id):
             return jsonify(error='Order not found.'), 404
-        invoice = connection.execute('SELECT * FROM order_invoices WHERE id = ? AND order_id = ?',
+        invoice = connection.execute('SELECT * FROM order_invoices WHERE id = ? AND order_id = ? AND deleted_at IS NULL',
                                      (invoice_id, order_id)).fetchone()
         if not invoice:
             return jsonify(error='PI not found.'), 404

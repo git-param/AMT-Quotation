@@ -21,6 +21,7 @@ class Element {
   reset() {}
   scrollIntoView() {}
   focus(){this.focused=true;}
+  remove(){this.removed=true;}
   querySelectorAll(selector) {
     const nodes = this.children.flatMap(child => [child, ...child.querySelectorAll('*')]);
     if (selector === 'input:checked') return nodes.filter(node => node.tag === 'input' && node.checked);
@@ -59,6 +60,7 @@ function setup(search = '?client_id=9') {
       else if(url==='/api/orders' && options.method==='POST')response=data;
       else if(url==='/api/orders/7')response=data;
       else if(url==='/api/orders/7/status'){data.order.status=JSON.parse(options.body).status;response={order:data.order};}
+      else if(url==='/api/orders/7/invoices/12'&&options.method==='DELETE')response={message:'PI removed.'};
       else if(url==='/api/orders/7/discount'){data.order.discount=options.method==='DELETE'?null:JSON.parse(options.body);response=data;}
       else if(url==='/api/orders/7/line-commercial-details'){const body=JSON.parse(options.body);for(const item of body.lines)Object.assign(data.lines.find(line=>line.id===item.id),item);response=data;}
       else if(url.startsWith('/api/enquiries?'))response={enquiries:[enquiry],pages:1};
@@ -287,6 +289,18 @@ test('completion actions stay hidden for read-only and cancelled orders',async()
   assert.equal(f.element('toggleOrderStatus').hidden,true);
   f.data.order.can_edit=true;f.data.order.status='cancelled';await f.context.showDetails(7);
   assert.equal(f.element('toggleOrderStatus').hidden,true);
+});
+
+test('invoice minus button confirms removal and calls only the selected record endpoint',async()=>{
+  const f=setup();await settle();f.data.order.can_delete_order=true;await f.context.showDetails(7);
+  f.context.appendInvoice({id:12,reference:'PI-9215',currency:'USD',workbook_format:'xlsx',has_pdf:true},7);
+  const row=f.element('invoiceList').children[0],button=row.children.at(-1);
+  assert.equal(button.textContent,'\u2212');assert.equal(button.attributes['aria-label'],'Remove PI PI-9215');
+  f.context.window.confirm=()=>false;await button.onclick();
+  assert.equal(f.requests.filter(item=>item.options.method==='DELETE').length,0);
+  f.context.window.confirm=()=>true;await button.onclick();
+  assert.ok(f.requests.some(item=>item.url==='/api/orders/7/invoices/12'&&item.options.method==='DELETE'));
+  assert.equal(row.removed,true);
 });
 
 test('workspace header toggles status through its own iframe and refreshes lists',async()=>{

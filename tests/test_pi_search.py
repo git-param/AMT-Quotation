@@ -92,6 +92,13 @@ class PiSearchTests(unittest.TestCase):
         for query in ({'page':0},{'page_size':101},{'currency':'EUR'},{'q':'x'*201}):
             self.assertEqual(self.search(**query).status_code,400,query)
 
+    def test_removing_one_pi_keeps_other_records_with_same_number(self):
+        order_id,first=self.invoice();_,second=self.invoice(order_id=order_id)
+        self.assertEqual(self.client.delete(f'/api/orders/{order_id}/invoices/{first}').status_code,200)
+        results=self.search().json
+        self.assertEqual(results['total'],1);self.assertEqual(results['invoices'][0]['id'],second)
+        self.assertEqual(self.client.get(results['invoices'][0]['excel_url']).status_code,200)
+
 
 if __name__=='__main__':
     unittest.main()

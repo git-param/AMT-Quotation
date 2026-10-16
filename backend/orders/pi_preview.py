@@ -28,8 +28,9 @@ def authorized(connection,order_id):
 
 
 def preview_row(connection,order_id,preview_id,user):
-    return connection.execute('SELECT * FROM invoice_previews WHERE id=? AND order_id=? AND created_by=?',
-                              (preview_id,order_id,user['id'])).fetchone()
+    return connection.execute('SELECT p.* FROM invoice_previews p LEFT JOIN order_invoices i ON i.id=p.issued_invoice_id '
+        'WHERE p.id=? AND p.order_id=? AND p.created_by=? AND (p.issued_invoice_id IS NULL OR i.deleted_at IS NULL)',
+        (preview_id,order_id,user['id'])).fetchone()
 
 
 @bp.route('/api/orders/<int:order_id>/invoices/preview',methods=['POST'])
