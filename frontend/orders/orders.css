@@ -1,5 +1,8 @@
 /* Orders reuse the CRM panels, fields, responsive tables and SKU draft editor. */
 .wrap { max-width:1480px; }
+.order-status-actions{display:flex;align-items:center;gap:8px}
+.order-status-toggle{border:1px solid #bbf7d0!important;background:#f0fdf4!important;color:#166534!important;white-space:nowrap}
+.order-status-toggle:disabled{opacity:.55;cursor:wait}
 .panel { margin-bottom:24px; }
 #editor,#detail { scroll-margin-top:20px; }
 .order-parties { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }

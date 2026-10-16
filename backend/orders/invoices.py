@@ -420,7 +420,7 @@ def generate_invoice(order_id):
             '(order_id, reference, currency, snapshot_json, workbook, created_by) '
             'VALUES (?, ?, ?, ?, ?, ?)',
             (order_id, reference, data['currency'], json.dumps(snapshot), workbook, user['id']))
-        connection.execute("UPDATE client_orders SET pi_reference = ?, pi_date = ?, "
+        connection.execute("UPDATE client_orders SET pi_reference = ?, pi_date = ?, status = 'completed', "
             "updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?",
             (reference, issued, user['id'], order_id))
         record_revision(connection, order_id, user, 'edit')

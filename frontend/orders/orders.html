@@ -83,7 +83,7 @@
                     <div><span class="eyebrow">A GOOD DEAL STARTS HERE</span><h2 id="formTitle">New order</h2>
                     <p id="referenceHint">Order reference is generated when saved.</p></div>
                 </div>
-                <button id="cancel" class="btn-sm" type="button">Cancel</button>
+                <div class="order-status-actions"><button id="composerStatus" class="btn-sm order-status-toggle" type="button" hidden>Complete</button><button id="cancel" class="btn-sm" type="button">Cancel</button></div>
             </div>
             <form id="orderForm" novalidate>
                 <p id="formError" class="composer-error" role="alert" tabindex="-1" hidden></p>
@@ -145,7 +145,7 @@
                     <h2 id="detailTitle"></h2>
                     <p id="detailAccess"></p>
                 </div>
-                <div><button id="deleteOrder" class="btn-sm btn-del" type="button" hidden>Delete order</button><button id="editOrder" class="btn-sm" type="button">Edit order</button><button id="closeDetail"
+                <div><button id="toggleOrderStatus" class="btn-sm order-status-toggle" type="button" hidden>Complete</button><button id="deleteOrder" class="btn-sm btn-del" type="button" hidden>Delete order</button><button id="editOrder" class="btn-sm" type="button">Edit order</button><button id="closeDetail"
                         class="btn-sm" type="button">Close</button></div>
             </div>
             <nav id="recordLinks" class="picker" aria-label="Related records"></nav>

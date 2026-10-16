@@ -51,12 +51,14 @@ class NativePiTests(unittest.TestCase):
     def test_native_exports_without_reference_workbooks_and_idempotent_issuance(self):
         with patch('backend.orders.invoices.template',side_effect=AssertionError('No template at runtime')):
             preview=self.preview()
+            self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['order']['status'],'draft')
             self.assertEqual(preview['document']['reference'],'AMT/1234')
             exact=self.client.get(preview['pdf_url'])
             self.assertEqual(exact.status_code,200)
             self.assertTrue(exact.data.startswith(b'%PDF-'))
             issued=self.issue(preview)
             self.assertEqual(issued.status_code,201,issued.json)
+            self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['order']['status'],'completed')
             self.assertEqual(self.issue(preview).json,issued.json)
             xlsx=self.client.get(issued.json['xlsx_url'])
             pdf=self.client.get(issued.json['pdf_url'])
@@ -95,6 +97,27 @@ class NativePiTests(unittest.TestCase):
         self.assertEqual(self.issue(first).json['id'],issued.json['id'])
         with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
             self.assertIn('SALES/2026/001',book.read('xl/sharedStrings.xml').decode())
+
+    def test_reopening_completed_order_preserves_pi_and_retry_does_not_complete_again(self):
+        preview=self.preview();issued=self.issue(preview)
+        self.assertEqual(issued.status_code,201,issued.json)
+        path=f'/api/orders/{self.order_id}'
+        response=self.client.put(path+'/status',json={'status':'draft'})
+        self.assertEqual(response.status_code,200,response.json)
+        retried=self.issue(preview)
+        self.assertEqual(retried.json['id'],issued.json['id'])
+        self.assertEqual(retried.json['order_status'],'draft')
+        self.assertEqual(self.client.get(issued.json['xlsx_url']).status_code,200)
+        self.assertEqual(self.client.get(path).json['order']['status'],'draft')
+
+    def test_failed_pi_generation_keeps_order_pending(self):
+        preview=self.preview()
+        with patch('backend.orders.pi_exports.xlsx',side_effect=ValueError('Workbook generation failed.')):
+            response=self.issue(preview)
+        self.assertEqual(response.status_code,400,response.json)
+        saved=self.client.get(f'/api/orders/{self.order_id}').json
+        self.assertEqual(saved['order']['status'],'draft')
+        self.assertEqual(saved['invoices'],[])
 
     def test_other_order_can_edit_and_issue_an_already_used_pi_number(self):
         first=self.issue(self.preview())

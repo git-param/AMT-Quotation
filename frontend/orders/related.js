@@ -9,11 +9,26 @@ window.renderRelatedOrders = async (host, scope, canCreate) => {
   const name=document.createElement('strong');name.textContent='Order workspace';
   const hint=document.createElement('span');hint.textContent='Order details, items and proforma invoices';heading.append(name,hint);
   const close=document.createElement('button');close.type='button';close.className='btn-sm';close.textContent='Close';close.setAttribute('aria-label','Close order workspace');
-  header.append(heading,close);
+  const statusToggle=document.createElement('button');statusToggle.type='button';statusToggle.className='btn-sm order-status-toggle';statusToggle.hidden=true;
+  const headerActions=document.createElement('div');headerActions.className='order-dialog-actions';headerActions.append(statusToggle,close);header.append(heading,headerActions);
   const frame=document.createElement('iframe');frame.title='Client order workspace';dialog.append(header,frame);section.append(dialog);
   let refresh=()=>{};
-  const onMessage=event=>{if(event.origin===location.origin&&event.source===frame.contentWindow&&event.data?.type==='amt-order-close')dialog.close();};
+  let activeOrder=null;
+  const onMessage=event=>{
+    if(event.origin!==location.origin||event.source!==frame.contentWindow)return;
+    if(event.data?.type==='amt-order-close')dialog.close();
+    if(event.data?.type==='amt-order-state'){
+      const order=event.data.order;
+      const changed=activeOrder&&order&&activeOrder.id===order.id&&activeOrder.status!==order.status;
+      activeOrder=order;statusToggle.hidden=!order?.can_edit;statusToggle.disabled=Boolean(event.data.busy);
+      statusToggle.textContent=order?.status==='completed'?'Move to pending':'Complete';
+      hint.textContent=order?'Generating a PI automatically marks the order complete.':'Order details, items and proforma invoices';
+      if(changed)refresh();
+    }
+  };
+  statusToggle.onclick=()=>{statusToggle.disabled=true;frame.contentWindow.postMessage({type:'amt-order-toggle-status'},location.origin);};
   function open(extra){
+    activeOrder=null;statusToggle.hidden=true;
     frame.src='/orders?'+new URLSearchParams({...scope,embedded:1,...extra});
     window.addEventListener('message',onMessage);document.body.classList.add('order-modal-open');dialog.showModal();
   }
@@ -23,7 +38,7 @@ window.renderRelatedOrders = async (host, scope, canCreate) => {
   const loaders=[];
   for(const pending of [true,false]){
     const group=document.createElement('section');group.className='order-card-group';
-    const heading=document.createElement('h4');heading.textContent=pending?'Pending drafts':'Existing orders & PI references';
+    const heading=document.createElement('h4');heading.textContent=pending?'Pending orders':'Complete orders';
     const cards=document.createElement('div');cards.className='order-cards';
     const paging=document.createElement('div');paging.className='picker';
     const previous=document.createElement('button'),next=document.createElement('button'),status=document.createElement('span');
@@ -31,17 +46,17 @@ window.renderRelatedOrders = async (host, scope, canCreate) => {
     previous.textContent='Previous';next.textContent='Next';paging.append(previous,status,next);group.append(heading,cards,paging);section.append(group);
     let page=1;
     async function load(){
-      const response=await fetch('/api/orders?'+new URLSearchParams({...scope,status:pending?'draft':'all',exclude_drafts:pending?'0':'1',page,page_size:6}));
+      const response=await fetch('/api/orders?'+new URLSearchParams({...scope,completion:pending?'pending':'complete',page,page_size:6}));
       const data=await response.json();if(!response.ok)throw new Error(data.error||'Unable to load orders.');
       if(page>Math.max(1,data.pages)){page=Math.max(1,data.pages);return load();}
-      heading.textContent=(pending?'Pending drafts':'Existing orders & PI references')+` (${data.total})`;
+      heading.textContent=(pending?'Pending orders':'Complete orders')+` (${data.total})`;
       previous.disabled=page<=1;next.disabled=page>=data.pages;status.textContent=`${page} / ${Math.max(1,data.pages)}`;
       cards.replaceChildren();
       for(const order of data.orders){
         const resume=pending&&order.can_edit;
         const card=document.createElement('button');card.type='button';card.className='related-order-card';card.onclick=()=>open({order_id:order.id,...(resume?{edit:1}:{})});
         const ref=document.createElement('strong');ref.textContent=order.reference;
-        const meta=document.createElement('span');meta.textContent=`${order.order_date} / ${order.status} / ${order.currency}`;
+        const meta=document.createElement('span');meta.textContent=`${order.order_date} / ${order.status==='completed'?'Complete':order.status==='draft'?'Pending':order.status} / ${order.currency}`;
         const pi=document.createElement('span');pi.textContent=order.pi_reference?`PI: ${order.pi_reference}`:resume?'Continue draft →':'PI not generated';
         card.append(ref,meta,pi);
         if(order.can_delete_order){
@@ -62,7 +77,7 @@ window.renderRelatedOrders = async (host, scope, canCreate) => {
           entry.append(card,remove);cards.append(entry);
         }else cards.append(card);
       }
-      if(!data.orders.length){const empty=document.createElement('p');empty.textContent=pending?'No pending drafts.':'No existing orders yet.';cards.append(empty);}
+      if(!data.orders.length){const empty=document.createElement('p');empty.textContent=pending?'No pending orders.':'No complete orders yet.';cards.append(empty);}
     }
     const safeLoad=()=>load().catch(error=>{status.textContent=error.message;});
     previous.onclick=()=>{page--;safeLoad();};next.onclick=()=>{page++;safeLoad();};loaders.push(safeLoad);

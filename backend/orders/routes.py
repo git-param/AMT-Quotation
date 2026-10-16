@@ -50,6 +50,11 @@ def list_orders():
             raise ValueError('Invalid draft filter.')
         if exclude == '1':
             query += " AND o.status != 'draft'"
+        completion = request.args.get('completion', 'all')
+        if completion not in ('all', 'pending', 'complete'):
+            raise ValueError('Invalid completion filter.')
+        if completion != 'all':
+            query += " AND o.status " + ('=' if completion == 'complete' else '!=') + " 'completed'"
         search = request.args.get('q', '').strip()
         if len(search) > 200:
             raise ValueError('Search is limited to 200 characters.')
@@ -84,6 +89,37 @@ def list_orders():
                        page=page, pages=(total + size - 1) // size)
     finally:
         connection.close()
+
+
+@bp.route('/api/orders/<int:order_id>/status', methods=['PUT'])
+@authenticated_required
+def change_order_status(order_id):
+    """Move an authorized order between pending and complete independently of form edits."""
+    connection = get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        user = get_current_user()
+        order = read_order(connection, user, order_id)
+        if not order:
+            return jsonify(error='Order not found.'), 404
+        if not order['can_edit']:
+            return jsonify(error='Client access is read-only.'), 403
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or set(data) != {'status'} or data['status'] not in ('draft', 'completed'):
+            raise ValueError('Choose pending or complete for this order.')
+        if order['status'] == 'cancelled':
+            raise ValueError('Cancelled orders cannot be moved to pending or complete.')
+        if data['status'] != order['status']:
+            connection.execute("UPDATE client_orders SET status=?,updated_by=?,"
+                "updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+                (data['status'], user['id'], order_id))
+            record_revision(connection, order_id, user, 'edit')
+        connection.commit()
+        return jsonify(order=dict(read_order(connection, user, order_id)))
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    finally:
+        connection.rollback();connection.close()
 
 
 @bp.route('/api/orders/<int:order_id>')

@@ -45,7 +45,7 @@ function setup(search = '?client_id=9') {
   const listing = {orders:[],total:0,page:1,pages:0};
   let denied = false;
   const context = {
-    window:{addEventListener(){},createPiPreview:()=>({reset(){},open(){}}),createSkuDraftEditor:()=>({reset(){},currencyChanged(){},values(){return [];} }),confirm:()=>true},
+    window:{addEventListener(){},parent:{postMessage(){}},createPiPreview:()=>({reset(){},open(){}}),createSkuDraftEditor:()=>({reset(){},currencyChanged(){},values(){return [];} }),confirm:()=>true},
     document:{body:new Element(),getElementById:element,createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag)},
     location:{search},URLSearchParams,Intl,Date,
     Option: class extends Element { constructor(label,value){super('option');this.textContent=label;this.value=String(value);} },
@@ -58,6 +58,7 @@ function setup(search = '?client_id=9') {
       else if(url.startsWith('/api/orders?'))response=listing;
       else if(url==='/api/orders' && options.method==='POST')response=data;
       else if(url==='/api/orders/7')response=data;
+      else if(url==='/api/orders/7/status'){data.order.status=JSON.parse(options.body).status;response={order:data.order};}
       else if(url==='/api/orders/7/discount'){data.order.discount=options.method==='DELETE'?null:JSON.parse(options.body);response=data;}
       else if(url==='/api/orders/7/line-commercial-details'){const body=JSON.parse(options.body);for(const item of body.lines)Object.assign(data.lines.find(line=>line.id===item.id),item);response=data;}
       else if(url.startsWith('/api/enquiries?'))response={enquiries:[enquiry],pages:1};
@@ -178,10 +179,10 @@ test('related order summaries preserve client scope and read-only navigation',as
   const section=host.children[0];
   assert.equal(section.children[0].children[0].textContent,'Orders & Proforma Invoices');
   assert.equal(section.children[0].children.length,1); // VIEW has no Add order.
-  assert.equal(section.children[2].children[0].textContent,'Pending drafts (1)');
-  assert.equal(section.children[3].children[0].textContent,'Existing orders & PI references (1)');
-  assert.ok(fixture.requests.some(item=>item.url.includes('client_id=9')&&item.url.includes('status=draft')));
-  assert.ok(fixture.requests.some(item=>item.url.includes('exclude_drafts=1')));
+  assert.equal(section.children[2].children[0].textContent,'Pending orders (1)');
+  assert.equal(section.children[3].children[0].textContent,'Complete orders (1)');
+  assert.ok(fixture.requests.some(item=>item.url.includes('client_id=9')&&item.url.includes('completion=pending')));
+  assert.ok(fixture.requests.some(item=>item.url.includes('completion=complete')));
 });
 
  test('PI conversion uses the quotation rate without requesting an executive-entered rate',async()=>{
@@ -264,6 +265,49 @@ test('composer presents one continuous form with references and location first',
 test('embedded order composer uses the outer close control only',async()=>{
   const f=setup('?client_id=9&embedded=1');await settle();await f.context.createOrder();
   assert.equal(f.element('cancel').hidden,true);
+});
+
+test('completion toggle switches both ways without clearing unsaved form edits',async()=>{
+  const f=setup();await settle();Object.assign(f.data.order,{destination:'USA',shipping_charges:'0',po_reference:'',pi_reference:'',delivery_terms:'DAP',delivery_time:'4 days',dispatch_method:'Courier'});await f.context.editOrder(7);
+  f.element('po_reference').value='Unsaved PO';
+  assert.equal(f.element('composerStatus').textContent,'Complete');
+  await f.element('composerStatus').onclick();
+  assert.equal(f.data.order.status,'completed');
+  assert.equal(f.element('composerStatus').textContent,'Move to pending');
+  assert.equal(f.element('po_reference').value,'Unsaved PO');
+  await f.element('composerStatus').onclick();
+  assert.equal(f.data.order.status,'draft');
+  assert.equal(f.element('composerStatus').textContent,'Complete');
+});
+
+test('completion actions stay hidden for read-only and cancelled orders',async()=>{
+  const f=setup();await settle();f.data.order.can_edit=false;await f.context.showDetails(7);
+  assert.equal(f.element('toggleOrderStatus').hidden,true);
+  f.data.order.can_edit=true;f.data.order.status='cancelled';await f.context.showDetails(7);
+  assert.equal(f.element('toggleOrderStatus').hidden,true);
+});
+
+test('workspace header toggles status through its own iframe and refreshes lists',async()=>{
+  const f=setup();await settle();f.context.location.origin='http://localhost';
+  let handler;
+  f.context.window.addEventListener=(_,callback)=>{handler=callback;};
+  f.listing.orders=[f.data.order];f.listing.total=1;
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/orders/related.js'),'utf8'),f.context);
+  const host=new Element();await f.context.window.renderRelatedOrders(host,{client_id:9},false);
+  const section=host.children[0],dialog=section.children[1],frame=dialog.children[1];
+  dialog.showModal=()=>{};
+  let sent;
+  frame.contentWindow={postMessage:data=>{sent=data;}};
+  section.children[2].children[1].children[0].onclick();
+  const button=dialog.children[0].children[1].children[0];
+  handler({origin:'http://other',source:frame.contentWindow,data:{type:'amt-order-state',order:f.data.order}});
+  assert.equal(button.hidden,true);
+  handler({origin:'http://localhost',source:frame.contentWindow,data:{type:'amt-order-state',order:f.data.order}});
+  assert.equal(button.hidden,false);assert.equal(button.textContent,'Complete');
+  button.onclick();assert.equal(sent.type,'amt-order-toggle-status');assert.equal(button.disabled,true);
+  handler({origin:'http://localhost',source:frame.contentWindow,data:{type:'amt-order-state',order:{...f.data.order,status:'completed'},busy:false}});
+  assert.equal(button.textContent,'Move to pending');assert.equal(button.disabled,false);
+  await settle();assert.ok(f.requests.filter(request=>request.url.includes('completion=complete')).length>=2);
 });
 
 test('linked parties stay compact; custom party edits reopen with saved data',async()=>{

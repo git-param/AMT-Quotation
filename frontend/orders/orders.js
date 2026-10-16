@@ -10,6 +10,36 @@ let current=null, editing=null, editingLine=null, clientData=null;
 let detailVersion=0;
 let formVersion=0;
 let commercialInputs=[],savingCommercial=false;
+let statusOrder=null,statusSaving=false;
+function updateOrderStatusUI(order){
+  statusOrder=order;
+  const canChange=Boolean(order?.can_edit&&order.status!=='cancelled');
+  for(const id of ['composerStatus','toggleOrderStatus']){
+    el(id).hidden=!canChange||params.get('embedded')==='1';
+    el(id).disabled=statusSaving;
+    el(id).textContent=order?.status==='completed'?'Move to pending':'Complete';
+    el(id).title='Generating a PI automatically marks this order complete.';
+  }
+  if(params.get('embedded')==='1')window.parent.postMessage({type:'amt-order-state',order:order?{id:order.id,status:order.status,can_edit:canChange}:null,busy:statusSaving},location.origin);
+}
+async function toggleOrderCompletion(){
+  if(!statusOrder?.can_edit||statusOrder.status==='cancelled'||statusSaving)return;
+  const orderId=statusOrder.id,target=statusOrder.status==='completed'?'draft':'completed';
+  statusSaving=true;updateOrderStatusUI(statusOrder);
+  try{
+    const result=await api(`/api/orders/${orderId}/status`,json('PUT',{status:target}));
+    if(statusOrder?.id!==orderId)return;
+    if(current?.order.id===orderId)current.order.status=result.order.status;
+    updateOrderStatusUI(result.order);
+    if(current?.order.id===orderId)el('detailAccess').textContent=`${result.order.status==='completed'?'Complete':'Pending'} / ${current.order.currency} / Editable`;
+    await load();message(target==='completed'?'Order moved to complete orders.':'Order moved to pending orders.');
+  }catch(error){message(error.message,true);}
+  finally{statusSaving=false;updateOrderStatusUI(statusOrder);}
+}
+el('composerStatus').onclick=toggleOrderCompletion;el('toggleOrderStatus').onclick=toggleOrderCompletion;
+window.addEventListener('message',event=>{
+  if(params.get('embedded')==='1'&&event.origin===location.origin&&event.source===window.parent&&event.data?.type==='amt-order-toggle-status')toggleOrderCompletion();
+});
 function updateComposer(){
   for(const prefix of ['buyer','notify']){
     el(prefix+'Summary').textContent=el(prefix+'_text').value.trim()||'No address added yet';
@@ -268,6 +298,7 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
 async function createOrder() {
   if(!clientScope)throw new Error('Open a client in Clients & Orders to add an order.');
   const version=++formVersion;editing=null;el('orderForm').reset();initialDrafts.reset();
+  updateOrderStatusUI(null);
   el('initialDrafts').hidden=true;el('initialLines').hidden=false;
   el('formTitle').textContent='New order';el('referenceHint').textContent='Your order reference will be created when you save.';
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));
@@ -284,6 +315,7 @@ async function editOrder(id) {
   const data=await api(`/api/orders/${id}`);if(!data.order.can_edit)throw new Error('Client access is read-only.');
   if((clientScope&&String(data.order.client_id)!==clientScope)||(enquiryScope&&String(data.order.enquiry_id)!==enquiryScope))throw new Error('Order does not belong to the selected record.');
   if(version!==formVersion)return;
+  updateOrderStatusUI(data.order);
   editing=id;initialDrafts.reset();el('initialLines').hidden=true;
   headerFields.forEach(key=>{el(key).value=data.order[key];});if(!await prepareClient(data.order.client_id,data.delivery,version))return;
   el('pi_reference').readOnly=Boolean(data.invoices?.some(invoice=>invoice.workbook_format==='xlsm'));
@@ -314,6 +346,7 @@ async function showDetails(id) {
   if((clientScope&&String(data.order.client_id)!==clientScope)||(enquiryScope&&String(data.order.enquiry_id)!==enquiryScope))throw new Error('Order does not belong to the selected record.');
   current=data;commercialInputs=[];editingLine=null;el('editor').hidden=true;el('piError').hidden=true;el('lineForm').hidden=true;el('lineDrafts').hidden=true;el('copyPanel').hidden=true;lineDrafts.reset();
   const order=data.order;
+  updateOrderStatusUI(order);
   el('discountForm').hidden=true;el('giveDiscount').hidden=!order.can_edit;el('giveDiscount').disabled=!data.lines.length&&!order.discount;el('giveDiscount').setAttribute('aria-expanded','false');
   const discount=order.discount;
   el('giveDiscount').textContent=discount?'Edit discount':'Give discount';
@@ -351,7 +384,7 @@ async function showDetails(id) {
     }catch(error){message(error.message,true);}
   };
   el('detailTitle').textContent=order.reference;
-  el('detailAccess').textContent=`${order.status} / ${order.currency} / ${order.can_edit?'Editable':'Read only'}`;
+  el('detailAccess').textContent=`${order.status==='completed'?'Complete':order.status==='draft'?'Pending':order.status} / ${order.currency} / ${order.can_edit?'Editable':'Read only'}`;
   el('editOrder').hidden=!order.can_edit;el('addLine').hidden=!order.can_edit;
   el('deleteOrder').hidden=!order.can_delete_order;
   el('deleteOrder').onclick=()=>deleteOrder(order).catch(error=>message(error.message,true));
@@ -436,7 +469,9 @@ function appendInvoice(invoice,id){
 }
 const invoicePreview=window.createPiPreview(el('piPreview'),api,json,async result=>{
   appendInvoice({...result,currency:el('piCurrency').value,workbook_format:'xlsx',has_pdf:true},current.order.id);
-  message(`PI ${result.reference} generated. Excel and PDF are ready.`);
+  current.order.status=result.order_status||'completed';updateOrderStatusUI(current.order);
+  el('detailAccess').textContent=`${current.order.status==='completed'?'Complete':'Pending'} / ${current.order.currency} / Editable`;
+  await load();message(`PI ${result.reference} generated. ${current.order.status==='completed'?'Order marked complete.':'Order remains pending.'} Excel and PDF are ready.`);
 },doc=>{
   if(current)current.order.pi_reference=doc.reference;
   el('pi_reference').value=doc.reference;

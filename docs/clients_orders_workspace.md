@@ -8,7 +8,7 @@ module. There is no active enquiry creation screen in navigation.
 
 Client master fields, ownership, supervision, active VIEW/EDIT sharing, soft
 deletion, and management-only SKU removal retain their existing rules. Client
-profiles expose independent pending drafts and existing orders/PI references.
+profiles expose separate pending orders and complete orders, including PI references.
 Filters, pagination, totals, histories, exports, and writes use current client
 authorization. An inactive client remains readable; it cannot receive new orders.
 
@@ -88,6 +88,13 @@ party, delivery, and required commercial fields. `GET /api/orders` adds
 parameters retain their behavior. Client detail/directory payloads add
 `order_count` and `pending_order_count`.
 
+The workspace header offers **Complete** for a pending order and **Move to pending**
+for a complete order. `PUT /api/orders/{id}/status` accepts `completed` or `draft`
+and requires current client EDIT access. Status changes preserve unsaved form
+edits, saved items and issued files. Cancelled orders cannot use this toggle.
+The `completion=pending|complete` list filter and pending counts use the saved
+completion status; pending includes orders not marked completed.
+
 ## Editable PI previews and native Excel/PDF generation
 
 The active UI uses **Preview PI** after selecting USD or INR and any required
@@ -105,6 +112,12 @@ is idempotent for the same preview ID, rejects a changed source order, rechecks
 current client EDIT access and records an order revision and audit event.
 Preview endpoints also require the preview creator; downloads require current
 client visibility. Cancelled orders cannot issue invoices.
+
+Successful PI issuance automatically marks its order completed in the same
+transaction. Opening, saving or printing a preview does not complete the order,
+and failed generation leaves its status unchanged. Users may move an issued
+order back to pending; retrying the same issued preview or downloading its files
+does not complete it again.
 
 Native renderers use `assets/PI-img/header.png`, `address.png`,
 `payment_options.png` and `signature.png`. Assets and company settings are frozen

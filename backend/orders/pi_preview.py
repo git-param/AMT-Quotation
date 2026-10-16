@@ -159,7 +159,7 @@ def issue_preview(order_id):
                 "VALUES(?,?,?,?,?,?,'xlsx',?)",(order_id,doc['reference'],doc['currency'],json.dumps(doc),workbook,user['id'],pdf))
             invoice_id=cursor.lastrowid
             connection.execute('UPDATE invoice_previews SET issued_invoice_id=? WHERE id=?',(invoice_id,row['id']))
-            connection.execute("UPDATE client_orders SET pi_reference=?,pi_date=?,updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+            connection.execute("UPDATE client_orders SET pi_reference=?,pi_date=?,status='completed',updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
                 (doc['reference'],doc['date'],user['id'],order_id))
             record_revision(connection,order_id,user,'edit')
             connection.execute('INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)',
@@ -167,7 +167,8 @@ def issue_preview(order_id):
                  'reference':doc['reference'],'currency':doc['currency'],'preview_id':row['id'],'formats':['xlsx','pdf']})))
         connection.commit()
         base=f'/api/orders/{order_id}/invoices/{invoice_id}/download'
-        return jsonify(id=invoice_id,reference=doc['reference'],xlsx_url=base+'?format=xlsx',pdf_url=base+'?format=pdf',
+        status=connection.execute('SELECT status FROM client_orders WHERE id=?',(order_id,)).fetchone()[0]
+        return jsonify(id=invoice_id,reference=doc['reference'],order_status=status,xlsx_url=base+'?format=xlsx',pdf_url=base+'?format=pdf',
                        xlsx_filename=invoice_filename(doc['reference'],'xlsx'),pdf_filename=invoice_filename(doc['reference'],'pdf')),201
     except ValueError as error:return jsonify(error=str(error)),400
     finally:connection.rollback();connection.close()
