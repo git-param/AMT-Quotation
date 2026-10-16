@@ -88,12 +88,15 @@
                 <p id="formError" class="composer-error" role="alert" tabindex="-1" hidden></p>
                 <div class="composer-layout">
                     <div class="composer-content">
-                        <div class="fields composer-fields">
+                        <div class="fields composer-fields composer-fields--primary">
                             <div class="form-field"><label for="pi_reference">Proforma Invoice No.</label><input id="pi_reference" type="text" maxlength="100" placeholder="Enter the PI number"></div>
                             <div class="form-field"><label for="po_reference">Purchase Order No.</label><input id="po_reference" type="text" placeholder="e.g. PO-2026-001"></div>
                             <div class="form-field"><label for="destination">Location / country</label><input id="destination" maxlength="200" list="orderCountries" autocomplete="off" placeholder="Type a country name"><datalist id="orderCountries"></datalist></div>
-                            <div class="form-field"><label for="currency">Deal currency</label><select id="currency" aria-describedby="currencyHelp"><option>USD</option><option>INR</option></select><small id="currencyHelp">India uses INR. Changing currency does not convert prices.</small></div>
+                            <div class="form-field"><label for="currency">Deal currency</label><select id="currency" aria-describedby="currencyHelp"><option>USD</option><option>INR</option></select></div>
                             <div class="form-field"><label for="order_date">Order date <span class="field-required">(required)</span></label><input id="order_date" type="date" required></div>
+                        </div>
+                        <p id="currencyHelp" class="composer-currency-help">India uses INR. Changing currency does not convert prices.</p>
+                        <div class="fields composer-fields composer-fields--shipping">
                             <div class="form-field"><label for="delivery_terms">Delivery terms</label><input id="delivery_terms" type="text" value="DAP"></div>
                             <div class="form-field"><label for="delivery_time">Delivery time</label><input id="delivery_time" type="text" value="4 to 6 days"></div>
                             <div class="form-field"><label for="dispatch_method">Dispatch By</label><input id="dispatch_method" type="text" value="DHL/Fedex/Aramex"></div>
