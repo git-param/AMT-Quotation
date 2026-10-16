@@ -60,6 +60,8 @@ class BulkPiTests(unittest.TestCase):
         summary = next(section for section in preview['layout']['sections'] if section['name']=='items')
         fields = [cell['field'] for row in summary['rows'] for cell in row if cell.get('field')]
         self.assertEqual(fields, ['bulk_description'])
+        self.assertTrue(all(cell['text'] != 'As per Annexure-1'
+                            for row in summary['rows'][2:] for cell in row))
         annexure = next(section for section in preview['layout']['sections'] if section['name']=='annexure')
         self.assertTrue(annexure['annexure'])
         self.assertEqual(len(annexure['rows']), 13)
@@ -167,7 +169,7 @@ class BulkPiTests(unittest.TestCase):
         self.assertEqual([cell['col'] for cell in section['rows'][-1]], [0,1,2,3])
         self.assertTrue(all(not cell['text'] for row in section['rows'][11:13] for cell in row))
         summary = section['rows'][13]
-        self.assertEqual(summary[0]['text'], 'Amount\nin Word:')
+        self.assertEqual(summary[0]['text'], 'Amount\nin\nWords')
         self.assertTrue(summary[0]['nowrap'])
         self.assertTrue(all(cell['total_cell'] for cell in summary))
         self.assertTrue(summary[1]['text'].startswith('USD '))

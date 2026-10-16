@@ -376,7 +376,7 @@ def write_annexure(book, doc, cover_coordinates):
                 if cell.get('accounting'):
                     options['num_format']='"'+symbol+'" #,##0.00'
             if cell.get('nowrap'):
-                options.update(text_wrap=False,shrink=True,font_size=10)
+                options.update(text_wrap=True,font_size=10)
             formats[key]=book.add_format(options)
         return formats[key]
     def image(name,row,col,width,height):

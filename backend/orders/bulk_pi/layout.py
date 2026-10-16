@@ -46,9 +46,6 @@ def layout(doc):
                 cell.pop('uom', None)
             if cell['col'] in (8, 9):
                 cell.update(numeric=True, calculated='subtotal')
-    # Keep the annexure reference visible even while editing the summary text.
-    items['rows'][2][1]['text'] = 'As per Annexure-1'
-
     model['sections'].append(annexure_section(doc))
     model['annexure_widths'] = ANNEXURE_WIDTHS
     return model
@@ -93,7 +90,7 @@ def annexure_section(doc):
         rows[-1][4] = cell(4, f'GST {Decimal(totals["tax_rate"])*100:g}%', 'bold')
         rows[-1][5] = cell(5, totals['tax'], 'amount', accounting=True, calculated='tax')
     summary_row = len(rows)
-    rows.append([cell(0, 'Amount\nin Word:', 'bold', nowrap=True),
+    rows.append([cell(0, 'Amount\nin\nWords', 'bold', nowrap=True),
                  cell(1, annexure_words(doc), 'bold', calculated='annexure_amount_in_words'),
                  cell(2, 'Total', 'bold_center'),
                  cell(3, quantity_summary(doc), 'bold_center', calculated='annexure_quantity'),
