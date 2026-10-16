@@ -231,3 +231,61 @@ test('item picker shows only SKU and quantity entry accepts whole numbers', asyn
   quantity.value = '3';quantity.oninput();
   assert.equal(editor.drafts.values()[0].quantity, '3');
 });
+
+test('manual order SKU loads and prints configured HSN before any lookup',async()=>{
+  const requests=[];
+  const editor=setup(()=>({client_id:7}),async url=>{requests.push(url);return {ok:true,json:async()=>({shared_hsn_code:'85371090'})};},'USD',true);
+  const manual=editor.host.children[1].children[2].children[1];
+  await manual.onclick();
+  let fields=editor.host.children[3].children[1];
+  assert.equal(fields.children[4].children[0].value,'85371090');assert.equal(fields.children[4].children[0].readOnly,true);
+  for(const [index,value] of [[0,'MANUAL'],[1,'Manual part'],[3,'12.50']]){const input=fields.children[index].children[0];input.value=value;input.oninput();}
+  assert.equal(editor.drafts.values()[0].hsn_code,'85371090');
+  await manual.onclick();fields=editor.host.children[3].children[1];assert.equal(fields.children[4].children[0].value,'85371090');
+  assert.deepEqual(requests,['/api/sku-defaults']);
+});
+
+test('missing lookup SKU does not block valid items and offers a prefilled manual action',async()=>{
+  const editor=setup(()=>({client_id:7}),async()=>({ok:true,json:async()=>({shared_hsn_code:'85371090',drafts:[
+    {sku:'1258',description:'Available part',quantity:'1',unit_price:'10.00',currency:'USD',found:true,stock:3,catalog_prices:{}},
+    {sku:'4657',description:'',quantity:'1',unit_price:'',currency:'USD',found:false,lookup_status:'not_found'},
+  ]})}),'USD',true);
+  await editor.button.onclick();
+  assert.equal(editor.drafts.values().length,1);assert.equal(editor.drafts.values()[0].sku,'1258');
+  const notice=editor.host.children[1].children[3];assert.equal(notice.hidden,false);
+  assert.match(notice.children[1].children[0].textContent,/4657.*not found.*manually/);
+  await notice.children[1].children[1].onclick();
+  const fields=editor.host.children[3].children[1];
+  assert.equal(fields.children[0].children[0].value,'4657');assert.equal(fields.children[4].children[0].value,'85371090');
+  assert.equal(notice.hidden,true);
+  for(const [index,value] of [[1,'Manually entered part'],[3,'5.00']]){const input=fields.children[index].children[0];input.value=value;input.oninput();}
+  const saved=editor.drafts.values();assert.equal(saved.length,2);assert.equal(saved[0].description,'Available part');assert.equal(saved[1].sku,'4657');
+  // A later missing result must preserve a manually completed item.
+  await editor.button.onclick();assert.equal(editor.drafts.values().length,2);assert.equal(editor.drafts.values()[1].description,'Manually entered part');
+});
+
+test('lookup failures are distinguished from missing catalog SKUs',async()=>{
+  const editor=setup(()=>({client_id:7}),async()=>({ok:true,json:async()=>({usd_inr_rate:90,drafts:[{sku:'OFFLINE',found:false,lookup_status:'unavailable',error:'Lookup unavailable'}]})}),'USD',true);
+  await editor.button.onclick();
+  const notice=editor.host.children[1].children[3];assert.match(notice.children[1].children[0].textContent,/Could not look up.*Retry/);
+  assert.doesNotMatch(notice.children[1].children[0].textContent,/not found/);
+  assert.throws(()=>editor.drafts.values(),/Select at least one/);
+});
+
+test('manual HSN loading failure allows retry without creating an empty item',async()=>{
+  let fail=true;
+  const editor=setup(()=>({client_id:7}),async()=>({ok:!fail,json:async()=>fail?{error:'Unable to load defaults'}:{shared_hsn_code:'85371090'}}),'USD',true);
+  const manual=editor.host.children[1].children[2].children[1];
+  await manual.onclick();assert.match(editor.status.textContent,/Unable to load defaults/);assert.equal(manual.disabled,false);
+  assert.throws(()=>editor.drafts.values(),/Select at least one/);
+  fail=false;await manual.onclick();assert.equal(editor.host.children[3].children[1].children[4].children[0].value,'85371090');
+});
+
+test('reset during asynchronous HSN loading does not restore a discarded manual item',async()=>{
+  let finish;
+  const editor=setup(()=>({client_id:7}),()=>new Promise(resolve=>{finish=resolve;}),'USD',true);
+  const manual=editor.host.children[1].children[2].children[1];
+  const pending=manual.onclick();assert.throws(()=>editor.drafts.values(),/Wait for the shared HSN/);
+  editor.drafts.reset();finish({ok:true,json:async()=>({shared_hsn_code:'85371090'})});await pending;
+  assert.throws(()=>editor.drafts.values(),/Select at least one/);assert.equal(manual.disabled,false);
+});

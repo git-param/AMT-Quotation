@@ -389,16 +389,18 @@ def bulk_lookup():
         for raw in skus:
             sku = raw.strip()
             row = {'sku': sku, 'description': '', 'quantity': '1', 'hsn_code':hsn,
-                   'unit_price': '', 'currency': currency, 'found': False}
+                   'unit_price': '', 'currency': currency, 'found': False,
+                   'lookup_status': 'unavailable'}
             try:
                 product = lookup_product(sku)
                 if not product.get('found'):
-                    row['error'] = 'SKU not found; complete or remove row.'
+                    row['lookup_status'] = 'not_found'
+                    row['error'] = 'SKU not found in the catalog. Add this SKU manually.'
                 else:
                     from backend.orders.catalog import remember_stock
                     remember_stock(sku,product.get('qty'))
                     row.update(description=product.get('title', ''),
-                               found=True,
+                               found=True, lookup_status='found',
                                stock=product.get('qty'),
                                condition=product.get('condition', ''),
                                url=product.get('url', ''))

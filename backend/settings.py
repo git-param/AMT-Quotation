@@ -4,7 +4,7 @@ import re
 
 from flask import Blueprint, jsonify, request, send_file
 
-from backend.common.auth import get_current_user, permission_required
+from backend.common.auth import authenticated_required, get_current_user, permission_required
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
 
@@ -14,6 +14,17 @@ bp = Blueprint('settings', __name__)
 def shared_hsn(connection):
     row = connection.execute("SELECT value FROM app_settings WHERE key='hsn_code'").fetchone()
     return row[0] if row else ''
+
+
+@bp.route('/api/sku-defaults', methods=['GET'])
+@authenticated_required
+def sku_defaults():
+    """Expose the shared item default without granting configuration access."""
+    connection = get_db()
+    try:
+        return jsonify(shared_hsn_code=shared_hsn(connection))
+    finally:
+        connection.close()
 
 
 @bp.route('/configuration')

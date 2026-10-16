@@ -5,6 +5,8 @@
     let activeRow = 0;
     let displayRate = null;
     let sharedHsn = '';
+    let defaultsLoaded = false, loadingDefaults = false, revision = 0;
+    let unresolved = [];
     const uoms=['PCs','Lot','Kit','set'];
     function stockIssue(row){
       if(!commercial)return '';
@@ -28,6 +30,7 @@
     const manual = document.createElement('button'); manual.type = 'button'; manual.className = 'btn-sm'; manual.textContent = 'Add manual SKU';
     const status = document.createElement('p'); status.className='draft-status'; status.setAttribute('role','status');
     const lookup = document.createElement('div'); lookup.className='draft-lookup';
+    const lookupNotice = document.createElement('div');lookupNotice.className='draft-lookup-notice';lookupNotice.setAttribute('role','alert');lookupNotice.hidden=true;
     const tableBox = document.createElement('div'); tableBox.className = 'source-table';
     const table = document.createElement('table'); table.className = 'tbl';
     const head = document.createElement('thead'); const headRow = document.createElement('tr');
@@ -35,6 +38,7 @@
     const allBox = document.createElement('input'); allBox.type='checkbox'; allBox.checked=true; allBox.setAttribute('aria-label','Include all SKU items'); headRow.children[0].append(allBox);
     const body = document.createElement('tbody'); table.append(head,body); tableBox.append(table);
     tools.append(fetchButton,manual,status); lookup.append(hint,input,tools); host.append(heading,lookup,tableBox);
+    lookup.append(lookupNotice);
     const editBox = document.createElement('div'); editBox.className='draft-item-editor'; host.append(editBox);
     const note = document.createElement('p'); note.className='draft-note'; note.textContent='Checked items will be saved. Click a row or choose an item below to edit its details. Catalog prices are shown above; the agreed deal price is set below.'; host.append(note);
     if(commercial)note.textContent+=' HSN code is filled from the shared configuration when available.';
@@ -119,9 +123,47 @@
       editBox.append(fields);
     }
     function render() { renderTable();renderEditor(); }
-    manual.onclick=()=>{const curr=currency();if(!['USD','INR'].includes(curr)){status.textContent='Choose a deal currency first.';return;}rows.push({sku:'',description:'',quantity:'1',unit_price:'',currency:curr,hsn_code:sharedHsn,uom:'PCs'});activeRow=rows.length-1;render();};
+    function applyDefaults(value){
+      sharedHsn=typeof value==='string'?value:'';defaultsLoaded=true;
+      if(commercial&&sharedHsn)rows.forEach(row=>{row.hsn_code=sharedHsn;});
+    }
+    function renderLookupNotice(){
+      lookupNotice.replaceChildren();lookupNotice.hidden=!unresolved.length;
+      if(!unresolved.length)return;
+      const title=document.createElement('strong');title.textContent='Some SKUs need manual entry';lookupNotice.append(title);
+      for(const item of unresolved){
+        const entry=document.createElement('div'),text=document.createElement('p'),button=document.createElement('button');
+        text.textContent=item.unavailable?`Could not look up SKU ${item.sku}. Retry the lookup or enter its details manually.`:`SKU ${item.sku} was not found in the catalog. Please add it manually.`;
+        button.type='button';button.className='btn-sm';button.textContent=`Add ${item.sku} manually`;
+        button.onclick=async()=>{if(await addManualSku(item.sku)){unresolved=unresolved.filter(other=>other!==item);renderLookupNotice();}};
+        entry.append(text,button);lookupNotice.append(entry);
+      }
+    }
+    async function addManualSku(sku=''){
+      if(fetching||loadingDefaults)return false;
+      const curr=currency(),version=revision,target=JSON.stringify(scope());
+      if(!['USD','INR'].includes(curr)){status.textContent='Choose a deal currency first.';return false;}
+      try{
+        if(commercial&&!defaultsLoaded){
+          loadingDefaults=true;manual.disabled=true;status.className='draft-status';status.textContent='Loading shared HSN code...';
+          const response=await fetch('/api/sku-defaults');const data=await response.json();
+          if(!response.ok)throw new Error(data.error||'Unable to load the shared HSN code. Try adding the manual SKU again.');
+          applyDefaults(data.shared_hsn_code);
+        }
+        if(version!==revision)return false;
+        if(curr!==currency()||target!==JSON.stringify(scope()))throw new Error('Client or currency changed. Add the manual SKU again.');
+        const existing=sku?rows.findIndex(row=>row.sku.trim()===sku.trim()):-1;
+        if(existing<0){rows.push({sku,description:'',quantity:'1',unit_price:'',currency:curr,hsn_code:sharedHsn,uom:'PCs'});activeRow=rows.length-1;}
+        else activeRow=existing;
+        render();status.className='draft-status';status.textContent=commercial&&sharedHsn?'Manual item added with the configured HSN code. Complete its description, quantity and price.':'Manual item added. Complete its details before saving.';
+        editBox.querySelector?.('[aria-label="SKU / item code"]')?.focus();return true;
+      }catch(error){if(version===revision){status.className='draft-status error';status.textContent=error.message;}return false;}
+      finally{loadingDefaults=false;manual.disabled=false;}
+    }
+    manual.onclick=()=>addManualSku();
     fetchButton.onclick=async()=>{
-      if(fetching)return;
+      if(fetching||loadingDefaults)return;
+      const version=revision;
       const curr=currency();const skus=[...new Set(input.value.split(/[\n,;]+/).map(v=>v.trim()).filter(Boolean))];
       if(!['USD','INR'].includes(curr)||!skus.length){status.textContent='Choose USD/INR and enter at least one SKU.';return;}
       fetching=true;fetchButton.disabled=true;status.className='draft-status';status.textContent='Fetching SKU details...';
@@ -133,10 +175,11 @@
           throw new Error('Select a client or open an enquiry before looking up SKUs.');
         }
         const response=await fetch('/api/enquiries/sku-lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...target,skus,currency:curr})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Lookup failed.');
+        if(version!==revision)return;
         if(target[keys[0]]!==scope()[keys[0]])throw new Error('Client or enquiry changed while fetching. Look up SKUs again.');
         if(curr!==currency())throw new Error('Currency changed while fetching. Fetch again.');
         const returnedRate = Number(data.usd_inr_rate);
-        sharedHsn=data.shared_hsn_code||sharedHsn;
+        if(typeof data.shared_hsn_code==='string')applyDefaults(data.shared_hsn_code);
         if (Number.isFinite(returnedRate) && returnedRate > 0) displayRate = returnedRate;
         // Older running backends omit catalog prices and the USD display rate.
         if (!displayRate && data.drafts.some(row=>!row.catalog_prices)) {
@@ -148,9 +191,15 @@
             }
           } catch (_) { /* The original deal price can still be displayed. */ }
         }
+        if(version!==revision)return;
         if(target[keys[0]]!==scope()[keys[0]] || curr!==currency())throw new Error('Client or currency changed while fetching. Look up SKUs again.');
         let added = 0;let updated = 0;
+        unresolved=[];
         for (const draft of data.drafts) {
+          if(draft.found===false){
+            if(!unresolved.some(item=>item.sku===draft.sku))unresolved.push({sku:draft.sku,unavailable:draft.lookup_status==='unavailable'||/lookup unavailable/i.test(draft.error||'')});
+            continue;
+          }
           if(commercial){draft.item_condition=draft.condition||'';draft.hsn_code=sharedHsn||draft.hsn_code||'';draft.uom='PCs';}
           if (Number.isInteger(Number(draft.quantity))) draft.quantity = String(Number(draft.quantity));
           const existing = rows.find(row=>row.sku.trim()===draft.sku.trim());
@@ -166,13 +215,15 @@
             Object.assign(existing,draft,edits);updated++;
           } else { rows.push({...draft});added++; }
         }
-        render();status.textContent=`${added} draft rows added; ${updated} existing rows refreshed. Review each row; missing values must be completed.`;
+        render();renderLookupNotice();status.textContent=`${added} draft rows added; ${updated} existing rows refreshed. Review each row; missing values must be completed.`;
+        if(unresolved.length)lookupNotice.scrollIntoView?.({block:'nearest'});
         if(commercial){const issue=rows.filter(row=>row.included!==false).map(stockIssue).find(Boolean);if(issue){status.className='draft-status error';status.textContent=issue;}}
-      }catch(error){status.textContent=error.message;}finally{fetching=false;fetchButton.disabled=false;}
+      }catch(error){if(version===revision)status.textContent=error.message;}finally{fetching=false;fetchButton.disabled=false;}
     };
     const editor = {
       values() {
         if(fetching)throw new Error('Wait for SKU lookup to finish.');
+        if(loadingDefaults)throw new Error('Wait for the shared HSN code to load.');
         const selected=rows.filter(row=>row.included!==false);
         if(!selected.length)throw new Error('Select at least one complete SKU line.');
         if(selected.some(row=>row.currency!==currency()))throw new Error('Currency changed. Fetch again or review the draft prices.');
@@ -192,7 +243,7 @@
         return selected.map(row=>Object.fromEntries(['sku','description','quantity','unit_price','currency',...(commercial?['hsn_code','item_condition','uom']:[])].map(key=>[key,row[key]||(key==='uom'?'PCs':'')])));
       },
       currencyChanged() { rows.forEach(row=>{row.currency=currency();row.unit_price='';});render();status.textContent='Currency changed. Fetch again or enter unit prices in the chosen currency.'; },
-      reset() { rows=[];activeRow=0;input.value='';status.textContent='';render(); }
+      reset() { revision++;rows=[];unresolved=[];activeRow=0;input.value='';status.textContent='';renderLookupNotice();render(); }
     };
     if(save)save.onclick=async()=>{save.disabled=true;try{await onSave(editor.values());editor.reset();status.textContent='SKU lines saved.';}catch(error){status.textContent=error.message;}finally{save.disabled=false;}};
     render();return editor;

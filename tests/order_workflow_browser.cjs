@@ -70,6 +70,7 @@ assert.equal(await evaluate("document.querySelector('#buyerEditor').hidden"),fal
 await set('pi_reference','WORKFLOW/2026/001');await set('po_reference','PO-WORKFLOW-001');
 await click('save');await until("!document.querySelector('#detail').hidden");
 await click('addLine');await evaluate("[...document.querySelectorAll('#lineDrafts button')].find(b=>b.textContent==='Add manual SKU').click()");
+await until("document.querySelector('#lineDrafts [aria-label=\"HSN code\"]')?.value==='85371090'");
 await evaluate("(()=>{for(const [label,value] of Object.entries({'SKU / item code':'WORKFLOW-PART','Description':'Browser tested part','Quantity':'2','Agreed unit price (INR)':'100','HSN code':'85371090','Item condition':'New','Unit of measure':'PCs'})){const n=document.querySelector('#lineDrafts [aria-label=\"'+label+'\"]');if(!n)throw Error(label);n.value=value;n.dispatchEvent(new Event('input',{bubbles:true}));}[...document.querySelectorAll('#lineDrafts button')].find(b=>b.textContent==='Save all SKU lines').click();})()");
 await until("document.querySelector('#lineRows').textContent.includes('WORKFLOW-PART')");
 await set('piCurrency','INR','change');await evaluate("document.querySelector('#piForm').requestSubmit()");await until("document.querySelector('#piPreview .pi-paper')");
@@ -81,6 +82,7 @@ assert.equal(downloads.length,2);assert.ok(downloads.every(d=>d.ok&&d.size>100))
 // Initial SKU lines also save through the new-order composer.
 await click('newOrder');await until("!document.querySelector('#editor').hidden");await click('manualToggle');
 await evaluate("[...document.querySelectorAll('#initialDrafts button')].find(b=>b.textContent==='Add manual SKU').click()");
+await until("document.querySelector('#initialDrafts [aria-label=\"HSN code\"]')?.value==='85371090'");
 await click('save');await until("document.activeElement.matches(':invalid') || !document.querySelector('#formError').hidden");
 await evaluate("(()=>{for(const [label,value] of Object.entries({'SKU / item code':'INITIAL-PART','Description':'Initial draft part','Quantity':'3','Agreed unit price (INR)':'25.50','Item condition':'New'})){const n=document.querySelector('#initialDrafts [aria-label=\"'+label+'\"]');n.value=value;n.dispatchEvent(new Event('input',{bubbles:true}));}})()");
 await click('buyer_same');await set('buyer_primary','Mobile Buyer\nBilling Street');
@@ -115,7 +117,32 @@ await evaluate("document.querySelector('.order-card-group .related-order-card').
 await until("document.querySelector('iframe')?.contentWindow.document.querySelector('#editor') && !document.querySelector('iframe').contentWindow.document.querySelector('#editor').hidden");
 assert.equal(await evaluate("document.querySelector('iframe').contentWindow.document.querySelector('#save').textContent"),'Save changes');
 await shot('order-composer-resume-desktop');
+
+// Real mixed lookup: valid SKU saves independently, missing SKU offers manual entry.
+const inFrame=code=>evaluate(`(async()=>{const w=document.querySelector('iframe').contentWindow,d=w.document;${code}})()`);
+await evaluate("document.querySelector('.order-dialog').close()");
+await until("!document.querySelector('.order-dialog').open && document.querySelector('iframe').getAttribute('src')==='about:blank'");
+await evaluate("document.querySelector('.related-orders .btn-add').click()");
+await until("document.querySelector('iframe')?.contentWindow.document.querySelector('#editor') && !document.querySelector('iframe').contentWindow.document.querySelector('#editor').hidden");
+await inFrame("d.getElementById('manualToggle').click();const input=d.querySelector('#initialDrafts [aria-label=\"SKU codes\"]');input.value='LOOKUP-AVAILABLE, LOOKUP-MISSING';[...d.querySelectorAll('#initialDrafts button')].find(b=>b.textContent==='Look Up SKUs').click()");
+await until("document.querySelector('iframe').contentWindow.document.querySelector('#initialDrafts .draft-lookup-notice')?.textContent.includes('LOOKUP-MISSING')");
+assert.match(await inFrame("return d.querySelector('#initialDrafts .draft-lookup-notice').textContent"),/not found.*manually/);
+assert.equal(await inFrame("return d.querySelectorAll('#initialDrafts .draft-product-row').length"),1);
+await shot('order-mixed-sku-lookup');
+await inFrame("d.getElementById('save').click()");
+await until("!document.querySelector('iframe').contentWindow.document.getElementById('detail').hidden");
+let mixed=await inFrame("return w.fetch('/api/orders/'+w.eval('current.order.id')).then(r=>r.json())");
+assert.equal(mixed.lines.length,1);assert.equal(mixed.lines[0].sku,'LOOKUP-AVAILABLE');assert.equal(mixed.lines[0].hsn_code,'85371090');
+await inFrame("d.getElementById('addLine').click();d.querySelector('#lineDrafts [aria-label=\"SKU codes\"]').value='LOOKUP-MISSING';[...d.querySelectorAll('#lineDrafts button')].find(b=>b.textContent==='Look Up SKUs').click()");
+await until("document.querySelector('iframe').contentWindow.document.querySelector('#lineDrafts .draft-lookup-notice button')");
+await inFrame("d.querySelector('#lineDrafts .draft-lookup-notice button').click()");
+await until("document.querySelector('iframe').contentWindow.document.querySelector('#lineDrafts [aria-label=\"SKU / item code\"]')?.value==='LOOKUP-MISSING'");
+assert.equal(await inFrame("return d.querySelector('#lineDrafts [aria-label=\"HSN code\"]').value"),'85371090');
+await inFrame("for(const [label,value] of Object.entries({'Description':'Missing SKU entered manually','Quantity':'2','Agreed unit price (INR)':'150','Item condition':'New'})){const n=d.querySelector('#lineDrafts [aria-label=\"'+label+'\"]');n.value=value;n.dispatchEvent(new w.Event('input',{bubbles:true}));}[...d.querySelectorAll('#lineDrafts button')].find(b=>b.textContent==='Save all SKU lines').click()");
+await until("document.querySelector('iframe').contentWindow.document.querySelector('#lineRows').textContent.includes('LOOKUP-MISSING')");
+mixed=await inFrame("return w.fetch('/api/orders/'+w.eval('current.order.id')).then(r=>r.json())");
+assert.equal(mixed.lines.length,2);assert.ok(mixed.lines.every(line=>line.hsn_code==='85371090'));
 assert.deepEqual(errors,[]);
-console.log('Browser workflow passed: draft creation, single-form field order, required validation, save failure/retry, party synchronization, country/GST, reopen/edit, SKU persistence, INR PI XLSX/PDF, desktop/mobile and embedded layout.');
+console.log('Browser workflow passed: draft creation, single-form field order, required validation, save failure/retry, party synchronization, country/GST, reopen/edit, SKU persistence, automatic manual HSN, mixed lookup/manual recovery, INR PI XLSX/PDF, desktop/mobile and embedded layout.');
 }finally{ws.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
