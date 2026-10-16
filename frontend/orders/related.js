@@ -38,10 +38,11 @@ window.renderRelatedOrders = async (host, scope, canCreate) => {
       previous.disabled=page<=1;next.disabled=page>=data.pages;status.textContent=`${page} / ${Math.max(1,data.pages)}`;
       cards.replaceChildren();
       for(const order of data.orders){
-        const card=document.createElement('button');card.type='button';card.className='related-order-card';card.onclick=()=>open({order_id:order.id});
+        const resume=pending&&order.can_edit;
+        const card=document.createElement('button');card.type='button';card.className='related-order-card';card.onclick=()=>open({order_id:order.id,...(resume?{edit:1}:{})});
         const ref=document.createElement('strong');ref.textContent=order.reference;
         const meta=document.createElement('span');meta.textContent=`${order.order_date} / ${order.status} / ${order.currency}`;
-        const pi=document.createElement('span');pi.textContent=order.pi_reference?`PI: ${order.pi_reference}`:'PI not generated';
+        const pi=document.createElement('span');pi.textContent=order.pi_reference?`PI: ${order.pi_reference}`:resume?'Continue draft →':'PI not generated';
         card.append(ref,meta,pi);
         if(order.can_delete_order){
           const entry=document.createElement('div');entry.className='order-card-entry';

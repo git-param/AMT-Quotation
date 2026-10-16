@@ -10,6 +10,38 @@ let current=null, editing=null, editingLine=null, clientData=null;
 let detailVersion=0;
 let formVersion=0;
 let commercialInputs=[],savingCommercial=false;
+function updateComposer(){
+  for(const prefix of ['buyer','notify']){
+    el(prefix+'Summary').textContent=el(prefix+'_text').value.trim()||'No address added yet';
+  }
+}
+function openPartyEditor(prefix,open){
+  el(prefix+'Editor').hidden=!open;
+  el(prefix+'Summary').hidden=open;
+  el(prefix+'Toggle').setAttribute('aria-expanded',String(open));
+  el(prefix+'Toggle').textContent=open?'Hide details':'Review / edit';
+}
+function resetComposer(){
+  el('formError').hidden=true;
+  el('cancel').hidden=params.get('embedded')==='1';
+  el('referenceHint').textContent=(clientData.lead.company||clientData.lead.name)+' · '+(editing===null?'Reference created on save.':el('referenceHint').textContent);
+  for(const prefix of ['buyer','notify'])openPartyEditor(prefix,!el(prefix+'_same').checked);
+  el('editingItemsHint').hidden=editing===null;
+  el('save').textContent=editing===null?'Save draft':'Save changes';
+  el('saveHint').textContent=editing===null?'Progress is saved when you choose Save draft.':'Changes are saved when you choose Save changes.';
+  el('manualToggle').hidden=false;
+  updateComposer();
+}
+function revealInvalidControl(control){
+  for(let parent=control.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;
+  control.focus();control.reportValidity();
+}
+el('orderForm').oninput=()=>{el('formError').hidden=true;updateComposer();};
+el('orderForm').onchange=updateComposer;
+for(const prefix of ['buyer','notify'])el(prefix+'Toggle').onclick=()=>{
+  openPartyEditor(prefix,el(prefix+'Editor').hidden);
+  if(!el(prefix+'Editor').hidden)el(prefix+'_primary').focus();
+};
 function message(text,error=false){el('message').textContent=text;el('message').className=error?'error':'';}
 async function api(url,options={}) {
   const response=await fetch(url,options);const data=await response.json();
@@ -52,7 +84,7 @@ function showPartyFields(prefix){
   const [primary,secondary]=window.orderLocations.partyParts(el(prefix+'_text').value,el('destination').value);
   el(prefix+'_primary').value=primary;el(prefix+'_details').value=secondary;
 }
-function syncConsignee(){for(const prefix of ['buyer','notify'])if(el(prefix+'_same').checked){el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);showPartyFields(prefix);}}
+function syncConsignee(){for(const prefix of ['buyer','notify'])if(el(prefix+'_same').checked){el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);showPartyFields(prefix);}updateComposer();}
 for(const prefix of ['consignee','buyer','notify']){
   const changed=()=>{
     el(prefix+'_text').value=prefix==='consignee'?window.orderLocations.joinParty(el(prefix+'_primary').value,el(prefix+'_details').value):el(prefix+'_primary').value;
@@ -77,8 +109,8 @@ el('consigneeGst').oninput=()=>{
   showPartyFields('consignee');syncConsignee();
 };
 for(const prefix of ['buyer','notify']){
-  el(prefix+'_text').oninput=()=>{el(prefix+'_same').checked=el(prefix+'_text').value===window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);refreshConsigneeGst();};
-  el(prefix+'_same').onchange=()=>{if(el(prefix+'_same').checked)el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);showPartyFields(prefix);refreshConsigneeGst();};
+  el(prefix+'_text').oninput=()=>{el(prefix+'_same').checked=el(prefix+'_text').value===window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);refreshConsigneeGst();updateComposer();};
+  el(prefix+'_same').onchange=()=>{if(el(prefix+'_same').checked)el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);showPartyFields(prefix);refreshConsigneeGst();openPartyEditor(prefix,!el(prefix+'_same').checked);updateComposer();if(!el(prefix+'_same').checked)el(prefix+'_primary').focus();};
 }
 el('consignee_text').oninput=()=>{syncConsignee();refreshConsigneeGst();};
 const initialDrafts=window.createSkuDraftEditor(el('initialDrafts'),()=>({client_id:Number(clientScope)}),()=>el('currency').value,null,true);
@@ -178,7 +210,7 @@ async function createOrder() {
   if(!clientScope)throw new Error('Open a client in Clients & Orders to add an order.');
   const version=++formVersion;editing=null;el('orderForm').reset();initialDrafts.reset();
   el('initialDrafts').hidden=true;el('initialLines').hidden=false;
-  el('formTitle').textContent='New order / pending draft';el('referenceHint').textContent='Order reference is generated when saved.';
+  el('formTitle').textContent='New order';el('referenceHint').textContent='Your order reference will be created when you save.';
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));
   el('order_date').value=`${parts.year}-${parts.month}-${parts.day}`;
   el('shipping_charges').value='0.00';
@@ -186,19 +218,23 @@ async function createOrder() {
   el('pi_reference').value='';el('pi_reference').readOnly=false;
   if(!await prepareClient(Number(clientScope),null,version))return;
   if(!clientData.lead.can_edit||!clientData.lead.is_active)throw new Error('Choose an editable, active client.');
-  el('editor').hidden=false;el('detail').hidden=true;el('editor').scrollIntoView({behavior:'smooth'});
+  el('editor').hidden=false;el('detail').hidden=true;resetComposer();el('editor').scrollIntoView({behavior:'smooth'});
 }
 async function editOrder(id) {
   const version=++formVersion;
   const data=await api(`/api/orders/${id}`);if(!data.order.can_edit)throw new Error('Client access is read-only.');
+  if((clientScope&&String(data.order.client_id)!==clientScope)||(enquiryScope&&String(data.order.enquiry_id)!==enquiryScope))throw new Error('Order does not belong to the selected record.');
   if(version!==formVersion)return;
   editing=id;initialDrafts.reset();el('initialLines').hidden=true;
   headerFields.forEach(key=>{el(key).value=data.order[key];});if(!await prepareClient(data.order.client_id,data.delivery,version))return;
   el('pi_reference').readOnly=Boolean(data.invoices?.some(invoice=>invoice.workbook_format==='xlsm'));
-  el('detail').hidden=true;el('formTitle').textContent='Edit order';el('referenceHint').textContent=data.order.reference;el('editor').hidden=false;el('editor').scrollIntoView({behavior:'smooth'});
+  el('detail').hidden=true;el('formTitle').textContent='Edit order';el('referenceHint').textContent=data.order.reference;el('editor').hidden=false;resetComposer();el('editor').scrollIntoView({behavior:'smooth'});
 }
 el('orderForm').onsubmit=async event=>{
-  event.preventDefault();el('save').disabled=true;
+  event.preventDefault();
+  const invalid=el('orderForm').querySelector?.('input:invalid,textarea:invalid,select:invalid');
+  if(invalid){revealInvalidControl(invalid);return;}
+  el('save').disabled=true;el('save').textContent='Saving…';el('formError').hidden=true;
   try {
     if(!clientData)throw new Error('Choose a client before saving.');
     el('destination').value=el('destination').value.trim().toUpperCase();setIndiaCurrency();
@@ -211,7 +247,7 @@ el('orderForm').onsubmit=async event=>{
     if(editing===null){data.client_id=Number(clientScope);data.lines=el('initialDrafts').hidden?[]:initialDrafts.values();}
     const result=await api(editing===null?'/api/orders':`/api/orders/${editing}`,json(editing===null?'POST':'PUT',data));
     el('editor').hidden=true;await load();await showDetails(result.order.id);message('Order saved.');
-  }catch(error){message(error.message,true);}finally{el('save').disabled=false;}
+  }catch(error){el('formError').textContent=error.message;el('formError').hidden=false;el('formError').focus();message(error.message,true);}finally{el('save').disabled=false;el('save').textContent=editing===null?'Save draft':'Save changes';}
 };
 
 async function showDetails(id) {
@@ -301,7 +337,7 @@ async function showDetails(id) {
 el('lineForm').onsubmit=async event=>{event.preventDefault();try{await api(`/api/orders/${current.order.id}/lines/${editingLine}`,json('PUT',{sku:el('lineSku').value,description:el('lineDescription').value,quantity:el('lineQuantity').value,unit_price:el('linePrice').value,currency:el('lineCurrency').value,hsn_code:el('lineHsn').value,item_condition:el('lineCondition').value,uom:el('lineUom').value}));await showDetails(current.order.id);message('Order line saved.');}catch(error){message(error.message,true);}};
 el('addLine').onclick=()=>{lineDrafts.reset();el('lineDrafts').hidden=!el('lineDrafts').hidden;};
 el('cancelLine').onclick=()=>{el('lineForm').hidden=true;};
-el('manualToggle').onclick=()=>{el('initialDrafts').hidden=!el('initialDrafts').hidden;};
+el('manualToggle').onclick=()=>{el('initialDrafts').hidden=false;el('manualToggle').hidden=true;};
 
 el('newOrder').onclick=()=>createOrder().catch(error=>message(error.message,true));
 el('editOrder').onclick=()=>editOrder(current.order.id).catch(error=>message(error.message,true));
@@ -346,5 +382,5 @@ el('piForm').onsubmit=async event=>{
   if(enquiryScope){const e=(await api(`/api/enquiries/${enquiryScope}`)).enquiry;el('context').textContent=`Orders for ${e.reference} / ${e.client_name}`;el('newOrder').hidden=!e.can_edit||!e.client_active;}
   else if(clientScope){const c=(await api(`/api/leads/${clientScope}`)).lead;el('context').textContent=`Orders for ${c.name}`;el('newOrder').hidden=!c.can_edit||!c.is_active;}
   if(!clientScope)el('newOrder').hidden=true;
-  await load();if(params.get('order_id'))await showDetails(Number(params.get('order_id')));if(params.get('new')==='1')await createOrder();
+  await load();if(params.get('order_id')){if(params.get('edit')==='1')await editOrder(Number(params.get('order_id')));else await showDetails(Number(params.get('order_id')));}if(params.get('new')==='1')await createOrder();
 }catch(error){message(error.message,true);}})();
