@@ -12,6 +12,7 @@ from backend.orders.service import details,read_order,record_revision
 from backend.orders.pi_document import prepare,edit,validate_ready,print_document,recalculate
 from backend.orders import pi_exports
 from backend.orders.pi_layout import layout
+from backend.orders.filenames import invoice_filename
 
 
 def authorized(connection,order_id):
@@ -55,8 +56,6 @@ def save_preview(order_id,preview_id=None):
             if doc['reference']!=order['pi_reference']:
                 if order['updated_at']!=doc['source_updated_at']:
                     return jsonify(error='The order changed after this preview was opened. Open a new PI preview.'),409
-                if connection.execute('SELECT 1 FROM order_invoices WHERE reference=?',(doc['reference'],)).fetchone():
-                    raise ValueError('This Proforma Invoice No. has already been issued. Enter a different number.')
                 connection.execute("UPDATE client_orders SET pi_reference=?,updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
                     (doc['reference'],user['id'],order_id))
                 doc['source_updated_at']=connection.execute('SELECT updated_at FROM client_orders WHERE id=?',(order_id,)).fetchone()[0]
@@ -65,8 +64,8 @@ def save_preview(order_id,preview_id=None):
             connection.execute("UPDATE invoice_previews SET document_json=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
                                (json.dumps(doc),preview_id))
         else:
-            if set(data)-{'currency','usd_inr_rate'}:raise ValueError('Invalid PI preview fields.')
-            doc=prepare(details(connection,order),user,data.get('currency'),data.get('usd_inr_rate'))
+            if set(data)-{'currency','usd_inr_rate','bulk_description'}:raise ValueError('Invalid PI preview fields.')
+            doc=prepare(details(connection,order),user,data.get('currency'),data.get('usd_inr_rate'),data.get('bulk_description'))
             preview_id=uuid4().hex
             connection.execute('INSERT INTO invoice_previews(id,order_id,created_by,document_json) VALUES(?,?,?,?)',
                                (preview_id,order_id,user['id'],json.dumps(doc)))
@@ -90,8 +89,9 @@ def preview_pdf(order_id,preview_id):
         if error:return error
         row=preview_row(connection,order_id,preview_id,user)
         if not row:return jsonify(error='PI preview not found.'),404
-        return send_file(BytesIO(pi_exports.pdf(json.loads(row['document_json']))),mimetype='application/pdf',
-                         download_name='pi-preview.pdf',max_age=0)
+        doc=json.loads(row['document_json'])
+        return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',
+                         download_name=invoice_filename(doc['reference'],'pdf'),max_age=0)
     finally:connection.close()
 
 
@@ -107,7 +107,7 @@ def print_preview(order_id,preview_id):
         data=request.get_json(silent=True)
         if not isinstance(data,dict):return jsonify(error='Provide PI preview fields.'),400
         doc=print_document(json.loads(row['document_json']),data)
-        return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',download_name='pi-preview.pdf',max_age=0)
+        return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',download_name=invoice_filename(doc['reference'],'pdf'),max_age=0)
     finally:connection.close()
 
 
@@ -122,7 +122,12 @@ def calculate_preview(order_id,preview_id):
         if not row:return jsonify(error='PI preview not found.'),404
         if row['issued_invoice_id']:return jsonify(error='This PI has already been issued.'),409
         doc=recalculate(json.loads(row['document_json']),request.get_json(silent=True))
-        return jsonify(totals=doc['totals'])
+        totals=doc['totals']
+        if doc.get('pi_format')=='bulk':
+            from backend.orders.bulk_pi.layout import annexure_words, quantity_summary
+            totals={**totals,'annexure_amount_in_words':annexure_words(doc),
+                    'annexure_quantity':quantity_summary(doc)}
+        return jsonify(totals=totals)
     except ValueError as error:return jsonify(error=str(error)),400
     finally:connection.close()
 
@@ -147,8 +152,6 @@ def issue_preview(order_id):
             if order['updated_at']!=doc['source_updated_at']:
                 return jsonify(error='The order changed after this preview was opened. Open a new PI preview.'),409
             validate_ready(doc)
-            if connection.execute('SELECT 1 FROM order_invoices WHERE reference=?',(doc['reference'],)).fetchone():
-                return jsonify(error='This Proforma Invoice No. has already been issued. Use its existing downloads or enter a different number for a new order.'),409
             # Both files are issued together from exactly the approved document.
             workbook=pi_exports.xlsx(doc)
             pdf=pi_exports.pdf(doc)
@@ -164,6 +167,7 @@ def issue_preview(order_id):
                  'reference':doc['reference'],'currency':doc['currency'],'preview_id':row['id'],'formats':['xlsx','pdf']})))
         connection.commit()
         base=f'/api/orders/{order_id}/invoices/{invoice_id}/download'
-        return jsonify(id=invoice_id,reference=doc['reference'],xlsx_url=base+'?format=xlsx',pdf_url=base+'?format=pdf'),201
+        return jsonify(id=invoice_id,reference=doc['reference'],xlsx_url=base+'?format=xlsx',pdf_url=base+'?format=pdf',
+                       xlsx_filename=invoice_filename(doc['reference'],'xlsx'),pdf_filename=invoice_filename(doc['reference'],'pdf')),201
     except ValueError as error:return jsonify(error=str(error)),400
     finally:connection.rollback();connection.close()

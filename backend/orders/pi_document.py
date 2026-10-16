@@ -61,7 +61,7 @@ def sync_locations(doc):
     return doc
 
 
-def prepare(state, user, currency, rate):
+def prepare(state, user, currency, rate, bulk_description=None):
     from backend.orders.invoices import calculate
     from backend.database import get_db
     connection = get_db()
@@ -101,7 +101,12 @@ def prepare(state, user, currency, rate):
             assets[name] = base64.b64encode(path.read_bytes()).decode('ascii')
         except OSError as error:
             raise ValueError('Company PI image is missing: '+name) from error
+    bulk = len(totals['lines']) > 4
+    description = text(bulk_description or '', 2000, 'first-page description')
+    if bulk and not description:
+        raise ValueError('Enter the first-page description for this bulk PI. The products will be listed in Annexure-1.')
     return sync_locations({'schema_version':2,'reference':reference,
+        'pi_format':'bulk' if bulk else 'normal', 'bulk_description':description if bulk else '',
         'date':datetime.now(timezone(timedelta(hours=5,minutes=30))).date().isoformat(),
         'prepared_by':user['username'],'prepared_phone':company_phone(company),'currency':currency,'order':order,
         'delivery':{'consignee_text':consignee,'buyer_text':buyer,'notify_text':notify,
@@ -113,9 +118,13 @@ def prepare(state, user, currency, rate):
 
 def edit(document, edits):
     from backend.orders.invoices import calculate
-    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','terms','consignee_gst_number'}:
+    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','terms','consignee_gst_number','bulk_description'}:
         raise ValueError('Invalid PI preview fields. Company details and invoice identity cannot be edited.')
     doc = deepcopy(document)
+    if 'bulk_description' in edits:
+        if doc.get('pi_format') != 'bulk':
+            raise ValueError('A first-page summary description is only available for bulk PIs.')
+        doc['bulk_description'] = text(edits['bulk_description'],2000,'first-page description')
     if 'terms' in edits:
         doc['terms'] = text(edits['terms'],20000,'terms and conditions')
     if 'prepared_phone' in edits:
@@ -213,7 +222,7 @@ def print_document(document, edits):
     except ValueError:
         # Unfinished numeric inputs can still be printed using the last totals.
         pass
-    for key in ('date','prepared_phone','terms'):
+    for key in ('date','prepared_phone','terms','bulk_description'):
         if isinstance(edits.get(key),str):doc[key]=edits[key][:20000]
     if isinstance(edits.get('order'),dict):
         for key in ORDER_FIELDS:
@@ -234,6 +243,9 @@ def print_document(document, edits):
 
 
 def validate_ready(doc):
+    if doc.get('pi_format') == 'bulk':
+        if not text(doc.get('bulk_description',''),2000,'first-page description'):
+            raise ValueError('Enter the first-page description for this bulk PI.')
     if not str(doc.get('reference','')).strip():
         raise ValueError('Enter the Proforma Invoice No.')
     if not str(doc['order'].get('po_reference','')).strip():

@@ -118,6 +118,33 @@ class MigrationTests(unittest.TestCase):
         with test_connection(self.path) as connection:
             self.assertTrue(before == legacy_snapshot(connection))
 
+    def test_reusable_references_upgrade_preserves_records_files_and_sequences(self):
+        migrate_database(self.path, MIGRATIONS[:20])
+        tables = ('client_orders','order_invoices','invoice_previews','order_sku_lines')
+        with test_connection(self.path) as connection:
+            connection.execute("INSERT INTO users(username,password_hash) VALUES('fixture','test')")
+            connection.execute("INSERT INTO client_leads(name,created_by) VALUES('Client',1)")
+            connection.execute("INSERT INTO client_orders(reference,client_id,order_date,currency,created_by,updated_by) "
+                               "VALUES('ORDER-1',1,'2026-10-16','USD',1,1)")
+            connection.execute("INSERT INTO order_invoices(order_id,reference,currency,snapshot_json,workbook,created_by,workbook_format,pdf) "
+                               "VALUES(1,'PI-1','USD','{}',?,1,'xlsx',?)",(b'workbook fixture',b'pdf fixture'))
+            connection.execute("INSERT INTO invoice_previews(id,order_id,created_by,document_json,issued_invoice_id) "
+                               "VALUES('preview',1,1,'{}',1)")
+            connection.execute("INSERT INTO order_sku_lines(order_id,sku,description,quantity_milli,unit_price_minor,currency,created_by,updated_by) "
+                               "VALUES(1,'SKU','Part',1000,100,'USD',1,1)")
+            connection.execute("UPDATE sqlite_sequence SET seq=100 WHERE name IN ('client_orders','order_invoices')")
+            before = {table:connection.execute('SELECT * FROM '+table).fetchall() for table in tables}
+        self.assertEqual(migrate_database(self.path),[21])
+        with test_connection(self.path) as connection:
+            for table, rows in before.items():
+                self.assertEqual(connection.execute('SELECT * FROM '+table).fetchall(),rows)
+            for table in ('client_orders','order_invoices'):
+                columns = ','.join(row[1] for row in connection.execute('PRAGMA table_info('+table+')') if row[1]!='id')
+                cursor = connection.execute('INSERT INTO '+table+' ('+columns+') SELECT '+columns+' FROM '+table+' WHERE id=1')
+                self.assertEqual(cursor.lastrowid,101)
+            self.assertEqual(connection.execute('PRAGMA foreign_key_check').fetchall(),[])
+            self.assertEqual(connection.execute('PRAGMA integrity_check').fetchone()[0],'ok')
+
     def test_version_two_upgrade_preserves_credentials_and_roles(self):
         self.create_legacy_database()
         migrate_database(self.path, MIGRATIONS[:2])

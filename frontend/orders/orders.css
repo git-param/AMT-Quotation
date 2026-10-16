@@ -287,3 +287,20 @@ body.embedded #orderForm .consignee-editor textarea {flex:1}
   body.embedded #orderForm .composer-parties {flex:0}
   .composer-fields--shipping {margin-top:18px}
 }
+.bulk-description-field{max-width:760px;margin:18px 0;display:flex;flex-direction:column;gap:8px}
+.bulk-description-field label{font-size:13px;font-weight:600;color:#334155}
+.bulk-description-field textarea{width:100%;box-sizing:border-box;min-height:90px;padding:12px;font:inherit;font-size:13px;line-height:1.7;border:1px solid #cbd5e1;border-radius:8px;resize:vertical}
+.bulk-description-field small{font-size:12px;color:#64748b;line-height:1.7}
+.pi-annexure-page{margin-top:28px;padding-top:18px;border-top:12px solid #edf1f6}
+.pi-grid-annexure tr:nth-child(2){border-bottom:1.5px solid #000}
+.pi-grid-annexure_totals{font-size:12px}
+/* Annexure-1 follows the reference's six columns and fully ruled totals grid. */
+.pi-paper .pi-grid-annexure{font-family:"Times New Roman",Times,serif;font-size:12px;line-height:1.15;border:2px solid #000}
+.pi-paper .pi-grid-annexure td{border:1px solid #000;padding:2px 3px;vertical-align:middle}
+.pi-paper .pi-grid-annexure .pi-cell-annexure_title{font:700 8px Arial,sans-serif;text-align:center;vertical-align:bottom;border-bottom:2px solid #000}
+.pi-paper .pi-grid-annexure .pi-cell-head{border-top:2px solid #000;border-bottom:2px solid #000}
+.pi-paper .pi-grid-annexure .pi-cell-bold_center{font-weight:700;text-align:center}
+.pi-paper .pi-grid-annexure .pi-accounting{display:flex;justify-content:space-between;gap:4px}
+.pi-paper .pi-grid-annexure td.pi-total-cell{border:2px solid #000;text-align:center;vertical-align:middle;font-weight:700}
+.pi-paper .pi-grid-annexure .pi-total-cell .pi-accounting{justify-content:center}
+.pi-paper .pi-grid-annexure .pi-nowrap .pi-cell-text{white-space:pre;font-size:10px}

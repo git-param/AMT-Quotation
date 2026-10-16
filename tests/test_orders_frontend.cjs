@@ -302,3 +302,12 @@ test('pending drafts resume in the composer and enforce client scope',async()=>{
   f.data.order.client_id=10;
   await assert.rejects(()=>f.context.editOrder(7),/selected record/);
 });
+
+test('bulk description is required only above four order products',async()=>{
+  const f=setup();await settle();
+  const line={id:1,sku:'PART',description:'Part',quantity:'1',unit_price:'10.00',currency:'USD',line_total:'10.00',hsn_code:'85371090',item_condition:'New',uom:'PCs'};
+  f.data.lines=Array.from({length:4},(_,index)=>({...line,id:index+1}));await f.context.showDetails(7);
+  assert.equal(f.element('bulkDescriptionField').hidden,true);assert.equal(f.element('bulkDescription').required,false);
+  f.data.lines.push({...line,id:5});await f.context.showDetails(7);
+  assert.equal(f.element('bulkDescriptionField').hidden,false);assert.equal(f.element('bulkDescription').required,true);
+});
