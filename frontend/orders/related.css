@@ -15,6 +15,41 @@
 .order-card-entry{position:relative;display:flex;min-width:0}.order-card-entry .related-order-card{flex:1;padding-right:52px}.related-orders .order-card-delete{position:absolute;top:18px;right:8px;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:5px;border:0;background:transparent;color:#dc2626;border-radius:6px}.related-orders .order-card-delete:hover{background:#fff1f2}.order-card-delete svg{width:18px;height:18px;pointer-events:none}.order-card-delete:focus-visible{outline:2px solid #dc2626;outline-offset:2px}.order-deletion-log{margin-top:18px;padding:12px;border:1px solid #dce3eb;border-radius:8px;background:#fff}.order-deletion-log summary{cursor:pointer;font-weight:600}.order-deletion-log p{font-size:12px;margin-top:10px;color:#526173}
 
 body.order-modal-open{overflow:hidden}
+.related-orders .source-toolbar{margin-bottom:6px}
+.related-orders .order-card-group{padding:18px;margin-top:20px;border:1px solid #e2e8f0;border-radius:13px;background:#f8fafc}
+.related-orders .order-group-pending{background:#f7faff;border-color:#e0e9f7}
+.related-orders .order-group-complete{background:#f7fbf9;border-color:#dfede5}
+.related-orders .order-card-group h4{display:flex;align-items:center;gap:9px;margin:0 0 16px;font-size:13px;font-weight:600;color:#334155}
+.order-group-count{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:22px;padding:0 6px;box-sizing:border-box;border:1px solid #dbeafe;border-radius:7px;background:#eaf2ff;color:#3568ae;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums}
+.order-group-complete .order-group-count{background:#e8f5ed;border-color:#d2eadd;color:#278052}
+.related-orders .order-cards{grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}
+.related-orders .related-order-card{align-items:flex-start;justify-content:flex-start;margin:0;padding:18px;gap:12px;min-width:0;box-sizing:border-box;border-color:#e0e7f0;background:#fff;transition:border-color .15s,box-shadow .15s}
+.related-orders .related-order-card:hover{background:#fff;border-color:#9dbce7;box-shadow:0 5px 16px #193b670c}
+.related-orders .order-card-reference{font-size:14px;font-weight:700;letter-spacing:.015em;color:#193b67}
+.related-orders .order-card-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;color:#8491a3}
+.related-orders .order-card-meta>span{font-size:11px;color:#8491a3}
+.related-orders .order-card-meta .order-card-status{padding:3px 7px;border-radius:5px;background:#eff6ff;color:#3568ae;font-size:10px;font-weight:600}
+.related-orders .order-group-complete .order-card-status{background:#ecf8f0;color:#278052}
+.related-orders .order-card-meta .order-card-currency{color:#64748b;font-size:10px;font-weight:600;border-left:1px solid #e2e8f0;padding-left:8px}
+.related-orders .order-card-pi{display:block;width:100%;box-sizing:border-box;border-top:1px solid #eef2f7;padding-top:12px;color:#52647b;font-size:11px;line-height:1.6}
+.related-orders .order-card-open{align-self:flex-end;color:#2563eb;font-size:11px;font-weight:600}
+.related-orders .order-card-entry .related-order-card{padding-right:18px}
+.related-orders .order-card-entry .order-card-reference{padding-right:32px}
+.related-orders .order-card-delete{top:12px;right:10px;width:28px;height:28px;border:1px solid #ffe4e6;background:#fff8f9;color:#d25564;border-radius:7px}
+.related-orders .order-card-delete svg{width:15px;height:15px}
+.order-group-empty{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:20px 16px;border:1px dashed #d7e1ee;border-radius:10px;background:#ffffff80}
+.order-empty-icon{display:grid;place-items:center;flex:0 0 38px;height:38px;border-radius:11px;background:#eaf2ff;color:#6d94c8;font-size:19px}
+.order-group-complete .order-empty-icon{background:#e8f5ed;color:#78a58a}
+.order-group-empty>span:last-child{min-width:0}
+.order-group-empty strong{display:block;color:#52647b;font-size:12px;font-weight:600}
+.order-group-empty>span>span{display:block;margin-top:5px;color:#8491a3;font-size:11px;line-height:1.7}
+.related-orders .order-group-paging{justify-content:flex-end;gap:8px;margin:14px 0 0}
+.order-group-paging>span{font-size:11px;color:#64748b}
+.related-orders .order-group-paging .btn-sm{min-height:30px;padding:6px 10px;font-size:11px;border:1px solid #dfe6ef;border-radius:7px;background:#fff;color:#52647b}
+.related-orders .order-deletion-log{padding:14px 16px;border-radius:10px;border-color:#e8edf4;background:#fbfcfe}
+.related-orders .order-deletion-log summary{font-size:11px;font-weight:500;color:#8491a3}
+.related-orders .order-deletion-log[open] summary{color:#52647b}
+@media(max-width:650px){.related-orders .order-card-group{padding:14px}.order-group-empty{padding:16px 12px}.related-orders .source-toolbar h3{font-size:15px}.related-orders .related-order-card{padding:16px}}
 .order-dialog{position:fixed;inset:0;margin:auto;width:min(1800px,calc(100vw - 32px));height:calc(100dvh - 32px);max-width:none;max-height:none;box-sizing:border-box;border:1px solid #dce3eb;border-radius:16px;padding:0;overflow:hidden;background:#f5f7fb;box-shadow:0 24px 90px #0f172a40}
 .order-dialog[open]{display:flex;flex-direction:column}
 .order-dialog::backdrop{background:#0f172a80;backdrop-filter:blur(2px)}
