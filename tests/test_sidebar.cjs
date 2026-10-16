@@ -30,6 +30,7 @@ async function setup(user,mobile=false){
   const original={};
   for(const [url,id] of [['/enquiries',''],['/leads',''],['/client-access','accessLink'],['/sources','sourcesLink'],['/manager','mgrLink'],['/logout','']]){
     const link=new Element('a');link.setAttribute('href',url);link.id=id;header.append(link);original[url]=link;
+    if(url==='/manager')link.setAttribute('target','_blank');
   }
   const media={matches:mobile,addEventListener(){}};
   const events={};
@@ -43,11 +44,13 @@ test('header links move to sidebar with original IDs and active-page state',asyn
   const view=await setup({role:'admin',permissions:['management.view','sources.manage','leads.share_manage','settings.manage']});
   assert.equal(view.header.querySelectorAll('a[href]').length,0);
   assert.equal(view.original['/client-access'].id,'accessLink');
+  assert.equal(view.original['/manager'].getAttribute('target'),null);
   assert.equal(view.sidebar.children[1].children.find(row=>row.children[0].href==='/clients-orders').children[0].attributes['aria-current'],'page');
   const rows=view.sidebar.children[1].children;
-  assert.equal(rows.length,7);
+  assert.equal(rows.length,8);
   assert.ok(rows.every(row=>!row.hidden));
   assert.ok(rows.some(row=>row.children[0].href==='/clients-orders'));
+  assert.ok(rows.some(row=>row.children[0].href==='/search-pi'));
 });
 
 test('executives do not see management, source, or sharing links',async()=>{

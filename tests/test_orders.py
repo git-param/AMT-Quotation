@@ -163,6 +163,32 @@ class OrderTests(unittest.TestCase):
         self.assertEqual(result.status_code,400,result.json)
         self.assertIn('Increase the quantity',result.json['error'])
 
+    def test_completion_toggle_moves_orders_between_lists_and_keeps_order_data(self):
+        state=self.order();order_id=state['order']['id'];path=f'/api/orders/{order_id}'
+        for status,group in (('completed','complete'),('draft','pending')):
+            response=self.client.put(path+'/status',json={'status':status})
+            self.assertEqual(response.status_code,200,response.json)
+            self.assertEqual(response.json['order']['status'],status)
+            saved=self.client.get(path).json
+            self.assertEqual(saved['lines'],state['lines'])
+            self.assertEqual(saved['delivery'],state['delivery'])
+            listing=self.client.get('/api/orders',query_string={'client_id':self.parent,'completion':group}).json
+            self.assertIn(order_id,[order['id'] for order in listing['orders']])
+            other=self.client.get('/api/orders',query_string={'client_id':self.parent,'completion':'pending' if group=='complete' else 'complete'}).json
+            self.assertNotIn(order_id,[order['id'] for order in other['orders']])
+        self.assertEqual(self.client.put(path+'/status',json={'status':'invalid'}).status_code,400)
+        self.client.put(path,json={'status':'cancelled'})
+        self.assertEqual(self.client.put(path+'/status',json={'status':'completed'}).status_code,400)
+
+    def test_completion_toggle_enforces_client_permissions(self):
+        state=self.order();path=f'/api/orders/{state["order"]["id"]}/status'
+        self.as_user('exec2')
+        self.assertEqual(self.client.put(path,json={'status':'completed'}).status_code,404)
+        self.share('VIEW');self.as_user('exec2')
+        self.assertEqual(self.client.put(path,json={'status':'completed'}).status_code,403)
+        self.as_user(None)
+        self.assertEqual(self.client.put(path,json={'status':'completed'}).status_code,401)
+
     def test_independent_copies_decimal_totals_and_stable_order_line_ids(self):
         first, second = self.order(), self.order()
         order_id = first['order']['id']

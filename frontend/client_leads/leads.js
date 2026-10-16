@@ -513,12 +513,11 @@ async function openDetails(id) {
     h('strong', { text: person.name }),
     person.email ? contactLine('Email', person.email) : null,
     person.phone ? contactLine('Phone', person.phone) : null));
-  const contactCard = card('Contacts', lines.length || people.length ? null : h('p', { class: 'cl-muted', text: 'Not provided' }), ...lines);
+  const contactCard = card('Contact details', lines.length || people.length ? null : h('p', { class: 'cl-muted', text: 'Not provided' }), ...lines);
   if (people.length) contactCard.append(h('h4', { text: 'Contact persons' }), ...people);
 
-  card('Owner and creation', h('p', {
-    text: `${client.creator_name}\nCreated ${new Date(client.created_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`,
-  }));
+  card('Account owner', h('p', { class:'cl-owner-name',text:client.creator_name }),
+    h('p', { class:'cl-created-note',text:`Created ${new Date(client.created_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}` }));
   card('Enquiry source', client.enquiry_source_name
     ? h('p', { text: `${client.enquiry_source_name}${client.enquiry_source_active ? '' : ' (inactive)'}` })
     : h('p', { class: 'cl-muted', text: 'Not specified' }));

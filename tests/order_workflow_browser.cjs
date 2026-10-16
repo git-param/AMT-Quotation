@@ -73,7 +73,15 @@ await click('addLine');await evaluate("[...document.querySelectorAll('#lineDraft
 await until("document.querySelector('#lineDrafts [aria-label=\"HSN code\"]')?.value==='85371090'");
 await evaluate("(()=>{for(const [label,value] of Object.entries({'SKU / item code':'WORKFLOW-PART','Description':'Browser tested part','Quantity':'2','Agreed unit price (INR)':'100','HSN code':'85371090','Item condition':'New','Unit of measure':'PCs'})){const n=document.querySelector('#lineDrafts [aria-label=\"'+label+'\"]');if(!n)throw Error(label);n.value=value;n.dispatchEvent(new Event('input',{bubbles:true}));}[...document.querySelectorAll('#lineDrafts button')].find(b=>b.textContent==='Save all SKU lines').click();})()");
 await until("document.querySelector('#lineRows').textContent.includes('WORKFLOW-PART')");
+await click('giveDiscount');
+assert.equal(await evaluate("document.querySelector('#discountType').value"),'percent');
+await set('discountValue','10');await set('discountScope','total','change');
+await shot('order-discount-dialog');await click('applyDiscount');
+await until("document.querySelector('#discountForm').hidden && document.querySelector('#discountSummary').textContent.includes('10.00%')");
+record=await evaluate(`fetch('/api/orders/${orderId}').then(r=>r.json())`);
+assert.equal(record.order.discount.scope,'total');assert.equal(record.order.discount.show_on_pi,true);
 await set('piCurrency','INR','change');await evaluate("document.querySelector('#piForm').requestSubmit()");await until("document.querySelector('#piPreview .pi-paper')");
+assert.ok(await evaluate("document.querySelector('#piPreview').textContent.includes('Discount')"));
 assert.ok(await evaluate("document.querySelector('#piPreview').textContent.includes('BANK') || document.querySelector('#piPreview').textContent.toLowerCase().includes('bank')"));
 await evaluate("[...document.querySelectorAll('#piPreview button')].find(b=>b.textContent==='Generate XLSX').click()");
 await until("document.querySelector('#invoiceList a')");

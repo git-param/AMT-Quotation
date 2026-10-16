@@ -10,6 +10,36 @@ let current=null, editing=null, editingLine=null, clientData=null;
 let detailVersion=0;
 let formVersion=0;
 let commercialInputs=[],savingCommercial=false;
+let statusOrder=null,statusSaving=false;
+function updateOrderStatusUI(order){
+  statusOrder=order;
+  const canChange=Boolean(order?.can_edit&&order.status!=='cancelled');
+  for(const id of ['composerStatus','toggleOrderStatus']){
+    el(id).hidden=!canChange||params.get('embedded')==='1';
+    el(id).disabled=statusSaving;
+    el(id).textContent=order?.status==='completed'?'Move to pending':'Complete';
+    el(id).title='Generating a PI automatically marks this order complete.';
+  }
+  if(params.get('embedded')==='1')window.parent.postMessage({type:'amt-order-state',order:order?{id:order.id,status:order.status,can_edit:canChange}:null,busy:statusSaving},location.origin);
+}
+async function toggleOrderCompletion(){
+  if(!statusOrder?.can_edit||statusOrder.status==='cancelled'||statusSaving)return;
+  const orderId=statusOrder.id,target=statusOrder.status==='completed'?'draft':'completed';
+  statusSaving=true;updateOrderStatusUI(statusOrder);
+  try{
+    const result=await api(`/api/orders/${orderId}/status`,json('PUT',{status:target}));
+    if(statusOrder?.id!==orderId)return;
+    if(current?.order.id===orderId)current.order.status=result.order.status;
+    updateOrderStatusUI(result.order);
+    if(current?.order.id===orderId)el('detailAccess').textContent=`${result.order.status==='completed'?'Complete':'Pending'} / ${current.order.currency} / Editable`;
+    await load();message(target==='completed'?'Order moved to complete orders.':'Order moved to pending orders.');
+  }catch(error){message(error.message,true);}
+  finally{statusSaving=false;updateOrderStatusUI(statusOrder);}
+}
+el('composerStatus').onclick=toggleOrderCompletion;el('toggleOrderStatus').onclick=toggleOrderCompletion;
+window.addEventListener('message',event=>{
+  if(params.get('embedded')==='1'&&event.origin===location.origin&&event.source===window.parent&&event.data?.type==='amt-order-toggle-status')toggleOrderCompletion();
+});
 function updateComposer(){
   for(const prefix of ['buyer','notify']){
     el(prefix+'Summary').textContent=el(prefix+'_text').value.trim()||'No address added yet';
@@ -58,6 +88,59 @@ async function api(url,options={}) {
   }finally{finish?.();}
 }
 const json = (method,data) => ({method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+function formattedAmount(value){
+  const [whole,decimal='']=String(value??'0').split('.');
+  return whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')+'.'+decimal.padEnd(2,'0');
+}
+let discountChoices=[];
+function updateDiscountSelection(){
+  const selected=discountChoices.filter(input=>input.checked).length;
+  el('discountSelectionCount').textContent=selected?`${selected} of ${discountChoices.length} items selected`:
+    el('discountScope').value==='single'?'Select one item to discount.':'Select the items you want to discount.';
+}
+function discountControls(){
+  const amount=el('discountType').value==='amount',total=el('discountScope').value==='total';
+  el('discountValueLabel').textContent=amount?`Discount (${current.order.currency}${total?'':' per SKU line'})`:'Discount (%)';
+  el('discountValue').max=amount?'999999999.99':'100';
+  el('discountSkus').hidden=['all','total'].includes(el('discountScope').value);
+  el('discountHint').textContent=total?'Deducted once from the goods subtotal, before shipping and GST.':amount?'The amount is in order currency and applies once per selected SKU line, before shipping and GST.':'Percentage applies to each selected SKU line, before shipping and GST.';
+  for(const input of discountChoices)input.type=el('discountScope').value==='single'?'radio':'checkbox';
+  el('discountSkuLegend').textContent=el('discountScope').value==='single'?'Choose one item':'Choose items';
+  updateDiscountSelection();
+}
+el('discountType').onchange=discountControls;
+el('discountScope').onchange=()=>{for(const input of discountChoices)input.checked=false;discountControls();};
+el('giveDiscount').onclick=()=>{
+  const discount=current.order.discount;
+  el('discountType').value=discount?.type||'percent';el('discountScope').value=discount?.scope||'all';
+  el('discountValue').value=discount?.value||'';el('discountShow').checked=discount?.show_on_pi??true;
+  el('discountSkuChoices').replaceChildren();discountChoices=[];
+  for(const line of current.lines){
+    const label=document.createElement('label'),input=document.createElement('input');input.name='discountSku';input.value=String(line.id);input.checked=Boolean(discount?.line_ids.includes(line.id));
+    label.className='discount-sku-card';input.onchange=updateDiscountSelection;
+    const details=document.createElement('span');details.className='discount-sku-details';
+    const sku=document.createElement('strong');sku.textContent=line.sku;
+    const description=document.createElement('small');description.textContent=line.description||'Order item';details.append(sku,description);
+    const amount=document.createElement('span');amount.className='discount-sku-amount';
+    const caption=document.createElement('small');caption.textContent='Line total';
+    const price=document.createElement('strong');price.textContent=`${line.currency} ${formattedAmount(line.line_total)}`;
+    amount.append(caption,price);label.append(input,details,amount);el('discountSkuChoices').append(label);discountChoices.push(input);
+  }
+  discountControls();el('discountError').hidden=true;el('removeDiscount').hidden=!discount;el('discountForm').hidden=false;el('giveDiscount').setAttribute('aria-expanded','true');el('discountValue').focus();
+};
+el('cancelDiscount').onclick=()=>{el('discountForm').hidden=true;el('giveDiscount').setAttribute('aria-expanded','false');};
+async function persistDiscount(remove=false){
+  el('applyDiscount').disabled=true;el('removeDiscount').disabled=true;
+  try{
+    const scope=el('discountScope').value;
+    const data={type:el('discountType').value,value:el('discountValue').value,scope,line_ids:['all','total'].includes(scope)?[]:discountChoices.filter(input=>input.checked).map(input=>Number(input.value)),show_on_pi:el('discountShow').checked};
+    await api(`/api/orders/${current.order.id}/discount`,remove?{method:'DELETE'}:json('PUT',data));
+    await showDetails(current.order.id);message(remove?'Discount removed.':'Discount saved. PI amounts will include this discount.');
+  }catch(error){el('discountError').textContent=error.message;el('discountError').hidden=false;}
+  finally{el('applyDiscount').disabled=false;el('removeDiscount').disabled=false;}
+}
+el('discountForm').onsubmit=event=>{event.preventDefault();persistDiscount();};
+el('removeDiscount').onclick=()=>persistDiscount(true);
 function action(label,callback,danger=false){
   const button=document.createElement('button');button.type='button';button.className='btn-sm'+(danger?' btn-del':'');
   const icons={Details:'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',Edit:'m16 3 5 5-12 12-6 1 1-6L16 3Z M13 6l5 5',Delete:'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7'};
@@ -215,6 +298,7 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
 async function createOrder() {
   if(!clientScope)throw new Error('Open a client in Clients & Orders to add an order.');
   const version=++formVersion;editing=null;el('orderForm').reset();initialDrafts.reset();
+  updateOrderStatusUI(null);
   el('initialDrafts').hidden=true;el('initialLines').hidden=false;
   el('formTitle').textContent='New order';el('referenceHint').textContent='Your order reference will be created when you save.';
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));
@@ -231,6 +315,7 @@ async function editOrder(id) {
   const data=await api(`/api/orders/${id}`);if(!data.order.can_edit)throw new Error('Client access is read-only.');
   if((clientScope&&String(data.order.client_id)!==clientScope)||(enquiryScope&&String(data.order.enquiry_id)!==enquiryScope))throw new Error('Order does not belong to the selected record.');
   if(version!==formVersion)return;
+  updateOrderStatusUI(data.order);
   editing=id;initialDrafts.reset();el('initialLines').hidden=true;
   headerFields.forEach(key=>{el(key).value=data.order[key];});if(!await prepareClient(data.order.client_id,data.delivery,version))return;
   el('pi_reference').readOnly=Boolean(data.invoices?.some(invoice=>invoice.workbook_format==='xlsm'));
@@ -261,6 +346,12 @@ async function showDetails(id) {
   if((clientScope&&String(data.order.client_id)!==clientScope)||(enquiryScope&&String(data.order.enquiry_id)!==enquiryScope))throw new Error('Order does not belong to the selected record.');
   current=data;commercialInputs=[];editingLine=null;el('editor').hidden=true;el('piError').hidden=true;el('lineForm').hidden=true;el('lineDrafts').hidden=true;el('copyPanel').hidden=true;lineDrafts.reset();
   const order=data.order;
+  updateOrderStatusUI(order);
+  el('discountForm').hidden=true;el('giveDiscount').hidden=!order.can_edit;el('giveDiscount').disabled=!data.lines.length&&!order.discount;el('giveDiscount').setAttribute('aria-expanded','false');
+  const discount=order.discount;
+  el('giveDiscount').textContent=discount?'Edit discount':'Give discount';
+  const target=discount?.scope==='total'?'order total':discount?.scope==='all'?'all SKUs':data.lines.filter(line=>discount?.line_ids.includes(line.id)).map(line=>line.sku).join(', ');
+  el('discountSummary').textContent=discount?`Discount: ${discount.type==='percent'?discount.value+'%':order.currency+' '+discount.value+(discount.scope==='total'?'':' per SKU line')} on ${target}. ${discount.show_on_pi?'Shown in PI.':'Hidden in PI; reduced amounts still apply.'}`:'';
   el('conversionHint').textContent='Choose the currency for this proforma invoice.';
   el('piForm').hidden=!order.can_edit||order.status==='cancelled';el('piCurrency').value='';
   el('bulkDescriptionField').hidden=data.lines.length<=4;
@@ -293,7 +384,7 @@ async function showDetails(id) {
     }catch(error){message(error.message,true);}
   };
   el('detailTitle').textContent=order.reference;
-  el('detailAccess').textContent=`${order.status} / ${order.currency} / ${order.can_edit?'Editable':'Read only'}`;
+  el('detailAccess').textContent=`${order.status==='completed'?'Complete':order.status==='draft'?'Pending':order.status} / ${order.currency} / ${order.can_edit?'Editable':'Read only'}`;
   el('editOrder').hidden=!order.can_edit;el('addLine').hidden=!order.can_edit;
   el('deleteOrder').hidden=!order.can_delete_order;
   el('deleteOrder').onclick=()=>deleteOrder(order).catch(error=>message(error.message,true));
@@ -312,10 +403,16 @@ async function showDetails(id) {
   el('lineRows').replaceChildren();
   data.lines.forEach(line=>{
     const row=document.createElement('tr');
-    const product=cell(row,'');product.setAttribute('data-label','Item');const sku=document.createElement('strong');sku.textContent=line.sku;
+    const product=cell(row,'');product.setAttribute('data-label','Item');const sku=document.createElement('strong');sku.className='order-item-sku';sku.textContent=line.sku;
     const description=document.createElement('span');description.className='item-description';description.textContent=line.description;product.append(sku,description);
     if(line.source_enquiry_line_id){const source=document.createElement('small');source.textContent=`Imported enquiry item #${line.source_enquiry_line_id}`;product.append(source);}
-    [line.quantity+' '+(line.uom||'PCs'),line.currency+' '+line.unit_price,line.currency+' '+line.line_total].forEach((value,index)=>cell(row,value).setAttribute('data-label',['Quantity','Unit price','Amount'][index]));
+    const quantity=cell(row,'');quantity.setAttribute('data-label','Quantity');
+    const badge=document.createElement('span');badge.className='order-item-quantity';badge.textContent=line.quantity+' '+(line.uom||'PCs');quantity.append(badge);
+    for(const [label,value]of [['Unit price',line.unit_price],['Amount',line.line_total]]){
+      const td=cell(row,'');td.setAttribute('data-label',label);td.className='order-item-money';
+      const code=document.createElement('span');code.className='order-item-currency';code.textContent=line.currency+' ';
+      const number=document.createElement('strong');number.textContent=formattedAmount(value);td.append(code,number);
+    }
     const inputs={id:line.id,originalHsn:line.hsn_code||'',originalCondition:line.item_condition||''};
     for(const [key,label,limit,slot]of [['hsn_code','HSN code',20,'hsn'],['item_condition','Item condition',100,'condition']]){
       const td=cell(row,'');td.setAttribute('data-label',label);
@@ -330,13 +427,18 @@ async function showDetails(id) {
       }else{td.textContent=line[key]||'Not set';}
     }
     if(order.can_edit)commercialInputs.push(inputs);
-    const actions=cell(row,'');actions.setAttribute('data-label','Actions');
+    const actions=cell(row,'');actions.className='order-item-row-actions';actions.setAttribute('data-label','Actions');
     if(order.can_edit)actions.append(action('Edit',async()=>{if(commercialDirty())throw new Error('Save item details before opening the full line editor.');const latest=(await api(`/api/orders/${id}/lines/${line.id}`)).line;if(!latest.is_active)throw new Error('This line was removed.');editingLine=line.id;for(const [key,value] of Object.entries({lineSku:latest.sku,lineDescription:latest.description,lineQuantity:latest.quantity,linePrice:latest.unit_price,lineCurrency:latest.currency,lineHsn:current.shared_hsn_code||latest.hsn_code||'',lineCondition:latest.item_condition||'',lineUom:latest.uom||'PCs'}))el(key).value=value;el('lineHsn').readOnly=Boolean(current.shared_hsn_code);el('lineForm').hidden=false;el('lineForm').scrollIntoView({behavior:'smooth'});}));
     if(order.can_delete)actions.append(action('Delete',async()=>{if(!window.confirm(`Delete SKU ${line.sku}? History will be retained.`))return;await api(`/api/orders/${id}/lines/${line.id}`,{method:'DELETE'});await showDetails(id);},true));
     el('lineRows').append(row);
   });
   if(!data.lines.length){const row=document.createElement('tr');cell(row,'No active order items.').colSpan=7;el('lineRows').append(row);}
-  el('totals').replaceChildren();Object.entries(data.subtotals).forEach(([code,total])=>{const label=document.createElement('strong');label.textContent=`${code} subtotal: ${total}`;el('totals').append(label);});
+  el('totals').replaceChildren();Object.entries(data.subtotals).forEach(([code,total])=>{
+    const card=document.createElement('div');card.className='order-subtotal-card';
+    const label=document.createElement('span');label.textContent=order.discount?'Subtotal before discount':'Goods subtotal';
+    const amount=document.createElement('strong');amount.textContent=`${code} ${formattedAmount(total)}`;
+    card.append(label,amount);el('totals').append(card);
+  });
   el('deliveryHistory').replaceChildren();data.delivery_history.forEach(item=>{const p=document.createElement('p');p.textContent=`${new Date(item.recorded_at).toLocaleString()} / version ${item.id}\nShipping: ${addressText(item.shipping_address)}\nBilling: ${addressText(item.billing_address)}`;el('deliveryHistory').append(p);});
   el('revisions').replaceChildren();data.revisions.forEach(item=>{const p=document.createElement('p');p.textContent=`${new Date(item.created_at).toLocaleString()} / ${item.action.replaceAll('_',' ')} / actor #${item.actor_user_id}`;el('revisions').append(p);});
   selectOrderTab('items');updatePiReadiness();
@@ -363,11 +465,27 @@ function appendInvoice(invoice,id){
   const row=document.createElement('div');row.className='pi-download-row';
   const title=document.createElement('span');title.textContent=`${invoice.reference} / ${invoice.currency} / ${(invoice.created_at||'').slice(0,10)}`;row.append(title);
   for(const format of [invoice.workbook_format||'xlsm',...(invoice.has_pdf?['pdf']:[])]){const link=document.createElement('a');link.textContent='Download '+format.toUpperCase();link.href=`/api/orders/${id}/invoices/${invoice.id}/download?format=${format}`;row.append(link);}
+  if(current?.order.can_edit&&current.order.can_delete_order){
+    const remove=document.createElement('button');remove.type='button';remove.className='pi-remove-button';remove.textContent='\u2212';remove.title='Remove PI';remove.setAttribute('aria-label','Remove PI '+invoice.reference);
+    remove.onclick=async()=>{
+      if(!window.confirm(`Remove PI ${invoice.reference} from the invoice records?`))return;
+      remove.disabled=true;
+      try{
+        await api(`/api/orders/${id}/invoices/${invoice.id}`,{method:'DELETE'});
+        row.remove();if(current?.order.id===id)current.invoices=(current.invoices||[]).filter(item=>item.id!==invoice.id);
+        invoicePreview.removeIssued?.(invoice.id);
+        message('PI removed.');
+      }catch(error){remove.disabled=false;message(error.message,true);}
+    };
+    row.append(remove);
+  }
   el('invoiceList').append(row);
 }
 const invoicePreview=window.createPiPreview(el('piPreview'),api,json,async result=>{
   appendInvoice({...result,currency:el('piCurrency').value,workbook_format:'xlsx',has_pdf:true},current.order.id);
-  message(`PI ${result.reference} generated. Excel and PDF are ready.`);
+  current.order.status=result.order_status||'completed';updateOrderStatusUI(current.order);
+  el('detailAccess').textContent=`${current.order.status==='completed'?'Complete':'Pending'} / ${current.order.currency} / Editable`;
+  await load();message(`PI ${result.reference} generated. ${current.order.status==='completed'?'Order marked complete.':'Order remains pending.'} Excel and PDF are ready.`);
 },doc=>{
   if(current)current.order.pi_reference=doc.reference;
   el('pi_reference').value=doc.reference;

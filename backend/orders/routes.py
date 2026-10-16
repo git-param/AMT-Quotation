@@ -50,6 +50,11 @@ def list_orders():
             raise ValueError('Invalid draft filter.')
         if exclude == '1':
             query += " AND o.status != 'draft'"
+        completion = request.args.get('completion', 'all')
+        if completion not in ('all', 'pending', 'complete'):
+            raise ValueError('Invalid completion filter.')
+        if completion != 'all':
+            query += " AND o.status " + ('=' if completion == 'complete' else '!=') + " 'completed'"
         search = request.args.get('q', '').strip()
         if len(search) > 200:
             raise ValueError('Search is limited to 200 characters.')
@@ -84,6 +89,37 @@ def list_orders():
                        page=page, pages=(total + size - 1) // size)
     finally:
         connection.close()
+
+
+@bp.route('/api/orders/<int:order_id>/status', methods=['PUT'])
+@authenticated_required
+def change_order_status(order_id):
+    """Move an authorized order between pending and complete independently of form edits."""
+    connection = get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        user = get_current_user()
+        order = read_order(connection, user, order_id)
+        if not order:
+            return jsonify(error='Order not found.'), 404
+        if not order['can_edit']:
+            return jsonify(error='Client access is read-only.'), 403
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or set(data) != {'status'} or data['status'] not in ('draft', 'completed'):
+            raise ValueError('Choose pending or complete for this order.')
+        if order['status'] == 'cancelled':
+            raise ValueError('Cancelled orders cannot be moved to pending or complete.')
+        if data['status'] != order['status']:
+            connection.execute("UPDATE client_orders SET status=?,updated_by=?,"
+                "updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+                (data['status'], user['id'], order_id))
+            record_revision(connection, order_id, user, 'edit')
+        connection.commit()
+        return jsonify(order=dict(read_order(connection, user, order_id)))
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    finally:
+        connection.rollback();connection.close()
 
 
 @bp.route('/api/orders/<int:order_id>')
@@ -210,8 +246,8 @@ def save_order(order_id=None):
         ).fetchone()
         previous = details(connection, old)['delivery'] if old else None
         if old and connection.execute(
-                'SELECT 1 FROM order_invoices WHERE order_id = ?', (order_id,)).fetchone():
-            legacy = connection.execute("SELECT 1 FROM order_invoices WHERE order_id=? AND workbook_format='xlsm'",(order_id,)).fetchone()
+                'SELECT 1 FROM order_invoices WHERE order_id = ? AND deleted_at IS NULL', (order_id,)).fetchone():
+            legacy = connection.execute("SELECT 1 FROM order_invoices WHERE order_id=? AND workbook_format='xlsm' AND deleted_at IS NULL",(order_id,)).fetchone()
             if values['pi_date']!=old['pi_date'] or (legacy and values['pi_reference']!=old['pi_reference']):
                 raise ValueError('Generated PI references and dates cannot be edited.')
         destination = None
@@ -378,6 +414,50 @@ def order_lines(order_id, line_id=None):
         connection.close()
 
 
+@bp.route('/api/orders/<int:order_id>/discount', methods=['PUT', 'DELETE'])
+@authenticated_required
+def save_discount(order_id):
+    from backend.orders.discounts import validate
+    from backend.orders.invoices import calculate
+    from decimal import Decimal
+    connection = get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        user = get_current_user()
+        order = read_order(connection, user, order_id)
+        if not order:
+            return jsonify(error='Order not found.'), 404
+        if not order['can_edit']:
+            return jsonify(error='Client access is read-only.'), 403
+        state = details(connection, order)
+        data = request.get_json(silent=True) if request.method == 'PUT' else None
+        if request.method == 'PUT' and data is None:
+            raise ValueError('Provide discount details.')
+        discount = validate(data, state['lines'])
+        state['order']['discount'] = discount
+        if discount:
+            rate = None
+            if any(line['currency'] != order['currency'] for line in state['lines']):
+                from backend.quotation_tool.shopify import get_inr_rate
+                quoted = get_inr_rate()
+                if quoted is None:
+                    raise ValueError('The quotation exchange rate is unavailable. Try again shortly.')
+                rate = format(Decimal(str(quoted)).quantize(Decimal('0.000001')), '.6f')
+            calculate(state, order['currency'], rate, Decimal(0))
+        connection.execute('UPDATE client_orders SET discount_json=?, updated_by=?, '
+            "updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+            (json.dumps(discount), user['id'], order_id))
+        record_revision(connection, order_id, user, 'edit')
+        result = details(connection, read_order(connection, user, order_id))
+        connection.commit()
+        return jsonify(result)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    finally:
+        connection.rollback()
+        connection.close()
+
+
 @bp.route('/api/orders/<int:order_id>/line-commercial-details', methods=['PUT'])
 @authenticated_required
 def save_commercial_details(order_id):
@@ -488,3 +568,4 @@ def review_legacy_line(order_id, source_id):
 # Imported after blueprint and routes are defined to avoid a circular dependency.
 from backend.orders import invoices  # noqa: E402,F401
 from backend.orders import pi_preview  # noqa: E402,F401
+from backend.orders import pi_search  # noqa: E402,F401

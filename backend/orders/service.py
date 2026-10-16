@@ -209,11 +209,12 @@ def details(connection, order):
         'ORDER BY id DESC', (order['id'],),
     )]
     result = dict(order)
+    result['discount'] = json.loads(result.pop('discount_json', None) or 'null')
     result['shipping_charges'] = format(Decimal(result['shipping_minor']) / 100, '.2f')
     invoices = [dict(row) for row in connection.execute(
         'SELECT id, reference, currency, created_at, workbook_format, '
         '(pdf IS NOT NULL) AS has_pdf FROM order_invoices '
-        'WHERE order_id = ? ORDER BY id DESC', (order['id'],))]
+        'WHERE order_id = ? AND deleted_at IS NULL ORDER BY id DESC', (order['id'],))]
     legacy_review = []
     if order['reference'] == 'LEGACY-ENQ-' + str(order['enquiry_id']):
         legacy_review = [serialize(row) for row in connection.execute(

@@ -191,7 +191,7 @@ textarea.cl-input { resize: vertical; min-height: 84px; }
 #pageInfo { min-width: 90px; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* ───────── Profile ───────── */
-.cl-profile { display: flex; align-items: center; gap: 20px; padding: 24px; background: var(--cl-surface); border: 1px solid var(--cl-line); border-radius: 18px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 18px 40px -26px rgba(15, 23, 42, .18); }
+.cl-profile { display: flex; align-items: center; gap: 20px; padding: 28px; background: linear-gradient(110deg,#fff 55%,#f5f8ff); border: 1px solid #dfe7f2; border-radius: 18px; box-shadow: 0 3px 14px #14304f05; }
 .cl-profile-main { flex: 1; min-width: 0; }
 .cl-profile-main .cl-eyebrow { margin-bottom: 4px; }
 .cl-profile h2 { font-size: 26px; line-height: 1.2; letter-spacing: -.02em; color: var(--cl-brand); overflow-wrap: anywhere; }
@@ -199,14 +199,17 @@ textarea.cl-input { resize: vertical; min-height: 84px; }
 .cl-profile h2:focus-visible { outline: 3px solid #93c5fd; outline-offset: 4px; border-radius: 6px; }
 .cl-profile-main > p { margin-top: 4px; font-size: 14px; color: var(--cl-muted); }
 .cl-profile-actions { display: flex; align-items: center; gap: 8px; }
-.cl-detail-grid { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 20px; align-items: start; margin-top: 20px; }
+.cl-detail-grid { display: grid; grid-template-columns: minmax(250px, 290px) minmax(0, 1fr); gap: 22px; align-items: start; margin-top: 22px; }
 .cl-side { display: grid; gap: 14px; }
-.cl-info { padding: 18px 20px; background: var(--cl-surface); border: 1px solid var(--cl-line); border-radius: 14px; }
-.cl-info h3 { margin-bottom: 12px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--cl-muted); }
+.cl-info { padding: 20px; background: var(--cl-surface); border: 1px solid var(--cl-line); border-radius: 14px; box-shadow:0 2px 6px #14304f03; }
+.cl-info h3 { margin-bottom: 16px; padding-bottom:12px; border-bottom:1px solid #eef2f7; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; color: #334155; }
 .cl-info h4 { margin: 16px 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--cl-faint); }
 .cl-info p { font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--cl-ink-2); }
-.cl-contact-line { display: flex; gap: 10px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
-.cl-line-label { flex: 0 0 44px; color: var(--cl-faint); font-size: 12px; }
+.cl-contact-line { display: flex; flex-direction:column; gap: 3px; margin-top:13px; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.cl-line-label { color: var(--cl-muted); font-size: 10px; font-weight:500; }
+.cl-info .cl-owner-name{font-weight:600;color:#1e3a5f}
+.cl-info .cl-created-note{font-size:11px;color:#8491a3;margin-top:6px}
+.cl-profile-actions .cl-icon-btn{width:38px;height:38px;border-radius:10px}
 .cl-contact-line a { color: var(--cl-accent-ink); text-decoration: none; }
 .cl-contact-line a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .cl-person { padding: 10px 12px; margin-top: 8px; border-radius: 10px; background: var(--cl-wash); border: 1px solid var(--cl-line-soft); }
@@ -219,7 +222,7 @@ textarea.cl-input { resize: vertical; min-height: 84px; }
 #clientDetail .related-orders .btn-add { background: var(--cl-accent); border-color: var(--cl-accent); color: #fff; border-radius: 10px; min-height: 38px; padding: 0 16px; font-weight: 600; }
 #clientDetail .related-orders .btn-add:hover { background: var(--cl-accent-ink); }
 #clientDetail .related-order-card { border-radius: 12px; }
-#clientDetail .order-card-group h4 { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--cl-muted); }
+#clientDetail .order-card-group h4 { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: #334155; }
 
 /* ───────── Drawer ───────── */
 .cl-drawer {

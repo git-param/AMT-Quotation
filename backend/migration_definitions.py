@@ -595,4 +595,10 @@ MIGRATIONS = (
     (19, 'shared_hsn_configuration', CONFIGURATION_SCHEMA),
     (20, 'order_soft_deletion', ORDER_DELETION_SCHEMA),
     (21, 'reusable_order_and_pi_references', REUSABLE_ORDER_REFERENCES_SCHEMA),
+    (22, 'order_discounts', ("ALTER TABLE client_orders ADD COLUMN discount_json TEXT",)),
+    (23, 'invoice_soft_deletion', (
+        'ALTER TABLE order_invoices ADD COLUMN deleted_at TEXT',
+        'ALTER TABLE order_invoices ADD COLUMN deleted_by INTEGER REFERENCES users(id) ON DELETE RESTRICT',
+        'CREATE INDEX idx_invoices_visible ON order_invoices(order_id,deleted_at,id)',
+    )),
 )

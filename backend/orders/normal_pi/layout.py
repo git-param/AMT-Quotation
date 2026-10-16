@@ -5,7 +5,7 @@ is a layout definition only; it never opens a workbook or changes PI amounts.
 """
 from decimal import Decimal
 import re
-from backend.orders.locations import party_parts
+from backend.orders.locations import party_parts, address_only
 
 WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
           15.7109375,8.7109375,8,16,8.7109375,8.140625]
@@ -28,6 +28,11 @@ def layout(doc):
     def editable(col,span,label,value,path,style='',**extra):
         return c(col,span,label+str(value),style,path,label,value,**extra)
     def party_cell(col,span,value,path,**extra):
+        if path in ('delivery.buyer_text','delivery.notify_text'):
+            normalize=lambda text:'\n'.join(line.strip() for line in text.splitlines() if line.strip())
+            consignee=normalize(address_only(doc['delivery']['consignee_text']))
+            if (consignee and normalize(value)==consignee) or value.strip()=='(Same as consignee)':
+                value='(Same as consignee)'
         primary,secondary=party_parts(value)
         return c(col,span,'\n\n'.join(part for part in (primary,secondary) if part),field=path,value=value,
                  multiline=True,party=True,**extra)
@@ -79,14 +84,32 @@ def layout(doc):
             editable(6,2,'',line['quantity'],prefix+'quantity','center',uom=line['uom'],uom_field=prefix+'uom',type='number'),
             editable(8,1,'',line['unit_price'],prefix+'unit_price','amount',type='number'),
             editable(9,2,'',line['line_total'],prefix+'line_total','amount',numeric=True,type='number',calculated=f'lines.{index}.line_total')])
+        if line.get('discount_label'):
+            items[-1][1]['discount_note'] = line['discount_label']
+            items[-1][1]['text'] += '\n' + line['discount_label']
+            items[-1][1]['display_text'] = items[-1][1]['text']
+        if line.get('net_unit_price'):
+            items[-1][-2]['text'] = line['net_unit_price']
+            items[-1][-2]['display_text'] = line['net_unit_price']
+        if Decimal(line.get('discount_amount', '0')):
+            items[-1][-1]['readonly'] = True
     # The original reserves four ruled item rows, even for a one-line invoice.
     while len(items)<5:items.append([c(cell['col'],cell['span']) for cell in item_header])
     bank=[c(0,8,'BANK DETAIL','bank_title')]+[c(0,8,value,'bold') for value in doc['company']['bank']]
     bank.append(c(0,8,doc['company'].get('bank_charges',''),'warning'))
-    tax_label=f'GST {Decimal(total["tax_rate"])*100:g}%'
+    tax_label=f'GST {(Decimal(total["tax_rate"])*100).normalize():f}%'
     free=Decimal(total['shipping'])==0
     summaries=[(editable(9,2,'',total['shipping'],'shipping_charges','amount',type='number',free=free,display_text='Free' if free else total['shipping']),'Shipping'),
                (c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Sub Total')]
+    if Decimal(total.get('summary_discount', '0')):
+        discount=(c(9,2,'-'+total['summary_discount'],'amount',numeric=True), 'Discount')
+        if doc['currency']=='INR':
+            summaries=[(c(9,2,total['goods_total'],'amount',numeric=True,calculated='goods_total'),'Goods Subtotal'),
+                       discount,
+                       (c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Net Subtotal'),
+                       summaries[0]]
+        else:
+            summaries.insert(0, discount)
     if Decimal(total['tax_rate']):summaries.append((c(9,2,total['tax'],'amount',numeric=True,calculated='tax'),tax_label))
     count=max(len(bank),len(summaries)+1)
     bank_rows=[]

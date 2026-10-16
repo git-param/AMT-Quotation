@@ -255,7 +255,7 @@ def xlsx(doc):
                         if len(decimal.as_tuple().digits)<=15:sheet.write_number(row_index,col,float(decimal),fmt)
                         else:sheet.write_string(row_index,col,symbol+' '+cell['text'],fmt)
                     else:sheet.write_string(row_index,col,value,fmt)
-                    if chunk_index==0 and (cell.get('calculated') in ('subtotal','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
+                    if chunk_index==0 and (cell.get('calculated') in ('goods_total','subtotal','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
                         formula_cells.append((row_index,col,fmt,cell['calculated'],cell['text']))
                     height=max(height,len(lines)*(13 if cell['style'] in ('terms','final_term') else 16))
                     if cell.get('header_metadata'):height=max(height,len(lines)*16+2)
@@ -279,9 +279,13 @@ def xlsx(doc):
         if path.endswith('.line_total'):
             prefix=path.rsplit('.',1)[0]
             formula=f'=ROUND({coordinates[prefix+".quantity"]}*{coordinates[prefix+".unit_price"]},2)'
-        elif path=='subtotal':
+            line=doc['totals']['lines'][int(prefix.split('.')[1])]
+            if not line.get('net_unit_price'):
+                formula+='-'+line.get('discount_amount','0.00')
+        elif path in ('subtotal','goods_total'):
             refs=','.join(value for key,value in coordinates.items() if key.endswith('.line_total')) or '0'
             formula=f'=ROUND(SUM({refs}),2)'
+            if path=='subtotal':formula+='-'+doc['totals'].get('summary_discount','0.00')
         elif path=='tax':formula=f'=ROUND(({coordinates["subtotal"]}+N({coordinates["shipping_charges"]}))*{doc["totals"]["tax_rate"]},2)'
         else:formula=f'=ROUND({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("tax","0")},2)'
         sheet.write_formula(row,col,formula,fmt,float(Decimal(cached)))
