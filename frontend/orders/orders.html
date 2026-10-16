@@ -77,8 +77,11 @@
         </section>
         <section id="editor" class="panel order-composer" aria-labelledby="formTitle" hidden>
             <div class="composer-heading">
-                <div><span class="eyebrow">ORDER WORKSPACE</span><h2 id="formTitle">New order</h2>
+                <div class="composer-title-group">
+                    <span class="composer-emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span>
+                    <div><span class="eyebrow">A GOOD DEAL STARTS HERE</span><h2 id="formTitle">New order</h2>
                     <p id="referenceHint">Order reference is generated when saved.</p></div>
+                </div>
                 <button id="cancel" class="btn-sm" type="button">Cancel</button>
             </div>
             <form id="orderForm" novalidate>
@@ -125,12 +128,6 @@
                             </section>
                             <div id="editingItemsHint" class="composer-note" hidden>Existing items are retained. Manage quantities, prices and PI details in Items &amp; PI after saving.</div>
                     </div>
-                    <aside class="composer-aside" aria-label="Order overview">
-                        <span class="eyebrow">YOUR ORDER</span><h3 id="composerClient"></h3>
-                        <dl><dt>Destination</dt><dd id="overviewDestination"></dd><dt>Deal currency</dt><dd id="overviewCurrency"></dd><dt>Parties</dt><dd id="overviewParties"></dd></dl>
-                        <div class="draft-reassurance"><strong>Pick up where you left off</strong><p>Save a pending draft at any point. No items or invoice numbers needed to start.</p></div>
-                        <p class="bank-reassurance">Your company&#8217;s configured bank details are used automatically in the PI.</p>
-                    </aside>
                 </div>
                 <footer class="composer-footer">
                     <span id="saveHint">Progress is saved when you choose Save draft.</span>

@@ -21,7 +21,7 @@ assert.equal(await evaluate("fetch('/login',{method:'POST',body:new URLSearchPar
 const client=await evaluate(`fetch('/api/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Order Workflow Fixture',company:'Northstar Industrial',email:'orders@example.com',phone:'+919876543210',shipping_address:{line1:'12 Industrial Estate',city:'Mumbai',country:'India'}})}).then(r=>r.json())`);
 assert.ok(client.lead?.id,JSON.stringify(client));const clientId=client.lead.id;
 await send('Page.navigate',{url:base+'/orders?client_id='+clientId+'&new=1'});
-await until("!document.querySelector('#editor')?.hidden && document.querySelector('#composerClient').textContent==='Northstar Industrial'");
+await until("!document.querySelector('#editor')?.hidden && document.querySelector('#referenceHint').textContent.includes('Northstar Industrial')");
 assert.equal(await evaluate("document.querySelector('#currency').value"),'INR');
 assert.equal(await evaluate("document.querySelector('#save').textContent"),'Save draft');
 assert.equal(await evaluate("document.querySelectorAll('.composer-stage,.composer-steps,#nextStage,#previousStage').length"),0);
@@ -100,6 +100,14 @@ assert.equal(await evaluate("document.querySelector('iframe').contentWindow.docu
 assert.equal(await evaluate("document.querySelector('iframe').contentWindow.getComputedStyle(document.querySelector('iframe').contentWindow.document.querySelector('#cancel')).display"),'none');
 assert.equal(await evaluate("document.querySelectorAll('.order-dialog-header button').length"),1);
 await shot('order-composer-embedded-mobile');
+// The desktop composer should expose the header fields and all party cards at once.
+for(const [width,height] of [[1920,947],[1366,900]]){
+  await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
+  await evaluate("(()=>{const w=document.querySelector('iframe').contentWindow;w.scrollTo(0,0);})()");
+  assert.equal(await evaluate("(()=>{const w=document.querySelector('iframe').contentWindow,d=w.document,footer=d.querySelector('.composer-footer').getBoundingClientRect();return ['pi_reference','po_reference','destination','currency','order_date','delivery_terms','delivery_time','dispatch_method','shipping_charges','consignee_primary','consignee_details','buyerSummary','notifySummary','manualToggle'].every(id=>{const r=d.getElementById(id).getBoundingClientRect();return r.width>0&&r.top>=0&&r.bottom<=footer.top;})&&footer.bottom<=w.innerHeight;})()"),true,`All initial order details fit at ${width} x ${height}`);
+  await shot('order-composer-all-details-'+width);
+}
+
 await evaluate("document.querySelector('.order-dialog').close()");
 await send('Emulation.setDeviceMetricsOverride',{width:1366,height:960,deviceScaleFactor:1,mobile:false});
 await until("document.querySelector('.order-card-group .related-order-card')");

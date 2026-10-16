@@ -11,10 +11,6 @@ let detailVersion=0;
 let formVersion=0;
 let commercialInputs=[],savingCommercial=false;
 function updateComposer(){
-  el('composerClient').textContent=clientData?.lead.company||clientData?.lead.name||'Client order';
-  el('overviewDestination').textContent=el('destination').value||'To be added';
-  el('overviewCurrency').textContent=el('currency').value;
-  el('overviewParties').textContent=['buyer','notify'].every(prefix=>el(prefix+'_same').checked)?'Buyer & notify follow consignee':'Separate party details';
   for(const prefix of ['buyer','notify']){
     el(prefix+'Summary').textContent=el(prefix+'_text').value.trim()||'No address added yet';
   }
