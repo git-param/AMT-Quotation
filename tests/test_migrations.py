@@ -39,13 +39,13 @@ def legacy_snapshot(connection):
         snapshot[table] = connection.execute(
             'SELECT ' + ', '.join(row[1] for row in connection.execute(
                 'PRAGMA table_info(' + table + ')'
-            ) if row[1] not in ('is_active', 'supervisor_user_id'))
+            ) if row[1] not in ('is_active', 'supervisor_user_id', 'department'))
             + ' FROM ' + table + ' ORDER BY id'
         ).fetchall()
         snapshot[table + '_columns'] = [
             row for row in connection.execute(
                 'PRAGMA table_info(' + table + ')'
-            ) if row[1] not in ('is_active', 'supervisor_user_id')
+            ) if row[1] not in ('is_active', 'supervisor_user_id', 'department')
         ]
         snapshot[table + '_schema'] = connection.execute(
             'SELECT type, name, sql FROM sqlite_master '
@@ -117,6 +117,21 @@ class MigrationTests(unittest.TestCase):
         migrate_database(self.path)
         with test_connection(self.path) as connection:
             self.assertTrue(before == legacy_snapshot(connection))
+
+    def test_department_upgrade_preserves_users_and_defaults_to_unassigned(self):
+        migrate_database(self.path, MIGRATIONS[:23])
+        with test_connection(self.path) as connection:
+            connection.execute(
+                "INSERT INTO users(username,password_hash,role) "
+                "VALUES('existing','test-hash','admin')"
+            )
+            before = connection.execute('SELECT * FROM users').fetchall()
+        self.assertEqual(migrate_database(self.path), [24])
+        with test_connection(self.path) as connection:
+            rows = connection.execute('SELECT * FROM users').fetchall()
+            self.assertEqual([row[:-1] for row in rows], before)
+            self.assertEqual(rows[0][-1], '')
+        self.assertEqual(migrate_database(self.path), [])
 
     def test_reusable_references_upgrade_preserves_records_files_and_sequences(self):
         migrate_database(self.path, MIGRATIONS[:20])

@@ -145,6 +145,10 @@
             <label for="newPassword">Password</label>
             <input type="password" id="newPassword" placeholder="min 4 characters" maxlength="80">
           </div>
+          <div class="form-field">
+            <label for="newDepartment">Department (required)</label>
+            <input type="text" id="newDepartment" placeholder="e.g. Sales" maxlength="100" required>
+          </div>
           <div class="form-field" style="min-width:160px">
             <label for="newRole">Role</label>
             <select id="newRole">
@@ -178,11 +182,11 @@
 
     <div class="panel" id="userListPanel">
       <div class="panel-title">All users</div>
-      <div class="panel-sub">Change roles, assign a supervisor, or switch accounts on and off.</div>
+      <div class="panel-sub">Click a user to view full details and edit their account.</div>
       <div class="table-scroll is-flat">
         <table class="tbl">
-          <thead><tr><th>Username</th><th>Role</th><th>Supervisor</th><th>Created</th><th>Status</th></tr></thead>
-          <tbody id="usersList"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+          <thead><tr><th>Name</th><th>Role</th><th>Status</th></tr></thead>
+          <tbody id="usersList"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
       <div class="msg" id="deleteMsg"></div>
@@ -190,6 +194,29 @@
   </section>
 
 </main>
+
+<dialog id="userDetailsDialog" class="user-dialog" aria-labelledby="userDetailsTitle">
+  <div class="user-dialog-head">
+    <h2 id="userDetailsTitle">User details</h2>
+    <button type="button" class="btn-sm" id="closeUserDetails" aria-label="Close user details">Close</button>
+  </div>
+  <dl id="userDetails" class="user-details"></dl>
+  <form id="editUserForm" hidden>
+    <div class="user-edit-grid">
+      <div class="form-field"><label for="editUsername">Name / username</label><input id="editUsername" maxlength="40" required></div>
+      <div class="form-field"><label for="editDepartment">Department</label><input id="editDepartment" maxlength="100" required></div>
+      <div class="form-field"><label for="editRole">Role</label><select id="editRole"></select></div>
+      <div class="form-field"><label for="editStatus">Status</label><select id="editStatus"><option value="1">Active</option><option value="0">Inactive</option></select></div>
+      <div class="form-field"><label for="editSupervisor">Supervisor</label><select id="editSupervisor"></select></div>
+    </div>
+    <div class="user-dialog-actions">
+      <button type="submit" class="btn-sm btn-add" id="saveUserEdit">Save changes</button>
+      <button type="button" class="btn-sm" id="cancelUserEdit">Cancel</button>
+    </div>
+  </form>
+  <div class="user-dialog-actions" id="userDetailsActions"><button type="button" class="btn-sm btn-add" id="editUserButton">Edit user</button></div>
+  <div class="msg" id="userDetailsMsg" role="status" aria-live="polite"></div>
+</dialog>
 
 <script src="/static/manager_dashboard/manager.js"></script>
 </body>

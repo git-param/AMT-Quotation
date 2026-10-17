@@ -281,84 +281,172 @@ window.addEventListener('resize', () => {
 });
 
 // ── User management ───────────────────────────────────────────────────────────
+let _users = [];
+let _selectedUserId = null;
+let _savingUser = false;
+const userRoleLabels = {user: 'Sales Executive', manager: 'Admin', sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
+
 async function loadUsers() {
   const resp = await fetch('/api/manager/users').catch(() => null);
-  if (!resp) return;
+  if (!resp) { showMsg(document.getElementById('deleteMsg'), 'Unable to load users. Reload to retry.', false); return; }
   if (!resp.ok) { showAccessError(resp.status); return; }
   const data = await resp.json();
-  const users = data.users || [];
-
-  // Populate users table
+  _users = data.users || [];
   const tbody = document.getElementById('usersList');
   tbody.replaceChildren();
-  users.forEach(user => {
+  _users.forEach(user => {
     const row = document.createElement('tr');
+    row.className = 'user-row';
     const name = document.createElement('td');
-    name.textContent = user.username;
-    name.className = 'account-name';
-    const role = document.createElement('td');
-    const select = document.createElement('select');
-    select.className = 'role-select';
-    select.setAttribute('aria-label', `Role for ${user.username}`);
-    const roles = {sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
-    const currentRole = {user: 'sales_executive', manager: 'admin'}[user.role] || user.role;
-    Object.entries(roles).forEach(([code, label]) => select.add(new Option(label, code, false, code === currentRole)));
-    select.disabled = user.id === _currentUserId;
-    select.onchange = () => updateUser(user.id, 'role', {role: select.value});
-    role.append(select);
-    const created = document.createElement('td');
-    const date = new Date((user.created_at || '').replace(' ', 'T'));
-    created.textContent = Number.isNaN(date.getTime()) ? '?' : date.toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'});
-    created.title = user.created_at || '';
-    created.className = 'account-created';
-    const actions = document.createElement('td');
     const button = document.createElement('button');
-    button.textContent = user.is_active ? 'Deactivate' : 'Activate';
-    button.className = `btn-sm ${user.is_active ? 'btn-del' : 'btn-activate'}`;
-    button.disabled = user.id === _currentUserId;
-    button.setAttribute('aria-label', `${user.is_active ? 'Deactivate' : 'Activate'} ${user.username}`);
-    button.onclick = () => updateUser(user.id, user.is_active ? 'deactivate' : 'activate');
-    const status = document.createElement('span');
-    status.className = `account-status ${user.is_active ? 'is-active' : 'is-inactive'}`;
-    status.textContent = user.is_active ? 'Active' : 'Inactive';
-    const controls = document.createElement('div');
-    controls.className = 'account-actions';
-    controls.append(status, button);
-    actions.append(controls);
-    const supervisorCell = document.createElement('td');
-    const supervisor = document.createElement('select');
-    supervisor.className = 'role-select';
-    supervisor.setAttribute('aria-label', `Supervisor for ${user.username}`);
-    supervisor.add(new Option('Unassigned', '', false, !user.supervisor_user_id));
-    users.filter(u => u.role === 'sales_tl' && u.is_active).forEach(tl => {
-      supervisor.add(new Option(tl.username, tl.id, false, tl.id === user.supervisor_user_id));
-    });
-    if (user.supervisor_user_id && ![...supervisor.options].some(o => Number(o.value) === user.supervisor_user_id)) {
-      supervisor.add(new Option('Unavailable supervisor', user.supervisor_user_id, false, true));
-    }
-    supervisor.disabled = !user.is_active || !['user', 'sales_executive'].includes(user.role);
-    supervisor.onchange = () => updateUser(user.id, 'supervisor', {supervisor_user_id: supervisor.value ? Number(supervisor.value) : null});
-    supervisorCell.append(supervisor);
-    row.append(name, role, supervisorCell, created, actions);
+    button.type = 'button';
+    button.className = 'user-name-button';
+    button.textContent = user.username;
+    button.setAttribute('aria-label', `View details for ${user.username}`);
+    button.setAttribute('aria-haspopup', 'dialog');
+    name.append(button);
+    const role = document.createElement('td');
+    role.textContent = userRoleLabels[user.role] || user.role;
+    const status = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.className = `account-status ${user.is_active ? 'is-active' : 'is-inactive'}`;
+    badge.textContent = user.is_active ? 'Active' : 'Inactive';
+    status.append(badge);
+    row.append(name, role, status);
+    row.onclick = () => openUserDetails(user.id);
     tbody.append(row);
   });
-  // Populate reset-password dropdown
-  const sel = document.getElementById('resetUserId');
-  sel.replaceChildren(...users.map(u => new Option(u.username, u.id)));
+  if (!_users.length) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 3; cell.className = 'empty'; cell.textContent = 'No users found.';
+    row.append(cell); tbody.append(row);
+  }
+  document.getElementById('resetUserId').replaceChildren(..._users.map(u => new Option(u.username, u.id)));
 }
+
+function openUserDetails(id) {
+  const user = _users.find(u => u.id === id);
+  if (!user) return;
+  _selectedUserId = id;
+  document.getElementById('userDetailsTitle').textContent = user.username;
+  document.getElementById('userDetailsMsg').className = 'msg';
+  document.getElementById('editUserForm').hidden = true;
+  document.getElementById('userDetailsActions').hidden = false;
+  const details = document.getElementById('userDetails');
+  details.hidden = false;
+  details.replaceChildren();
+  const supervisor = _users.find(u => u.id === user.supervisor_user_id);
+  const date = new Date((user.created_at || '').replace(' ', 'T'));
+  const values = [
+    ['User ID', user.id], ['Name / username', user.username],
+    ['Department', user.department || 'Not assigned'],
+    ['Role', userRoleLabels[user.role] || user.role],
+    ['Supervisor', supervisor ? supervisor.username : user.supervisor_user_id ? 'Unavailable supervisor' : 'Unassigned'],
+    ['Created', Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleString('en-GB')],
+    ['Status', user.is_active ? 'Active' : 'Inactive'],
+  ];
+  values.forEach(([label, value]) => {
+    const dt = document.createElement('dt'); dt.textContent = label;
+    const dd = document.createElement('dd'); dd.textContent = value;
+    details.append(dt, dd);
+  });
+  const dialog = document.getElementById('userDetailsDialog');
+  if (!dialog.open) dialog.showModal();
+}
+
+function editSelectedUser() {
+  const user = _users.find(u => u.id === _selectedUserId);
+  if (!user) return;
+  document.getElementById('editUsername').value = user.username;
+  document.getElementById('editDepartment').value = user.department || '';
+  const roles = document.getElementById('editRole');
+  const choices = {sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
+  if (!Object.hasOwn(choices, user.role)) choices[user.role] = userRoleLabels[user.role] || user.role;
+  roles.replaceChildren(...Object.entries(choices).map(([code, label]) => new Option(label, code)));
+  roles.value = user.role;
+  roles.disabled = user.id === _currentUserId;
+  const status = document.getElementById('editStatus');
+  status.value = String(user.is_active);
+  status.disabled = user.id === _currentUserId;
+  const supervisor = document.getElementById('editSupervisor');
+  supervisor.replaceChildren(new Option('Unassigned', ''), ..._users
+    .filter(u => u.id !== user.id && u.role === 'sales_tl' && u.is_active)
+    .map(u => new Option(u.username, u.id)));
+  if (user.supervisor_user_id && ![...supervisor.options].some(o => Number(o.value) === user.supervisor_user_id)) {
+    supervisor.add(new Option('Unavailable supervisor', user.supervisor_user_id));
+  }
+  supervisor.value = user.supervisor_user_id ? String(user.supervisor_user_id) : '';
+  updateEditSupervisor();
+  document.getElementById('userDetails').hidden = true;
+  document.getElementById('userDetailsActions').hidden = true;
+  document.getElementById('editUserForm').hidden = false;
+  document.getElementById('editUsername').focus();
+}
+
+function updateEditSupervisor() {
+  const disabled = document.getElementById('editStatus').value !== '1' ||
+    !['user', 'sales_executive'].includes(document.getElementById('editRole').value);
+  const supervisor = document.getElementById('editSupervisor');
+  supervisor.disabled = disabled;
+  if (disabled) supervisor.value = '';
+}
+
+document.getElementById('editRole').onchange = updateEditSupervisor;
+document.getElementById('editStatus').onchange = updateEditSupervisor;
+document.getElementById('editUserButton').onclick = editSelectedUser;
+document.getElementById('cancelUserEdit').onclick = () => { if (!_savingUser) openUserDetails(_selectedUserId); };
+document.getElementById('closeUserDetails').onclick = () => { if (!_savingUser) document.getElementById('userDetailsDialog').close(); };
+document.getElementById('userDetailsDialog').addEventListener('cancel', event => { if (_savingUser) event.preventDefault(); });
+document.getElementById('editUserForm').onsubmit = async event => {
+  event.preventDefault();
+  if (_savingUser) return;
+  const id = _selectedUserId;
+  const msg = document.getElementById('userDetailsMsg');
+  const body = {
+    username: document.getElementById('editUsername').value.trim(),
+    department: document.getElementById('editDepartment').value.trim(),
+    role: document.getElementById('editRole').value,
+    is_active: Number(document.getElementById('editStatus').value),
+    supervisor_user_id: document.getElementById('editSupervisor').value ? Number(document.getElementById('editSupervisor').value) : null,
+  };
+  if (!body.username || !body.department) { showMsg(msg, 'Name and department are required', false); return; }
+  _savingUser = true;
+  document.getElementById('saveUserEdit').disabled = true;
+  try {
+    const response = await fetch(`/api/manager/users/${id}/edit`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+    });
+    if ([401, 403].includes(response.status)) {
+      document.getElementById('userDetailsDialog').close(); showAccessError(response.status); return;
+    }
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Unable to save user');
+    // Keep the open details accurate even if refreshing the list fails.
+    Object.assign(_users.find(u => u.id === id), body);
+    if (id === _currentUserId) document.getElementById('hdrUser').textContent = body.username;
+    openUserDetails(id);
+    showMsg(msg, 'User updated successfully', true);
+    try { await loadUsers(); } catch (_) { showMsg(msg, 'User saved. Reload to refresh the list.', true); }
+  } catch (error) { showMsg(msg, error.message || 'Unable to save user', false); }
+  finally { _savingUser = false; document.getElementById('saveUserEdit').disabled = false; }
+};
 
 async function addUser() {
   const username = document.getElementById('newUsername').value.trim();
   const password = document.getElementById('newPassword').value.trim();
   const role     = document.getElementById('newRole').value;
+  const department = document.getElementById('newDepartment').value.trim();
   const msg      = document.getElementById('addMsg');
   msg.className  = 'msg';
 
   if (!username || !password) { showMsg(msg, 'Username and password are required', false); return; }
+  if (!department) { showMsg(msg, 'Department is required', false); document.getElementById('newDepartment').focus(); return; }
+  if (department.length > 100) { showMsg(msg, 'Department must be 100 characters or fewer', false); return; }
 
   const resp = await fetch('/api/manager/users/add', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ username, password, role })
+    body: JSON.stringify({ username, password, role, department })
   });
   if ([401, 403].includes(resp.status)) { showAccessError(resp.status); return; }
   const data = await resp.json();
@@ -366,6 +454,7 @@ async function addUser() {
     showMsg(msg, `User "${username}" added successfully`, true);
     document.getElementById('newUsername').value = '';
     document.getElementById('newPassword').value = '';
+    document.getElementById('newDepartment').value = '';
     loadUsers();
   } else {
     showMsg(msg, data.error || 'Failed to add user', false);

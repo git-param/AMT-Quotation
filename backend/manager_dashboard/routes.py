@@ -107,7 +107,7 @@ def api_manager_users():
     connection = get_db()
     try:
         rows = connection.execute(
-            'SELECT id, username, role, is_active, created_at, '
+            'SELECT id, username, department, role, is_active, created_at, '
             'supervisor_user_id '
             'FROM users ORDER BY id'
         ).fetchall()
@@ -124,17 +124,23 @@ def api_manager_add_user():
     username = str(data.get('username') or '').strip()
     password = str(data.get('password') or '')
     role = data.get('role', 'sales_executive')
+    department = data.get('department')
     if not username or len(password) < 4:
         return jsonify(error='Username and password (4+ chars) required'), 400
     if not isinstance(role, str) or role not in ROLE_LABELS:
         return jsonify(error='Invalid role'), 400
+    if not isinstance(department, str) or not department.strip():
+        return jsonify(error='Department is required'), 400
+    department = department.strip()
+    if len(department) > 100:
+        return jsonify(error='Department must be 100 characters or fewer'), 400
     connection = get_db()
     try:
         with connection:
             connection.execute(
-                'INSERT INTO users (username, password_hash, role) '
-                'VALUES (?, ?, ?)',
-                (username, generate_password_hash(password), role),
+                'INSERT INTO users (username, password_hash, role, department) '
+                'VALUES (?, ?, ?, ?)',
+                (username, generate_password_hash(password), role, department),
             )
         return jsonify(ok=True)
     except sqlite3.IntegrityError:
@@ -267,6 +273,73 @@ def assign_supervisor(uid):
     finally:
         connection.rollback()
         connection.close()
+
+@bp.route('/api/manager/users/<int:uid>/edit', methods=['POST'])
+@permission_required('users.manage')
+def edit_user(uid):
+    """Save profile and account settings together without partial changes."""
+    data = _request_data()
+    username = data.get('username')
+    department = data.get('department')
+    role = data.get('role')
+    active = data.get('is_active')
+    supervisor = data.get('supervisor_user_id')
+    if not isinstance(username, str) or not 1 <= len(username.strip()) <= 40:
+        return jsonify(error='Username must be 1 to 40 characters'), 400
+    if not isinstance(department, str) or not 1 <= len(department.strip()) <= 100:
+        return jsonify(error='Department is required (100 characters or fewer)'), 400
+    if not isinstance(role, str) or role not in ROLE_LABELS:
+        return jsonify(error='Invalid role'), 400
+    if type(active) is not int or active not in (0, 1):
+        return jsonify(error='Invalid account status'), 400
+    if ('supervisor_user_id' not in data or
+            (supervisor is not None and
+             (type(supervisor) is not int or not 1 <= supervisor <= 9223372036854775807))):
+        return jsonify(error='Invalid supervisor ID'), 400
+    connection = get_db()
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        target = connection.execute(
+            'SELECT role, is_active FROM users WHERE id = ?', (uid,)
+        ).fetchone()
+        if not target:
+            return jsonify(error='User not found'), 404
+        if uid == session['user_id'] and (
+                role != target['role'] or active != target['is_active']):
+            return jsonify(error='Cannot change your own role or status'), 400
+        if (target['is_active'] and target['role'] in ('admin', 'manager')
+                and (not active or role not in ('admin', 'manager'))):
+            count = connection.execute(
+                "SELECT COUNT(*) FROM users WHERE is_active = 1 "
+                "AND role IN ('admin', 'manager')"
+            ).fetchone()[0]
+            if count <= 1:
+                return jsonify(error='Cannot remove the last active admin'), 409
+        if supervisor is not None:
+            if supervisor == uid:
+                return jsonify(error='Self-supervision is not allowed'), 400
+            if not active or role not in ('user', 'sales_executive'):
+                return jsonify(error='Only active executives can have a supervisor'), 400
+            leader = connection.execute(
+                'SELECT role, is_active FROM users WHERE id = ?', (supervisor,)
+            ).fetchone()
+            if not leader or not leader['is_active'] or leader['role'] != 'sales_tl':
+                return jsonify(error='Select an active Sales TL'), 400
+        connection.execute(
+            'UPDATE users SET username = ?, department = ?, role = ?, '
+            'is_active = ?, supervisor_user_id = ? WHERE id = ?',
+            (username.strip(), department.strip(), role, active, supervisor, uid),
+        )
+        connection.commit()
+        if uid == session['user_id']:
+            session['username'] = username.strip()
+        return jsonify(ok=True)
+    except sqlite3.IntegrityError:
+        return jsonify(error='Username already exists'), 409
+    finally:
+        connection.rollback()
+        connection.close()
+
 
 # Register the separate TL workspace after this blueprint is defined.
 from backend.manager_dashboard import team  # noqa: E402,F401

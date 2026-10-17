@@ -601,4 +601,8 @@ MIGRATIONS = (
         'ALTER TABLE order_invoices ADD COLUMN deleted_by INTEGER REFERENCES users(id) ON DELETE RESTRICT',
         'CREATE INDEX idx_invoices_visible ON order_invoices(order_id,deleted_at,id)',
     )),
+    (24, 'user_departments', (
+        "ALTER TABLE users ADD COLUMN department TEXT NOT NULL DEFAULT '' "
+        "CHECK (length(department) <= 100)",
+    )),
 )

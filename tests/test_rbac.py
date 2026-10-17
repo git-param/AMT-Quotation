@@ -147,11 +147,97 @@ class RBACTests(unittest.TestCase):
             'username': 'user', 'password': 'updated-pass',
         }).status_code, 401)
 
+    def test_user_creation_requires_valid_department(self):
+        self.session_as('admin')
+        base = {'username': 'department-test', 'password': 'fixture-pass',
+                'role': 'sales_executive'}
+        for extra in ({}, {'department': None}, {'department': ''},
+                      {'department': '   '}, {'department': 123},
+                      {'department': []}, {'department': 'x' * 101}):
+            with self.subTest(extra=extra):
+                response = self.client.post('/api/manager/users/add',
+                                            json={**base, **extra})
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('Department', response.json['error'])
+        self.assertEqual(self.client.post('/api/manager/users/add', json={
+            **base, 'department': '  Sales & Support  ',
+        }).status_code, 200)
+        users = self.client.get('/api/manager/users').json['users']
+        created = next(user for user in users if user['username'] == base['username'])
+        self.assertEqual(created['department'], 'Sales & Support')
+        self.assertNotIn('password_hash', created)
+        existing = next(user for user in users if user['username'] == 'admin')
+        self.assertEqual(existing['department'], '')
+
+    def test_edit_user_saves_profile_and_settings_atomically(self):
+        self.session_as('admin')
+        uid = self.ids['sales_executive']
+        body = {'username': 'Renamed', 'department': '  Sales  ',
+                'role': 'sales_executive', 'is_active': 1,
+                'supervisor_user_id': self.ids['sales_tl']}
+        connection = database.get_db()
+        try:
+            original_hash = connection.execute(
+                'SELECT password_hash FROM users WHERE id = ?', (uid,)
+            ).fetchone()[0]
+        finally:
+            connection.close()
+        self.assertEqual(self.client.post(f'/api/manager/users/{uid}/edit',
+                                         json=body).status_code, 200)
+        users = self.client.get('/api/manager/users').json['users']
+        target = next(u for u in users if u['id'] == uid)
+        self.assertEqual(target['username'], 'Renamed')
+        self.assertEqual(target['department'], 'Sales')
+        self.assertEqual(target['supervisor_user_id'], self.ids['sales_tl'])
+        for changes in (
+                {'username': 'admin'}, {'department': ' '},
+                {'department': 'x' * 101}, {'username': 'x' * 41},
+                {'role': 'unknown'}, {'is_active': True},
+                {'supervisor_user_id': uid},
+                {'supervisor_user_id': self.ids['admin']},
+                {'supervisor_user_id': 2**100},
+                {'role': 'sales_tl'}, {'is_active': 0}):
+            with self.subTest(changes=changes):
+                response = self.client.post(f'/api/manager/users/{uid}/edit',
+                                            json={**body, **changes})
+                self.assertIn(response.status_code, (400, 409))
+                current = next(u for u in self.client.get('/api/manager/users').json['users']
+                               if u['id'] == uid)
+                self.assertEqual(current, target)
+        self.assertEqual(self.client.post(f'/api/manager/users/{uid}/edit', json={
+            **body, 'role': 'sales_tl', 'supervisor_user_id': None,
+        }).status_code, 200)
+        connection = database.get_db()
+        try:
+            self.assertEqual(connection.execute(
+                'SELECT password_hash FROM users WHERE id = ?', (uid,)
+            ).fetchone()[0], original_hash)
+        finally:
+            connection.close()
+
+    def test_edit_user_permissions_self_protection_and_missing_user(self):
+        body = {'username': 'Updated admin', 'department': 'Management',
+                'role': 'admin', 'is_active': 1, 'supervisor_user_id': None}
+        uid = self.ids['admin']
+        self.session_as('sales_executive')
+        self.assertEqual(self.client.post(f'/api/manager/users/{uid}/edit',
+                                         json=body).status_code, 403)
+        self.session_as('admin')
+        self.assertEqual(self.client.post(f'/api/manager/users/{uid}/edit',
+                                         json=body).status_code, 200)
+        with self.client.session_transaction() as session:
+            self.assertEqual(session['username'], 'Updated admin')
+        for changes in ({'role': 'sales_executive'}, {'is_active': 0}):
+            self.assertEqual(self.client.post(f'/api/manager/users/{uid}/edit',
+                json={**body, **changes}).status_code, 400)
+        self.assertEqual(self.client.post('/api/manager/users/99999/edit',
+                                         json=body).status_code, 404)
+
     def test_admin_create_assign_deactivate_preserves_account(self):
         self.session_as('admin')
         self.assertEqual(self.client.post('/api/manager/users/add', json={
             'username': 'new-sales', 'password': 'fixture-pass',
-            'role': 'sales_executive',
+            'role': 'sales_executive', 'department': 'Sales',
         }).status_code, 200)
         self.assertEqual(self.client.post('/api/manager/users/add', json={
             'username': 'invalid', 'password': 'fixture-pass', 'role': 'root',
