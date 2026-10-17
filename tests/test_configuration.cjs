@@ -10,18 +10,22 @@ async function setup(admin) {
     return nodes.get(id);
   };
   let names = ['Sales'];
+  const prefixes = {};
   const context = {
     document: {getElementById: get, createElement: () => ({})},
     fetch: async (url, options) => {
       if (url === '/api/me') return {ok: true, json: async () => ({permissions: admin ? ['settings.manage', 'users.manage'] : ['settings.manage']})};
       if (url === '/api/settings') return {ok: true, json: async () => ({hsn_code: '85371090'})};
-      assert.equal(url, '/api/departments');
-      if (options) {
+      if (url.endsWith('/pi-prefix')) {
+        prefixes[names[Number(url.split('/')[3]) - 1]] = JSON.parse(options.body).pi_prefix;
+      } else if (options) {
+        assert.equal(url, '/api/departments');
         const name = JSON.parse(options.body).name;
         if (names.includes(name)) return {ok: false, json: async () => ({error: 'This department already exists.'})};
         names.push(name);
+        prefixes[name] = JSON.parse(options.body).pi_prefix || '';
       }
-      return {ok: true, json: async () => ({departments: [...names]})};
+      return {ok: true, json: async () => ({departments: [...names], department_settings: names.map((name,i)=>({id:i+1,name,pi_prefix:prefixes[name]||''}))})};
     },
   };
   vm.createContext(context);
@@ -48,5 +52,17 @@ test('admin adds departments in Configuration and duplicate errors preserve inpu
 test('team leads can view departments while the admin form stays hidden', async () => {
   const {get} = await setup(false);
   assert.equal(get('departmentForm').hidden, true);
+  assert.equal(get('departmentPrefixForm').hidden, true);
   assert.equal(get('departmentsList').children[0].textContent, 'Sales');
+});
+
+test('admins can configure and reload a department PI prefix', async () => {
+  const {get} = await setup(true);
+  assert.equal(get('departmentPrefixForm').hidden, false);
+  assert.equal(get('prefixDepartment').value, '1');
+  get('piPrefix').value = 'AMT';
+  await get('departmentPrefixForm').onsubmit({preventDefault() {}});
+  assert.equal(get('departmentsList').children[0].textContent, 'Sales · AMT/');
+  assert.equal(get('piPrefix').value, 'AMT');
+  assert.equal(get('prefixMessage').textContent, 'PI prefix saved.');
 });

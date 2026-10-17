@@ -43,6 +43,7 @@ function setup(search = '?client_id=9') {
   const order = {id:7,reference:'ORD-000007',client_id:9,enquiry_id:1,client_name:'Client',enquiry_reference:'ENQ-001',can_edit:true,can_delete:false,currency:'USD',status:'draft',order_date:'2026-10-14',created_at:'2026-10-14T00:00:00Z',owner_name:'Owner',creator_name:'Creator'};
   const data = {order,lines:[],subtotals:{},delivery:{billing_address:client.billing_address,shipping_address:client.shipping_address,consignee:{name:'Company'},buyer:{},notify_party:{}},delivery_history:[],revisions:[]};
   const requests = [];
+  const piDefaults = {pi_prefix: ''};
   const listing = {orders:[],total:0,page:1,pages:0};
   let denied = false;
   const context = {
@@ -56,6 +57,7 @@ function setup(search = '?client_id=9') {
       let response;
       if(url==='/static/common/countries.json')response=JSON.parse(fs.readFileSync(path.join(__dirname,'../frontend/common/countries.json'),'utf8'));
       else if(url.startsWith('/api/orders/deletions?'))response={deletions:[{reference:'ORD-000007',actor_name:'Owner',deleted_at:'2026-10-15T12:00:00Z'}]};
+      else if(url==='/api/orders/pi-defaults')response=piDefaults;
       else if(url.startsWith('/api/orders?'))response=listing;
       else if(url==='/api/orders' && options.method==='POST')response=data;
       else if(url==='/api/orders/7')response=data;
@@ -75,9 +77,26 @@ function setup(search = '?client_id=9') {
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/common/sku-feedback.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/common/order-locations.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/orders/orders.js'),'utf8'),context);
-  return {context,element,requests,data,listing,deny(){denied=true;}};
+  return {context,element,requests,data,listing,piDefaults,deny(){denied=true;}};
 }
 const settle = () => new Promise(resolve=>setImmediate(resolve));
+
+test('new orders prefill the department prefix and keep the full PI reference editable',async()=>{
+  const f=setup();await settle();f.piDefaults.pi_prefix='PUC';
+  await f.context.createOrder();
+  assert.equal(f.element('pi_reference').value,'PUC/');
+  assert.equal(f.element('pi_reference').readOnly,false);
+  f.element('pi_reference').value='CUSTOM/123214';
+  f.element('order_date').value='2026-10-17';
+  await f.element('orderForm').onsubmit({preventDefault(){}});
+  assert.equal(JSON.parse(f.requests.find(r=>r.url==='/api/orders'&&r.options.method==='POST').options.body).pi_reference,'CUSTOM/123214');
+  f.data.order.pi_reference='SAVED/001';f.data.order.destination='INDIA';f.piDefaults.pi_prefix='NEW';
+  await f.context.editOrder(7);
+  assert.equal(f.element('pi_reference').value,'SAVED/001');
+  f.data.order.pi_reference='';f.data.pi_defaults={pi_prefix:'AMT'};
+  await f.context.editOrder(7);
+  assert.equal(f.element('pi_reference').value,'AMT/');
+});
 
 test('party blocks are prefilled from editable client data without removed order header fields',async()=>{
   const fixture=setup();await settle();await fixture.context.createOrder();

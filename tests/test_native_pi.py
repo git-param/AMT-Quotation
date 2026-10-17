@@ -77,6 +77,55 @@ class NativePiTests(unittest.TestCase):
             self.assertEqual(len(self.client.get(f'/api/orders/{self.order_id}').json['invoices']),1)
             self.assertEqual(self.client.put(self.base+'/preview/'+preview['preview_id'],json={}).status_code,409)
 
+    def test_department_prefix_defaults_flow_to_editable_preview_and_issued_files(self):
+        connection = database.get_db()
+        with connection:
+            connection.executemany('INSERT INTO departments(name,pi_prefix) VALUES(?,?)', [('Sales', 'AMT'), ('Purchase', 'PUC')])
+            connection.execute("UPDATE users SET department='Sales' WHERE id=?", (self.ids['exec1'],))
+            connection.execute("UPDATE users SET department='Purchase' WHERE id=?", (self.ids['exec2'],))
+        connection.close()
+        self.as_user('exec1')
+        self.assertEqual(self.client.get('/api/orders/pi-defaults').json, {'department': 'Sales', 'pi_prefix': 'AMT'})
+        order = self.direct()
+        self.assertEqual(order['order']['pi_reference'], 'AMT/')
+        order_id = order['order']['id']
+        self.base = f'/api/orders/{order_id}/invoices'
+        preview = self.preview()
+        self.assertEqual(preview['document']['reference'], 'AMT/')
+        self.assertEqual(self.issue(preview).status_code, 400)
+        updated = self.client.put(self.base+'/preview/'+preview['preview_id'], json={'order': {'pi_reference': 'AMT/123214'}})
+        self.assertEqual(updated.status_code, 200, updated.json)
+        self.assertEqual(self.client.get(f'/api/orders/{order_id}').json['order']['pi_reference'], 'AMT/123214')
+        self.assertIn('AMT/123214', json.dumps(updated.json['layout']))
+        cells = [cell for section in updated.json['layout']['sections'] for row in section['rows'] for cell in row]
+        field = next(cell for cell in cells if cell.get('field') == 'order.pi_reference')
+        self.assertFalse(field.get('readonly'))
+        issued = self.issue(updated.json)
+        self.assertEqual(issued.status_code, 201, issued.json)
+        self.assertEqual(issued.json['reference'], 'AMT/123214')
+        self.assertTrue(self.client.get(issued.json['pdf_url']).data.startswith(b'%PDF-'))
+        with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
+            self.assertIn('AMT/123214', book.read('xl/sharedStrings.xml').decode())
+        self.as_user('exec2')
+        self.assertEqual(self.client.get('/api/orders/pi-defaults').json['pi_prefix'], 'PUC')
+        self.as_user('exec1')
+        custom = self.direct(pi_reference='CUSTOM/99')
+        self.assertEqual(custom['order']['pi_reference'], 'CUSTOM/99')
+        self.base = f"/api/orders/{custom['order']['id']}/invoices"
+        self.assertEqual(self.preview()['document']['reference'], 'CUSTOM/99')
+
+    def test_blank_existing_order_uses_its_creator_department_in_preview(self):
+        connection = database.get_db()
+        with connection:
+            connection.execute("INSERT INTO departments(name,pi_prefix) VALUES('Sales','AMT')")
+            connection.execute("UPDATE users SET department='Sales' WHERE id=?", (self.ids['exec1'],))
+        connection.close()
+        self.client.put(f'/api/orders/{self.order_id}', json={'pi_reference': ''})
+        self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['pi_defaults']['pi_prefix'], 'AMT')
+        self.as_user('admin')
+        preview = self.preview()
+        self.assertEqual(preview['document']['reference'], 'AMT/')
+
     def test_pi_number_is_required_and_reusable_with_fresh_previews(self):
         self.client.put(f'/api/orders/{self.order_id}',json={'pi_reference':''})
         missing=self.client.post(self.base+'/preview',json={'currency':'USD'})

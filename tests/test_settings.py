@@ -56,6 +56,25 @@ class SettingsTests(unittest.TestCase):
         connection.close()
         self.assertEqual(self.client.get('/api/sku-defaults').status_code, 401)
 
+    def test_admin_department_pi_prefix_configuration_and_permissions(self):
+        self.as_user('admin')
+        result = self.client.post('/api/departments', json={'name': 'Sales', 'pi_prefix': 'AMT/'})
+        self.assertEqual(result.status_code, 201)
+        department = result.json['department_settings'][0]
+        self.assertEqual(department['pi_prefix'], 'AMT')
+        url = f"/api/departments/{department['id']}/pi-prefix"
+        self.as_user('tl1')
+        self.assertEqual(self.client.put(url, json={'pi_prefix': 'PUC'}).status_code, 403)
+        self.as_user('exec1')
+        self.assertEqual(self.client.put(url, json={'pi_prefix': 'PUC'}).status_code, 403)
+        self.as_user('admin')
+        for invalid in ('A/B', 'x' * 21, None, '<script>', 'with space'):
+            self.assertEqual(self.client.put(url, json={'pi_prefix': invalid}).status_code, 400)
+        self.assertEqual(self.client.put(url, json={'pi_prefix': 'PUC'}).status_code, 200)
+        self.assertEqual(self.client.get('/api/departments').json['department_settings'][0]['pi_prefix'], 'PUC')
+        self.assertEqual(self.client.put(url, json={'pi_prefix': ''}).status_code, 200)
+        self.assertEqual(self.client.put('/api/departments/9999/pi-prefix', json={'pi_prefix': 'AMT'}).status_code, 404)
+
     def test_departments_admin_creation_validation_and_dropdown_choices(self):
         for name, expected in [(None, 401), ('exec1', 403), ('tl1', 403), ('admin', 201), ('manager', 201)]:
             self.as_user(name)

@@ -144,6 +144,7 @@ def order_detail(order_id):
         if not order:
             return jsonify(error='Order not found.'), 404
         result = details(connection, order)
+        result['pi_defaults'] = user_pi_defaults(connection, order['created_by'])
         result['revisions'] = [dict(row, snapshot=json.loads(
             row['snapshot_json'])) for row in connection.execute(
                 'SELECT id, action, actor_user_id, created_at, snapshot_json '

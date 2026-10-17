@@ -151,12 +151,26 @@ class MigrationTests(unittest.TestCase):
         with test_connection(self.path) as connection:
             connection.execute("INSERT INTO users(username,password_hash,department) VALUES('existing','fixture','Sales')")
             before = connection.execute('SELECT * FROM users').fetchall()
-        self.assertEqual(migrate_database(self.path), [26])
+        self.assertEqual(migrate_database(self.path, MIGRATIONS[:26]), [26])
         with test_connection(self.path) as connection:
             rows = connection.execute('SELECT * FROM users').fetchall()
             self.assertEqual([row[:-2] for row in rows], before)
             self.assertEqual(rows[0][-2:], ('', ''))
-        self.assertEqual(migrate_database(self.path), [])
+        self.assertEqual(migrate_database(self.path, MIGRATIONS[:26]), [])
+
+    def test_department_prefix_upgrade_preserves_departments_and_users(self):
+        migrate_database(self.path, MIGRATIONS[:26])
+        with test_connection(self.path) as connection:
+            connection.execute("INSERT INTO departments(name) VALUES('Sales')")
+            connection.execute("INSERT INTO users(username,password_hash,department) VALUES('fixture','fixture','Sales')")
+            users = connection.execute('SELECT * FROM users').fetchall()
+            departments = connection.execute('SELECT * FROM departments').fetchall()
+        self.assertEqual(migrate_database(self.path), [27])
+        with test_connection(self.path) as connection:
+            self.assertEqual(connection.execute('SELECT * FROM users').fetchall(), users)
+            rows = connection.execute('SELECT * FROM departments').fetchall()
+            self.assertEqual([row[:-1] for row in rows], departments)
+            self.assertEqual(rows[0][-1], '')
 
     def test_reusable_references_upgrade_preserves_records_files_and_sequences(self):
         migrate_database(self.path, MIGRATIONS[:20])

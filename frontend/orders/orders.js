@@ -321,6 +321,7 @@ async function editOrder(id) {
   updateOrderStatusUI(data.order);
   editing=id;initialDrafts.reset();el('initialLines').hidden=true;
   headerFields.forEach(key=>{el(key).value=data.order[key];});if(!await prepareClient(data.order.client_id,data.delivery,version))return;
+  if(!data.order.pi_reference&&data.pi_defaults?.pi_prefix&&!data.invoices?.length)el('pi_reference').value=data.pi_defaults.pi_prefix+'/';
   el('pi_reference').readOnly=Boolean(data.invoices?.some(invoice=>invoice.workbook_format==='xlsm'));
   el('detail').hidden=true;el('formTitle').textContent='Edit order';el('referenceHint').textContent=data.order.reference;el('editor').hidden=false;resetComposer();el('editor').scrollIntoView({behavior:'smooth'});
 }
