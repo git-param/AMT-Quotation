@@ -1,4 +1,15 @@
 /* Editable commercial snapshot; the server owns identity, bank details and totals. */
+window.downloadPiFile = async function(url, filename) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || 'Unable to download the PI.');
+  }
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a'); link.href = objectUrl; link.download = filename;
+  document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+};
 window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}) {
   let state = null,
     issued = null,
@@ -126,7 +137,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
   async function run(callback){
     if(busy)return;busy=true;
     toolbar.querySelectorAll('button').forEach(button=>button.disabled=true);
-    try{await callback();}catch(error){status.textContent=error.message;status.classList.add('error');status.focus();}
+    try{await callback();}catch(error){status.textContent=error.message;status.classList.add('error');status.focus();window.skuFeedback?.show(error.message,true);}
     finally{busy=false;toolbar.querySelectorAll('button').forEach(button=>button.disabled=false);}
   }
   function button(label,callback,primary=false){
@@ -151,7 +162,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     }
     for(const format of ['xlsx','pdf'])button('Generate '+format.toUpperCase(),async()=>{
       if(!issued){await save(true);issued=await api(state.base.replace('/preview','/issue'),json('POST',{preview_id:state.preview_id}));await onIssued(issued);render();}
-      const link=node('a');link.href=issued[format+'_url'];link.download=issued[format+'_filename']||issued.reference.replace(/[<>:"/\\|?*\u0000-\u001f]/g,'-')+'.'+format;host.append(link);link.click();link.remove();
+      await window.downloadPiFile(issued[format+'_url'],issued[format+'_filename']||issued.reference.replace(/[<>:"/\\|?*\u0000-\u001f]/g,'-')+'.'+format);
     },true);
     status=node('p',issued?'PI '+issued.reference+' issued. Both downloads use this saved invoice.':'Edit fields directly below, then review the PDF print preview. Changes apply to this PI only.','pi-preview-status');
     status.role='status';status.tabIndex=-1;host.append(status);

@@ -9,7 +9,7 @@ from backend.config import ROOT_DIR
 from backend.client_leads.details import text,phone
 from backend.enquiries.lines import number, serialize
 from backend.orders.company import get_profile
-from backend.orders.parties import text_delivery
+from backend.orders.parties import text_delivery, parse_block, LABELS
 from backend.orders.locations import country_block, gst_number, with_gst, without_gst, address_only, COPIED_CONTACT
 from backend.orders.service import header, order_line
 
@@ -36,7 +36,7 @@ def party_block(party, address):
     return '\n'.join(filter(None, [party.get('name'), *[address.get(key) for key in
         ('line1','line2','city','state','postal_code')],
         'Country: '+address['country'] if address.get('country') else '',
-        *[label+party[key] for key,label in (('phone','Tel: '),('pic','PIC: '),
+        *[label+party[key] for key,label in (('phone','Tel/Phone: '),('pic','PIC: '),
           ('email','Email: '),('gst_number','GST: ')) if party.get(key)]]))
 
 
@@ -52,7 +52,8 @@ def sync_locations(doc):
         country = 'INDIA'
     previous = [(source_delivery.get('shipping_address') or {}).get('country'),
                 doc['source_state']['order'].get('destination')]
-    doc['delivery']['consignee_text'] = country_block(doc['delivery']['consignee_text'], country, previous)
+    doc['delivery']['consignee_text'] = re.sub(r'^(\s*)(?:Tel|Telephone|Phone)\s*:', r'\1Tel/Phone:',
+        country_block(doc['delivery']['consignee_text'], country, previous), flags=re.I|re.M)
     number_value=gst_number(doc['delivery']['consignee_text'])
     doc['delivery']['consignee_text']=with_gst(doc['delivery']['consignee_text'],number_value)
     doc['order']['destination'] = country
@@ -252,9 +253,41 @@ def print_document(document, edits):
     return sync_locations(doc)
 
 
+class PiDetailsRequired(ValueError):
+    def __init__(self, fields):
+        self.missing_fields = fields
+        super().__init__('Complete these details before generating or downloading the PI PDF:\n' + '\n'.join('• ' + field for field in fields))
+
+
+def missing_details(doc):
+    missing = []
+    reference = str(doc.get('reference', '')).strip()
+    if not reference or reference.endswith('/'):
+        missing.append('Proforma Invoice No. (complete prefix and number)')
+    if not str(doc['order'].get('po_reference', '')).strip():
+        missing.append('Purchase Order No.')
+    country = str(doc['order'].get('destination', '')).strip()
+    values = {}
+    for line in doc['delivery'].get('consignee_text', '').splitlines()[1:]:
+        match = re.fullmatch(r'\s*([^:]+):\s*(.*)', line)
+        if match:
+            key = LABELS.get(match[1].strip().lower())
+            if key: values[key] = match[2].strip()
+    if not (country or values.get('country')):
+        missing.append('Consignee country')
+    for key, label in [('gst_number', 'GST No.'), ('phone', 'Tel/Phone'), ('pic', 'PIC'), ('email', 'Email')]:
+        if not values.get(key): missing.append('Consignee ' + label)
+    return missing
+
+
 def validate_ready(doc):
-    if str(doc.get('reference', '')).strip().endswith('/'):
-        raise ValueError('Enter the invoice number after the prefix in Proforma Invoice No.')
+    missing = missing_details(doc)
+    if missing:
+        raise PiDetailsRequired(missing)
+    try:
+        parse_block(doc['delivery']['consignee_text'], doc['order'].get('destination', ''))
+    except ValueError as error:
+        raise ValueError('Consignee details: ' + str(error)) from error
     if doc.get('pi_format') == 'bulk':
         if not text(doc.get('bulk_description',''),2000,'first-page description'):
             raise ValueError('Enter the first-page description for this bulk PI.')

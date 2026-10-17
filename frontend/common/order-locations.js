@@ -2,10 +2,10 @@
 (() => {
   const countries = new Set();
   const gstLine = /^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$/i;
-  const contactLine = /^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:/i;
+  const contactLine = /^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:/i;
   function addressOnly(value, country = '') {
     return value.split('\n').filter((line,index)=>!index||(
-      !/^\s*(?:Country|GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line)
+      !/^\s*(?:Country|GST(?:IN|\s*(?:No\.?|Number))?|Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line)
       && !countries.has(line.trim().toUpperCase())
       && !(country && line.trim().toUpperCase()===country.trim().toUpperCase())
     )).join('\n').trimEnd();

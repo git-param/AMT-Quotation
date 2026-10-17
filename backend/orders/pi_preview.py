@@ -9,11 +9,15 @@ from backend.common.auth import authenticated_required,get_current_user
 from backend.database import get_db
 from backend.orders.routes import bp
 from backend.orders.service import details,read_order,record_revision
-from backend.orders.pi_document import prepare,edit,validate_ready,print_document,recalculate
+from backend.orders.pi_document import prepare,edit,validate_ready,print_document,recalculate,missing_details
 from backend.orders import pi_exports
 from backend.orders.pi_layout import layout
 from backend.orders.filenames import invoice_filename
 from backend.settings import user_pi_defaults
+
+
+def validation_error(error):
+    return jsonify(error=str(error), missing_fields=getattr(error, 'missing_fields', [])), 400
 
 
 def authorized(connection,order_id):
@@ -78,13 +82,16 @@ def save_preview(order_id,preview_id=None):
             preview_id=uuid4().hex
             connection.execute('INSERT INTO invoice_previews(id,order_id,created_by,document_json) VALUES(?,?,?,?)',
                                (preview_id,order_id,user['id'],json.dumps(doc)))
-        # Rendering here makes the print preview fail early, before issuance.
-        pi_exports.pdf(doc)
+        # Keep the editor available for incomplete drafts without producing a PDF.
+        missing = missing_details(doc)
+        if not missing:
+            validate_ready(doc)
+            pi_exports.pdf(doc)
         connection.commit()
         return jsonify(preview_id=preview_id,document=doc,layout=layout(doc),
-            pdf_url=f'/api/orders/{order_id}/invoices/preview/{preview_id}/pdf'),200 if request.method=='PUT' else 201
+            missing_fields=missing, pdf_url=f'/api/orders/{order_id}/invoices/preview/{preview_id}/pdf'),200 if request.method=='PUT' else 201
     except ValueError as error:
-        return jsonify(error=str(error)),400
+        return validation_error(error)
     finally:
         connection.rollback();connection.close()
 
@@ -99,8 +106,10 @@ def preview_pdf(order_id,preview_id):
         row=preview_row(connection,order_id,preview_id,user)
         if not row:return jsonify(error='PI preview not found.'),404
         doc=json.loads(row['document_json'])
+        validate_ready(doc)
         return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',
                          download_name=invoice_filename(doc['reference'],'pdf'),max_age=0)
+    except ValueError as error:return validation_error(error)
     finally:connection.close()
 
 
@@ -116,7 +125,9 @@ def print_preview(order_id,preview_id):
         data=request.get_json(silent=True)
         if not isinstance(data,dict):return jsonify(error='Provide PI preview fields.'),400
         doc=print_document(json.loads(row['document_json']),data)
+        validate_ready(doc)
         return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',download_name=invoice_filename(doc['reference'],'pdf'),max_age=0)
+    except ValueError as error:return validation_error(error)
     finally:connection.close()
 
 
@@ -137,7 +148,7 @@ def calculate_preview(order_id,preview_id):
             totals={**totals,'annexure_amount_in_words':annexure_words(doc),
                     'annexure_quantity':quantity_summary(doc)}
         return jsonify(totals=totals)
-    except ValueError as error:return jsonify(error=str(error)),400
+    except ValueError as error:return validation_error(error)
     finally:connection.close()
 
 
@@ -179,5 +190,5 @@ def issue_preview(order_id):
         status=connection.execute('SELECT status FROM client_orders WHERE id=?',(order_id,)).fetchone()[0]
         return jsonify(id=invoice_id,reference=doc['reference'],order_status=status,xlsx_url=base+'?format=xlsx',pdf_url=base+'?format=pdf',
                        xlsx_filename=invoice_filename(doc['reference'],'xlsx'),pdf_filename=invoice_filename(doc['reference'],'pdf')),201
-    except ValueError as error:return jsonify(error=str(error)),400
+    except ValueError as error:return validation_error(error)
     finally:connection.rollback();connection.close()

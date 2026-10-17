@@ -164,7 +164,7 @@ function addressText(address){return addressFields.map(key=>address?.[key]).filt
 function formatPartyBlock(party={},address={}){
   const lines=[party.name,...addressFields.filter(key=>key!=='country').map(key=>address?.[key])].filter(Boolean);
   if(address?.country)lines.push('Country: '+address.country);
-  lines.push('Tel: '+(party.phone||''),'PIC: '+(party.pic||''),'Email: '+(party.email||''));
+  lines.push('Tel/Phone: '+(party.phone||''),'PIC: '+(party.pic||''),'Email: '+(party.email||''));
   if(party.gst_number)lines.push('GST: '+party.gst_number);
   return lines.join('\n');
 }
@@ -287,7 +287,7 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
   ]){
     let value=delivery?.[key]??(party?.name?formatPartyBlock(party,address):window.orderLocations.addressOnly(consignee,el('destination').value));
     if(value===consignee||(window.orderLocations.addressOnly(value)===window.orderLocations.addressOnly(consignee,el('destination').value)&&
-      !/^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel|Telephone|Phone|PIC|E-?mail)\s*:/im.test(value)))value=window.orderLocations.addressOnly(value);
+      !/^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:/im.test(value)))value=window.orderLocations.addressOnly(value);
     el(prefix+'_text').value=value;el(prefix+'_same').checked=value===window.orderLocations.addressOnly(consignee,el('destination').value);
   }
   for(const prefix of ['consignee','buyer','notify'])showPartyFields(prefix);
@@ -468,7 +468,7 @@ el('piCurrency').onchange=()=>{
 function appendInvoice(invoice,id){
   const row=document.createElement('div');row.className='pi-download-row';
   const title=document.createElement('span');title.textContent=`${invoice.reference} / ${invoice.currency} / ${(invoice.created_at||'').slice(0,10)}`;row.append(title);
-  for(const format of [invoice.workbook_format||'xlsm',...(invoice.has_pdf?['pdf']:[])]){const link=document.createElement('a');link.textContent='Download '+format.toUpperCase();link.href=`/api/orders/${id}/invoices/${invoice.id}/download?format=${format}`;row.append(link);}
+  for(const format of [invoice.workbook_format||'xlsm',...(invoice.has_pdf?['pdf']:[])]){const link=document.createElement('a');link.textContent='Download '+format.toUpperCase();link.href=`/api/orders/${id}/invoices/${invoice.id}/download?format=${format}`;link.onclick=async event=>{event.preventDefault();try{await window.downloadPiFile(link.href,invoice.reference.replace(/[<>:"/\\|?*]/g,'-')+'.'+format);}catch(error){message(error.message,true);}};row.append(link);}
   if(current?.order.can_edit&&current.order.can_delete_order){
     const remove=document.createElement('button');remove.type='button';remove.className='pi-remove-button';remove.textContent='\u2212';remove.title='Remove PI';remove.setAttribute('aria-label','Remove PI '+invoice.reference);
     remove.onclick=async()=>{

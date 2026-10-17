@@ -6,7 +6,7 @@ from backend.client_leads.details import email, phone, text
 from backend.orders.locations import without_gst
 
 TEXT_FIELDS = ('consignee_text', 'buyer_text', 'notify_text')
-LABELS = {'tel': 'phone', 'telephone': 'phone', 'phone': 'phone',
+LABELS = {'tel': 'phone', 'tel/phone': 'phone', 'telephone': 'phone', 'phone': 'phone',
           'email': 'email', 'e-mail': 'email', 'pic': 'pic',
           'gst': 'gst_number', 'gst no': 'gst_number', 'gst no.': 'gst_number', 'gst number': 'gst_number',
           'gstin': 'gst_number',

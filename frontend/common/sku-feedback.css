@@ -14,3 +14,4 @@
 @media(prefers-reduced-motion:reduce){.sku-feedback-spinner{animation:none;border-color:#2563eb;border-right-color:#dbeafe}}
 @media(max-width:550px){.sku-feedback{right:16px;bottom:16px}}
 @media print{.sku-feedback{display:none!important}}
+.sku-feedback-notice p{white-space:pre-line;max-height:50vh;overflow:auto;overflow-wrap:anywhere}

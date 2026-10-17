@@ -481,6 +481,11 @@ def download_invoice(order_id, invoice_id):
         if output_format=='pdf':
             if invoice['pdf'] is None:
                 return jsonify(error='This historical PI does not have a saved PDF.'),404
+            from backend.orders.pi_document import validate_ready
+            try:
+                validate_ready(json.loads(invoice['snapshot_json']))
+            except ValueError as error:
+                return jsonify(error=str(error), missing_fields=getattr(error, 'missing_fields', [])), 400
             return send_file(BytesIO(invoice['pdf']),as_attachment=True,
                 download_name=invoice_filename(invoice['reference'],'pdf'),mimetype='application/pdf')
         if output_format!=invoice['workbook_format']:
