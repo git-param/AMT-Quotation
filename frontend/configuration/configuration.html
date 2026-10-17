@@ -4,28 +4,35 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Configuration | AMT</title>
 <link rel="stylesheet" href="/static/manager_dashboard/manager.css">
-<link rel="stylesheet" href="/static/enquiry_sources/sources.css">
+<link rel="stylesheet" href="/static/configuration/configuration.css">
 <link rel="stylesheet" href="/static/common/sidebar.css">
 <script src="/static/common/sidebar.js" defer></script>
 </head>
 <body>
 <header class="hdr"><div><div class="hdr-logo">Configuration</div><div class="hdr-sub">Shared settings for your team</div></div><nav><a class="back-link" href="/">Quotation Tool</a><a class="back-link" href="/logout">Sign Out</a></nav></header>
-<main class="wrap">
+<main class="wrap configuration-wrap">
+<div class="page-head"><div><p class="settings-eyebrow">Administration</p><h1>Workspace settings</h1><p>Manage shared defaults and keep your team organised.</p></div></div>
 <p id="message" role="status" aria-live="polite"></p>
-<section class="panel"><h1>HSN code</h1><p>Set one HSN code for every SKU. This applies to order items and new PI previews. Existing previews and issued invoices retain their saved code.</p>
-<form id="settingsForm"><div class="form-row"><div class="form-field"><label for="hsnCode">Shared HSN code</label><input id="hsnCode" name="hsn_code" inputmode="numeric" pattern="[0-9]{4}|[0-9]{6}|[0-9]{8}" maxlength="8" required aria-describedby="hsnHint"><small id="hsnHint">Enter 4, 6 or 8 digits.</small></div><div class="form-actions"><button id="save" class="btn-sm btn-add" disabled>Save configuration</button></div></div></form>
+<div class="settings-panels">
+<section class="panel settings-card" aria-labelledby="hsnTitle">
+  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true">#</span><div><h2 id="hsnTitle">HSN code</h2><p>A shared classification code for all SKU items.</p></div></div>
+  <form id="settingsForm">
+    <div class="settings-input-row"><div class="form-field"><label for="hsnCode">Shared HSN code</label><input id="hsnCode" name="hsn_code" inputmode="numeric" pattern="[0-9]{4}|[0-9]{6}|[0-9]{8}" maxlength="8" required aria-describedby="hsnHint"></div><button id="save" class="btn-sm btn-add" disabled>Save changes</button></div>
+    <p id="hsnHint" class="field-hint">Enter 4, 6 or 8 digits.</p>
+  </form>
+  <div class="settings-note"><span aria-hidden="true">i</span><p>Applies to order items and new PI previews. Existing previews and issued invoices keep their saved code.</p></div>
 </section>
-<section class="panel">
-  <h2>Departments</h2>
-  <p>Departments available when creating or editing users.</p>
+<section class="panel settings-card" aria-labelledby="departmentsTitle">
+  <div class="settings-card-heading"><span class="settings-icon settings-icon-team" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.87M15 3.13a4 4 0 0 1 0 7.75"/><circle cx="9" cy="7" r="4"/></svg></span><div><h2 id="departmentsTitle">Departments</h2><p>Organise your team with consistent department names.</p></div></div>
   <form id="departmentForm" hidden>
-    <div class="form-row">
+    <div class="settings-input-row">
       <div class="form-field"><label for="departmentName">Department name</label><input id="departmentName" maxlength="100" placeholder="e.g. Sales" required></div>
       <button id="addDepartment" class="btn-sm btn-add" type="submit">Add department</button>
     </div>
   </form>
   <p id="departmentMessage" role="status" aria-live="polite"></p>
+  <div class="department-list-heading">Available departments<span>Used in user profiles</span></div>
   <ul id="departmentsList" aria-label="Configured departments"></ul>
-</section></main>
+</section></div></main>
 <script src="/static/configuration/configuration.js"></script>
 </body></html>

@@ -1,0 +1,37 @@
+/* Configuration uses the shared dashboard controls with a compact settings layout. */
+.configuration-wrap{max-width:1120px}
+.hdr nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.configuration-wrap .page-head{margin-bottom:26px}
+.configuration-wrap .settings-eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--brand);margin:0 0 7px}
+.settings-panels{display:grid;gap:22px}
+.settings-card{padding:26px 28px}
+.settings-card-heading{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+.settings-card-heading h2{font-size:17px;letter-spacing:-.02em;margin:0 0 4px}
+.settings-card-heading p{font-size:13px;color:var(--muted);line-height:1.6}
+.settings-icon{display:grid;place-items:center;flex:0 0 44px;height:44px;border:1px solid #DBEAFE;border-radius:13px;background:#EFF6FF;color:#2563EB;font-size:24px;font-weight:600}
+.settings-icon-team{background:#F0FDFA;border-color:#CCFBF1;color:#0F766E}
+.settings-icon svg{width:23px;height:23px}
+.settings-input-row{display:grid;grid-template-columns:minmax(0,440px) auto;align-items:end;justify-content:start;gap:12px}
+.settings-input-row .form-field{min-width:0;gap:8px}
+.settings-input-row input{height:44px;font-size:14px}
+.settings-input-row .btn-sm{height:44px}
+.field-hint{margin:8px 0 0;color:var(--muted);font-size:12px}
+#hsnCode{font-variant-numeric:tabular-nums;letter-spacing:.08em}
+.settings-note{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;margin-top:22px;background:#F8FAFC;border:1px solid #EEF2F7;border-radius:10px;font-size:12px;line-height:1.7;color:var(--muted)}
+.settings-note>span{display:grid;place-items:center;flex:0 0 17px;height:17px;margin-top:2px;border:1px solid #94A3B8;border-radius:50%;font-size:11px;font-weight:700}
+.department-list-heading{display:flex;align-items:center;gap:12px;justify-content:space-between;border-top:1px solid var(--line);padding-top:20px;margin-top:22px;font-size:12px;font-weight:600;color:var(--ink-2)}
+.department-list-heading span{font-size:11px;font-weight:400;color:var(--muted)}
+#departmentsList{display:flex;flex-wrap:wrap;gap:10px;list-style:none;padding:0;margin-top:14px}
+#departmentsList li{display:flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid #DBE5F3;border-radius:8px;background:#F8FAFD;color:#334155;font-size:13px;font-weight:500;overflow-wrap:anywhere;max-width:100%}
+#departmentsList li::before{content:'';width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:#60A5FA}
+#message:empty,#departmentMessage:empty{display:none}
+#message:not(:empty),#departmentMessage:not(:empty){padding:11px 14px;border:1px solid #BBF7D0;border-radius:9px;background:#F0FDF4;color:#166534;font-size:13px;margin:0 0 18px}
+#departmentMessage:not(:empty){margin:16px 0 0}
+#message.error,#departmentMessage.error{background:#FFF1F2;border-color:#FECDD3;color:#9F1239}
+@media(max-width:650px){
+  .settings-card{padding:20px}
+  .settings-card-heading{align-items:flex-start;gap:12px;margin-bottom:20px}
+  .settings-input-row{grid-template-columns:minmax(0,1fr);justify-content:stretch}
+  .settings-input-row .btn-sm{justify-self:start}
+  .department-list-heading{align-items:flex-start;flex-direction:column;gap:4px}
+}

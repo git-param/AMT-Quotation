@@ -247,6 +247,11 @@ function showTab(name) {
   });
   document.getElementById('viewOverview').hidden = name !== 'overview';
   document.getElementById('viewUsers').hidden = name !== 'users';
+  document.getElementById('dashboardTitle').textContent = name === 'users' ? 'Team & access' : 'Team activity at a glance';
+  document.getElementById('dashboardSubtitle').textContent = name === 'users'
+    ? 'Manage user accounts, departments, and access for your team.'
+    : 'See how your team is using the quotation tool today.';
+  document.getElementById('activityActions').hidden = name === 'users';
   if (name === 'overview' && _lastStats) drawCharts(_lastStats);   // canvases need a visible box
 }
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => showTab(tab.dataset.tab)));
