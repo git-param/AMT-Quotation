@@ -4,6 +4,7 @@ from io import BytesIO
 import json
 import unittest
 from zipfile import ZipFile
+from unittest.mock import patch
 
 from backend import database
 from backend.orders.invoices import amount_words, calculate
@@ -47,6 +48,29 @@ class CurrencyPiTests(unittest.TestCase):
                 self.assertTrue(self.client.get(issued.json['pdf_url']).data.startswith(b'%PDF-'))
                 with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
                     self.assertIn(words,book.read('xl/sharedStrings.xml').decode())
+
+    def test_aed_annexure_currency_code_and_amount_print_on_one_line(self):
+        from backend.orders.bulk_pi import exports
+        from reportlab.platypus import Paragraph
+        self.rates()
+        self.client.post(f'/api/orders/{self.order_id}/lines/bulk',json={'lines':[
+            {'sku':str(i),'description':'Part','quantity':'1','unit_price':'1000','currency':'USD',
+             'hsn_code':'85371090','item_condition':'New','uom':'PCs'} for i in range(4)]})
+        document = self.preview(currency='AED',bulk_description='Spare parts')['document']
+        document['totals']['lines'][0]['unit_price']='123456789.99'
+        captured=[]
+        original=exports.Table
+        def table(rows,*args,**kwargs):
+            if (len(rows)==1 and len(rows[0])==2 and isinstance(rows[0][0],Paragraph)
+                    and rows[0][0].getPlainText()=='AED'):
+                captured.append((rows[0],kwargs['colWidths']))
+            return original(rows,*args,**kwargs)
+        with patch.object(exports,'Table',side_effect=table):
+            self.assertTrue(exports.pdf(document).startswith(b'%PDF-'))
+        self.assertTrue(captured)
+        for paragraphs,widths in captured:
+            for paragraph,width in zip(paragraphs,widths):
+                self.assertLessEqual(paragraph.wrap(width,10000)[1],paragraph.style.leading+.01)
 
     def test_configured_cross_conversion_and_discount_edits_use_saved_rates(self):
         self.rates()

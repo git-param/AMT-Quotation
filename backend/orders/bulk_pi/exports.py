@@ -126,9 +126,18 @@ def pdf(doc):
         style=ParagraphStyle('cell',fontName=face,fontSize=size,
             leading=size+2,alignment=alignment,textColor=colors.red if kind=='warning' else colors.black)
         if cell.get('accounting') and not cell.get('total_cell'):
-            left=Paragraph(escape(symbol),ParagraphStyle('currency',parent=style,alignment=0))
-            right=Paragraph(format(Decimal(text),',.2f'),ParagraphStyle('money',parent=style,alignment=2))
-            money=Table([[left,right]],colWidths=[10,available_width-10])
+            amount=format(Decimal(text),',.2f')
+            # Currency codes such as AED need more room than a one-character
+            # symbol. Measure both parts and fit them on the same baseline.
+            gap=4
+            text_width=pdfmetrics.stringWidth(symbol,face,size)+pdfmetrics.stringWidth(amount,face,size)
+            money_size=size*min(1,max(available_width-gap-1,1)/max(text_width,1))
+            currency_width=pdfmetrics.stringWidth(symbol,face,money_size)+gap
+            left=Paragraph(escape(symbol),ParagraphStyle('currency',parent=style,alignment=0,
+                fontSize=money_size,leading=money_size+2,splitLongWords=0))
+            right=Paragraph(amount,ParagraphStyle('money',parent=style,alignment=2,
+                fontSize=money_size,leading=money_size+2,splitLongWords=0))
+            money=Table([[left,right]],colWidths=[currency_width,available_width-currency_width])
             money.setStyle(TableStyle([('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
             return money
         if cell.get('accounting'):
