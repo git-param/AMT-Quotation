@@ -13,6 +13,7 @@ from backend.orders.pi_document import prepare,edit,validate_ready,print_documen
 from backend.orders import pi_exports
 from backend.orders.pi_layout import layout
 from backend.orders.filenames import invoice_filename
+from backend.settings import user_pi_defaults
 
 
 def authorized(connection,order_id):
@@ -66,6 +67,13 @@ def save_preview(order_id,preview_id=None):
                                (json.dumps(doc),preview_id))
         else:
             if set(data)-{'currency','usd_inr_rate','bulk_description'}:raise ValueError('Invalid PI preview fields.')
+            if not order['pi_reference']:
+                prefix=user_pi_defaults(connection,order['created_by'])['pi_prefix']
+                if prefix:
+                    connection.execute("UPDATE client_orders SET pi_reference=?,updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+                        (prefix+'/',user['id'],order_id))
+                    record_revision(connection,order_id,user,'edit')
+                    order=read_order(connection,user,order_id)
             doc=prepare(details(connection,order),user,data.get('currency'),data.get('usd_inr_rate'),data.get('bulk_description'))
             preview_id=uuid4().hex
             connection.execute('INSERT INTO invoice_previews(id,order_id,created_by,document_json) VALUES(?,?,?,?)',

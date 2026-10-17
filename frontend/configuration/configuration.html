@@ -27,12 +27,24 @@
   <form id="departmentForm" hidden>
     <div class="settings-input-row">
       <div class="form-field"><label for="departmentName">Department name</label><input id="departmentName" maxlength="100" placeholder="e.g. Sales" required></div>
+      <div class="form-field"><label for="departmentPrefix">PI prefix (optional)</label><input id="departmentPrefix" maxlength="20" placeholder="e.g. AMT"></div>
       <button id="addDepartment" class="btn-sm btn-add" type="submit">Add department</button>
     </div>
   </form>
   <p id="departmentMessage" role="status" aria-live="polite"></p>
   <div class="department-list-heading">Available departments<span>Used in user profiles</span></div>
   <ul id="departmentsList" aria-label="Configured departments"></ul>
+  <form id="departmentPrefixForm" class="department-prefix-form" hidden>
+    <h3>Department PI prefixes</h3>
+    <p>Choose a department and set its invoice prefix. For example, AMT prefills AMT/. Users enter the number and can edit the full reference.</p>
+    <div class="settings-input-row">
+      <div class="form-field"><label for="prefixDepartment">Department</label><select id="prefixDepartment" required></select></div>
+      <div class="form-field"><label for="piPrefix">PI prefix</label><input id="piPrefix" maxlength="20" placeholder="e.g. AMT or PUC" aria-describedby="prefixHint"></div>
+      <button id="saveDepartmentPrefix" class="btn-sm btn-add" type="submit">Save prefix</button>
+    </div>
+    <p id="prefixHint" class="field-hint">Leave blank to remove the default. Saved orders and issued invoices keep their existing numbers.</p>
+    <p id="prefixMessage" role="status" aria-live="polite"></p>
+  </form>
 </section></div></main>
 <script src="/static/configuration/configuration.js"></script>
 </body></html>

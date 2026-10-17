@@ -15,6 +15,14 @@
 .settings-input-row .form-field{min-width:0;gap:8px}
 .settings-input-row input{height:44px;font-size:14px}
 .settings-input-row .btn-sm{height:44px}
+#departmentForm .settings-input-row,.department-prefix-form .settings-input-row{grid-template-columns:minmax(0,1fr) minmax(120px,.6fr) auto;justify-content:stretch}
+.department-prefix-form{margin-top:22px;padding-top:22px;border-top:1px solid var(--line)}
+.department-prefix-form h3{font-size:14px;margin-bottom:6px}
+.department-prefix-form>p:first-of-type{font-size:12px;line-height:1.7;color:var(--muted);margin-bottom:18px;max-width:640px}
+.settings-input-row select{height:44px}
+#prefixMessage:empty{display:none}
+#prefixMessage:not(:empty){font-size:12px;margin-top:12px;color:#166534}
+#prefixMessage.error{color:#9F1239}
 .field-hint{margin:8px 0 0;color:var(--muted);font-size:12px}
 #hsnCode{font-variant-numeric:tabular-nums;letter-spacing:.08em}
 .settings-note{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;margin-top:22px;background:#F8FAFC;border:1px solid #EEF2F7;border-radius:10px;font-size:12px;line-height:1.7;color:var(--muted)}
@@ -32,6 +40,7 @@
   .settings-card{padding:20px}
   .settings-card-heading{align-items:flex-start;gap:12px;margin-bottom:20px}
   .settings-input-row{grid-template-columns:minmax(0,1fr);justify-content:stretch}
+  #departmentForm .settings-input-row,.department-prefix-form .settings-input-row{grid-template-columns:minmax(0,1fr)}
   .settings-input-row .btn-sm{justify-self:start}
   .department-list-heading{align-items:flex-start;flex-direction:column;gap:4px}
 }

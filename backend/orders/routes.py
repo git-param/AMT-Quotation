@@ -10,6 +10,7 @@ from backend.client_leads.discovery import integer
 from backend.common.auth import authenticated_required, get_current_user
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
+from backend.settings import user_pi_defaults
 from backend.enquiries.lines import serialize
 from backend.enquiries.routes import editable_client, read_enquiry
 from backend.orders.service import (
@@ -18,6 +19,16 @@ from backend.orders.service import (
 )
 
 bp = Blueprint('orders', __name__)
+
+
+@bp.route('/api/orders/pi-defaults')
+@authenticated_required
+def pi_defaults():
+    connection = get_db()
+    try:
+        return jsonify(user_pi_defaults(connection, get_current_user()['id']))
+    finally:
+        connection.close()
 
 
 @bp.route('/orders')
@@ -241,6 +252,10 @@ def save_order(order_id=None):
             values = header({key: value for key, value in data.items()
                              if key not in ('client_id', 'enquiry_id', 'delivery', 'lines',
                                             'source_line_ids')})
+            if 'pi_reference' not in data:
+                prefix = user_pi_defaults(connection, user['id'])['pi_prefix']
+                if prefix:
+                    values['pi_reference'] = prefix + '/'
         client = connection.execute(
             'SELECT * FROM client_leads WHERE id = ?', (client_id,),
         ).fetchone()

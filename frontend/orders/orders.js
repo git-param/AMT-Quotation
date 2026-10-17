@@ -306,6 +306,9 @@ async function createOrder() {
   el('shipping_charges').value='0.00';
   el('delivery_terms').value='DAP';el('delivery_time').value='4 to 6 days';el('dispatch_method').value='DHL/Fedex/Aramex';
   el('pi_reference').value='';el('pi_reference').readOnly=false;
+  const piDefaults=await api('/api/orders/pi-defaults');
+  if(version!==formVersion)return;
+  el('pi_reference').value=piDefaults.pi_prefix?piDefaults.pi_prefix+'/':'';
   if(!await prepareClient(Number(clientScope),null,version))return;
   if(!clientData.lead.can_edit||!clientData.lead.is_active)throw new Error('Choose an editable, active client.');
   el('editor').hidden=false;el('detail').hidden=true;resetComposer();el('editor').scrollIntoView({behavior:'smooth'});

@@ -618,4 +618,8 @@ MIGRATIONS = (
         "ALTER TABLE users ADD COLUMN phone_number TEXT NOT NULL DEFAULT '' "
         "CHECK (length(phone_number) <= 15)",
     )),
+    (27, 'department_pi_prefixes', (
+        "ALTER TABLE departments ADD COLUMN pi_prefix TEXT NOT NULL DEFAULT '' "
+        "CHECK (length(pi_prefix) <= 20)",
+    )),
 )

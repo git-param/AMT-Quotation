@@ -23,12 +23,36 @@ def department_names(connection):
     )]
 
 
+def department_configuration(connection):
+    return {'departments': department_names(connection), 'department_settings': [dict(row) for row in connection.execute(
+        'SELECT id, name, pi_prefix FROM departments ORDER BY name COLLATE NOCASE'
+    )]}
+
+
+def validated_pi_prefix(value):
+    if not isinstance(value, str):
+        raise ValueError('Enter a PI prefix such as AMT or PUC.')
+    value = value.strip().rstrip('/')
+    if value and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,19}', value):
+        raise ValueError('Use up to 20 letters, digits, hyphens or underscores for the PI prefix.')
+    return value
+
+
+def user_pi_defaults(connection, user_id):
+    row = connection.execute(
+        'SELECT u.department, COALESCE(d.pi_prefix, \'\') AS pi_prefix '
+        'FROM users u LEFT JOIN departments d ON d.name = trim(u.department) COLLATE NOCASE '
+        'WHERE u.id = ?', (user_id,),
+    ).fetchone()
+    return dict(row) if row else {'department': '', 'pi_prefix': ''}
+
+
 @bp.route('/api/departments', methods=['GET'])
 @permission_required('settings.manage')
 def list_departments():
     connection = get_db()
     try:
-        return jsonify(departments=department_names(connection))
+        return jsonify(department_configuration(connection))
     finally:
         connection.close()
 
@@ -42,19 +66,51 @@ def add_department():
     if not isinstance(name, str) or not 1 <= len(name.strip()) <= 100:
         return jsonify(error='Enter a department name (100 characters or fewer).'), 400
     name = name.strip()
+    try:
+        prefix = validated_pi_prefix(data.get('pi_prefix', ''))
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
     user = get_current_user()
     connection = get_db()
     try:
         with connection:
-            cursor = connection.execute('INSERT INTO departments(name) VALUES (?)', (name,))
+            cursor = connection.execute('INSERT INTO departments(name, pi_prefix) VALUES (?, ?)', (name, prefix))
             connection.execute(
                 'INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
                 "VALUES(?,?,'department_create','departments',?,?)",
-                (user['id'], user['username'], str(cursor.lastrowid), json.dumps({'name': name})),
+                (user['id'], user['username'], str(cursor.lastrowid), json.dumps({'name': name, 'pi_prefix': prefix})),
             )
-        return jsonify(departments=department_names(connection)), 201
+        return jsonify(department_configuration(connection)), 201
     except sqlite3.IntegrityError:
         return jsonify(error='This department already exists.'), 409
+    finally:
+        connection.close()
+
+
+@bp.route('/api/departments/<int:department_id>/pi-prefix', methods=['PUT'])
+@permission_required('users.manage')
+def update_department_prefix(department_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or set(data) != {'pi_prefix'}:
+        return jsonify(error='Provide the PI prefix.'), 400
+    try:
+        prefix = validated_pi_prefix(data['pi_prefix'])
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    user = get_current_user()
+    connection = get_db()
+    try:
+        with connection:
+            previous = connection.execute('SELECT name, pi_prefix FROM departments WHERE id = ?', (department_id,)).fetchone()
+            if not previous:
+                return jsonify(error='Department not found.'), 404
+            connection.execute('UPDATE departments SET pi_prefix = ? WHERE id = ?', (prefix, department_id))
+            connection.execute(
+                'INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
+                "VALUES(?,?,'department_prefix_update','departments',?,?)",
+                (user['id'], user['username'], str(department_id), json.dumps({'before': previous['pi_prefix'], 'after': prefix})),
+            )
+        return jsonify(department_configuration(connection))
     finally:
         connection.close()
 

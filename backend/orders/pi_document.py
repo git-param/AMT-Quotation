@@ -253,6 +253,8 @@ def print_document(document, edits):
 
 
 def validate_ready(doc):
+    if str(doc.get('reference', '')).strip().endswith('/'):
+        raise ValueError('Enter the invoice number after the prefix in Proforma Invoice No.')
     if doc.get('pi_format') == 'bulk':
         if not text(doc.get('bulk_description',''),2000,'first-page description'):
             raise ValueError('Enter the first-page description for this bulk PI.')
