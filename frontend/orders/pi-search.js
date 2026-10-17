@@ -3,7 +3,7 @@
   const initial=new URLSearchParams(location.search);
   let page=Math.max(1,Number(initial.get('page'))||1),pages=0,version=0,controller=null;
   el('piSearch').value=initial.get('q')||'';
-  el('piCurrency').value=['USD','INR'].includes(initial.get('currency'))?initial.get('currency'):'all';
+  el('piCurrency').value=['USD','INR','AED','GBP','EUR'].includes(initial.get('currency'))?initial.get('currency'):'all';
   const node=(tag,text,className)=>{const item=document.createElement(tag);if(text!=null)item.textContent=text;if(className)item.className=className;return item;};
   const dateFormat=new Intl.DateTimeFormat('en-GB',{dateStyle:'medium',timeZone:'Asia/Kolkata'});
   function stateRow(title,hint,loading=false){

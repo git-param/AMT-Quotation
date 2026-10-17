@@ -3,7 +3,7 @@
 import re
 
 from backend.client_leads.details import email, phone, text
-from backend.orders.locations import without_gst
+from backend.orders.locations import without_gst, phone_block, CALLING_CODES
 
 TEXT_FIELDS = ('consignee_text', 'buyer_text', 'notify_text')
 LABELS = {'tel': 'phone', 'tel/phone': 'phone', 'telephone': 'phone', 'phone': 'phone',
@@ -20,6 +20,8 @@ def parse_block(value, country=''):
     address/location; commercial additions stay verbatim in the issued text.
     """
     value = text(value, 4000, 'party text')
+    country_match = re.search(r'^Country\s*:\s*(.+)$', value, re.I|re.M)
+    value = phone_block(value, country_match[1].strip() if country_match else country)
     lines = [line.strip() for line in value.splitlines() if line.strip()]
     party = {key: '' for key in ('name', 'phone', 'email', 'pic', 'gst_number')}
     location = []
@@ -44,7 +46,7 @@ def parse_block(value, country=''):
         else:
             location.append(line)
     party['email'] = email(party['email'])
-    party['phone'] = phone(party['phone'])
+    party['phone'] = '' if party['phone'] in CALLING_CODES.values() else phone(party['phone'])
     for key in ('pic', 'gst_number'):
         party[key] = text(party[key], 200, key)
     country = explicit_country or text(country, 200, 'destination')

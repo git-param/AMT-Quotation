@@ -165,12 +165,36 @@ class MigrationTests(unittest.TestCase):
             connection.execute("INSERT INTO users(username,password_hash,department) VALUES('fixture','fixture','Sales')")
             users = connection.execute('SELECT * FROM users').fetchall()
             departments = connection.execute('SELECT * FROM departments').fetchall()
-        self.assertEqual(migrate_database(self.path), [27])
+        self.assertEqual(migrate_database(self.path, MIGRATIONS[:27]), [27])
         with test_connection(self.path) as connection:
             self.assertEqual(connection.execute('SELECT * FROM users').fetchall(), users)
             rows = connection.execute('SELECT * FROM departments').fetchall()
             self.assertEqual([row[:-1] for row in rows], departments)
             self.assertEqual(rows[0][-1], '')
+
+    def test_multi_currency_upgrade_preserves_rows_indexes_files_and_sequences(self):
+        migrate_database(self.path, MIGRATIONS[:27])
+        tables = ('client_enquiries','enquiry_sku_lines','client_orders','order_sku_lines','order_invoices')
+        with test_connection(self.path) as connection:
+            connection.execute("INSERT INTO users(username,password_hash) VALUES('fixture','test')")
+            connection.execute("INSERT INTO client_leads(name,created_by) VALUES('Client',1)")
+            connection.execute("INSERT INTO client_orders(reference,client_id,order_date,currency,created_by,updated_by) VALUES('ORDER-1',1,'2026-10-17','USD',1,1)")
+            connection.execute("INSERT INTO order_sku_lines(order_id,sku,description,quantity_milli,unit_price_minor,currency,created_by,updated_by) VALUES(1,'SKU','Part',1000,100,'USD',1,1)")
+            connection.execute("INSERT INTO order_invoices(order_id,reference,currency,snapshot_json,workbook,created_by,workbook_format,pdf) VALUES(1,'PI-1','USD','{}',?,1,'xlsx',?)",(b'workbook',b'pdf'))
+            connection.execute("UPDATE sqlite_sequence SET seq=100 WHERE name='client_orders'")
+            before = {table: connection.execute('SELECT * FROM '+table).fetchall() for table in tables}
+            indexes = connection.execute("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").fetchall()
+        self.assertEqual(migrate_database(self.path),[28])
+        with test_connection(self.path) as connection:
+            for table in tables:
+                self.assertEqual(connection.execute('SELECT * FROM '+table).fetchall(),before[table])
+            self.assertEqual(connection.execute("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").fetchall(),indexes)
+            cursor=connection.execute("INSERT INTO client_orders(reference,client_id,order_date,currency,created_by,updated_by) VALUES('ORDER-2',1,'2026-10-17','AED',1,1)")
+            self.assertEqual(cursor.lastrowid,101)
+            connection.execute("UPDATE order_sku_lines SET currency='GBP'")
+            connection.execute("UPDATE order_invoices SET currency='EUR'")
+            self.assertEqual(connection.execute('PRAGMA foreign_key_check').fetchall(),[])
+            self.assertEqual(connection.execute('PRAGMA integrity_check').fetchone()[0],'ok')
 
     def test_reusable_references_upgrade_preserves_records_files_and_sequences(self):
         migrate_database(self.path, MIGRATIONS[:20])

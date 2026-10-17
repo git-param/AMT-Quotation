@@ -1,4 +1,5 @@
 """Client-scoped enquiries; all access derives from existing client grants."""
+from backend.common.currencies import CURRENCIES
 
 from datetime import date
 import re
@@ -88,9 +89,9 @@ def validated(data, existing=None):
     if result['status'] not in STATUSES:
         raise ValueError('Choose a valid enquiry status.')
     currency = data.get('deal_currency', existing.get('deal_currency'))
-    if (currency not in ('USD', 'INR')
+    if (currency not in CURRENCIES
             and (not existing or currency is not None)):
-        raise ValueError('Choose USD or INR deal currency.')
+        raise ValueError('Choose USD, INR, AED, GBP or EUR deal currency.')
     result['deal_currency'] = currency
     return result
 

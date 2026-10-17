@@ -11,11 +11,16 @@ async function setup(admin) {
   };
   let names = ['Sales'];
   const prefixes = {};
+  let rates = {};
   const context = {
     document: {getElementById: get, createElement: () => ({})},
     fetch: async (url, options) => {
       if (url === '/api/me') return {ok: true, json: async () => ({permissions: admin ? ['settings.manage', 'users.manage'] : ['settings.manage']})};
       if (url === '/api/settings') return {ok: true, json: async () => ({hsn_code: '85371090'})};
+      if (url === '/api/currency-rates') {
+        if (options) rates = JSON.parse(options.body).rates;
+        return {ok:true,json:async()=>({rates})};
+      }
       if (url.endsWith('/pi-prefix')) {
         prefixes[names[Number(url.split('/')[3]) - 1]] = JSON.parse(options.body).pi_prefix;
       } else if (options) {
@@ -65,4 +70,13 @@ test('admins can configure and reload a department PI prefix', async () => {
   assert.equal(get('departmentsList').children[0].textContent, 'Sales · AMT/');
   assert.equal(get('piPrefix').value, 'AMT');
   assert.equal(get('prefixMessage').textContent, 'PI prefix saved.');
+});
+
+test('admin currency rate inputs save units per USD and keep blanks unconfigured', async () => {
+  const {get} = await setup(true);
+  assert.equal(get('currencyRatesSection').hidden,false);
+  get('rateAED').value='4';get('rateGBP').value='0.8';get('rateEUR').value='0.9';
+  await get('currencyRatesForm').onsubmit({preventDefault(){}});
+  assert.equal(get('currencyRatesMessage').textContent,'Currency rates saved.');
+  assert.equal(get('rateAED').value,'4');assert.equal(get('rateINR').value,'');
 });

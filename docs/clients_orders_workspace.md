@@ -121,6 +121,21 @@ returns to the editable page. Preview edits apply to the issued PI, leaving the
 source order intact. Seller/bank details, branding, reference, currency and
 ownership cannot be supplied or overridden by preview edits.
 
+Orders, item lines and native PIs support USD, INR, AED (UAE dirham), GBP
+(British pound) and EUR (euro). Admins set units per 1 USD under Configuration →
+Currency conversion rates. Missing rates block conversion with a specific
+configuration message; they never relabel an unconverted amount. Blank INR uses
+the existing quotation rate. Same-currency invoices need no conversion rate.
+PI snapshots retain conversion rates and amounts; words and PDF/Excel currency
+labels follow the selected currency, including fils, pence, cents or paisa.
+New currency company terms and tax settings inherit the configured USD profile
+unless the company profile explicitly supplies values for that currency.
+
+The consignee country prefills calling codes for local Tel/Phone numbers.
+Existing explicit international numbers remain editable and are preserved.
+Calling-code mappings follow the ITU E.164 country-code list:
+https://www.itu.int/dms_pub/itu-t/opb/sp/T-SP-E.164D-2016-PDF-E.pdf
+
 Before PDF print preview, generation or download, the consignee country,
 GST number, Tel/Phone, PIC and email must be filled, together with the complete
 PI number and purchase order number. Missing fields appear together in a

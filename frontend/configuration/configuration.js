@@ -3,6 +3,26 @@
   const input = document.getElementById('hsnCode');
   const save = document.getElementById('save');
   const message = document.getElementById('message');
+  const ratesMessage = document.getElementById('currencyRatesMessage');
+  const ratesButton = document.getElementById('saveCurrencyRates');
+  async function ratesRequest(options) {
+    const response = await fetch('/api/currency-rates', options); const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Unable to load currency rates.');
+    for (const code of ['INR','AED','GBP','EUR']) document.getElementById('rate'+code).value = data.rates[code] || '';
+  }
+  document.getElementById('currencyRatesForm').onsubmit = async event => {
+    event.preventDefault(); ratesButton.disabled = true;
+    const rates = {};
+    for (const code of ['INR','AED','GBP','EUR']) {
+      const value = document.getElementById('rate'+code).value.trim(); if (value) rates[code] = value;
+    }
+    try {
+      await ratesRequest({method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({rates})});
+      ratesMessage.className = ''; ratesMessage.textContent = 'Currency rates saved.';
+    } catch (error) { ratesMessage.className = 'error'; ratesMessage.textContent = error.message; }
+    finally { ratesButton.disabled = false; }
+  };
+  ratesRequest().catch(error => { ratesMessage.className = 'error'; ratesMessage.textContent = error.message; });
   async function request(options) {
     const response = await fetch('/api/settings', options);
     const data = await response.json();
@@ -88,6 +108,7 @@
   ]).then(([user, data]) => {
     departmentForm.hidden = !user.permissions.includes('users.manage');
     prefixForm.hidden = !user.permissions.includes('users.manage');
+    document.getElementById('currencyRatesSection').hidden = !user.permissions.includes('users.manage');
     renderDepartments(data.departments, data.department_settings);
   }).catch(error => { departmentMessage.className = 'error'; departmentMessage.textContent = error.message; });
 })();

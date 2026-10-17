@@ -12,6 +12,7 @@ from backend.orders.company import get_profile
 from backend.orders.parties import text_delivery, parse_block, LABELS
 from backend.orders.locations import country_block, gst_number, with_gst, without_gst, address_only, COPIED_CONTACT
 from backend.orders.service import header, order_line
+from backend.common.currencies import CURRENCIES, conversion_rates, configured_rates
 
 ASSETS = ('header.png', 'address.png', 'payment_options.png', 'signature.png')
 ORDER_FIELDS = {'po_reference', 'pi_reference', 'payment_terms', 'delivery_terms', 'destination',
@@ -68,19 +69,28 @@ def prepare(state, user, currency, rate, bulk_description=None):
     connection = get_db()
     try:
         company = get_profile(connection)
+        configured_inr = configured_rates(connection).get('INR')
+        account = connection.execute(
+            'SELECT phone_country_code, phone_number FROM users WHERE id = ?',
+            (user['id'],),
+        ).fetchone()
+        prepared_phone = phone(account['phone_country_code'] + account['phone_number']) if account and account['phone_number'] else ''
     finally:
         connection.close()
-    if currency not in ('USD','INR'):
-        raise ValueError('Choose USD or INR PI currency.')
+    if currency not in CURRENCIES:
+        raise ValueError('Choose USD, INR, AED, GBP or EUR PI currency.')
     reference = text(state['order']['pi_reference'],100,'Proforma Invoice No.')
     if not reference:
         raise ValueError('Enter the Proforma Invoice No. in order details before opening a PI preview.')
     tax = Decimal(company['tax_rates'][currency])
     if not tax.is_finite() or not 0 <= tax <= 1:
         raise ValueError('Company PI tax configuration is invalid.')
-    if rate is None and any(code!=currency for code in [state['order']['currency'],*[line['currency'] for line in state['lines']]]):
+    sources = {state['order']['currency'], *[line['currency'] for line in state['lines']]}
+    if any(code != currency for code in sources) and not (sources | {currency}).issubset({'USD','INR'}):
+        rate = conversion_rates(sources | {currency})
+    if rate is None and any(code!=currency for code in sources):
         from backend.quotation_tool.shopify import get_inr_rate
-        quoted_rate=get_inr_rate()
+        quoted_rate=configured_inr or get_inr_rate()
         if quoted_rate is None:raise ValueError('The quotation exchange rate is unavailable. Try again shortly.')
         try:rate=format(Decimal(str(quoted_rate)).quantize(Decimal('0.000001')),'.6f')
         except Exception as error:raise ValueError('The quotation exchange rate is unavailable. Try again shortly.') from error
@@ -109,7 +119,7 @@ def prepare(state, user, currency, rate, bulk_description=None):
     return sync_locations({'schema_version':2,'reference':reference,
         'pi_format':'bulk' if bulk else 'normal', 'bulk_description':description if bulk else '',
         'date':datetime.now(timezone(timedelta(hours=5,minutes=30))).date().isoformat(),
-        'prepared_by':user['username'],'prepared_phone':company_phone(company),'currency':currency,'order':order,
+        'prepared_by':user['username'],'prepared_phone':prepared_phone,'currency':currency,'order':order,
         'delivery':{'consignee_text':consignee,'buyer_text':buyer,'notify_text':notify,
                     'instructions':destination.get('instructions','')},
         'totals':totals,'source_conversion':deepcopy(totals),'shared_hsn_code':state.get('shared_hsn_code',''),
@@ -186,9 +196,14 @@ def edit(document, edits):
         source = doc['source_state']['order']['currency']
         if source != doc['currency']:
             from backend.orders.invoices import money
-            rate = Decimal(doc['source_conversion']['usd_inr_rate'])
             value = Decimal(discount['value'])
-            discount['value'] = format(money(value * rate if source == 'USD' else value / rate), '.2f')
+            rates = doc['source_conversion'].get('exchange_rates')
+            if rates:
+                converted = value / Decimal(rates[source]) * Decimal(rates[doc['currency']])
+            else:
+                rate = Decimal(doc['source_conversion']['usd_inr_rate'])
+                converted = value * rate if source == 'USD' else value / rate
+            discount['value'] = format(money(converted), '.2f')
         state['order']['discount'] = discount
     doc['totals'] = calculate(state,doc['currency'],None,Decimal(doc['totals']['tax_rate']))
     return sync_locations(doc)
@@ -264,11 +279,11 @@ def missing_details(doc):
     reference = str(doc.get('reference', '')).strip()
     if not reference or reference.endswith('/'):
         missing.append('Proforma Invoice No. (complete prefix and number)')
-    if not str(doc['order'].get('po_reference', '')).strip():
+    if not str(doc.get('order', {}).get('po_reference', '')).strip():
         missing.append('Purchase Order No.')
-    country = str(doc['order'].get('destination', '')).strip()
+    country = str(doc.get('order', {}).get('destination', '')).strip()
     values = {}
-    for line in doc['delivery'].get('consignee_text', '').splitlines()[1:]:
+    for line in doc.get('delivery', {}).get('consignee_text', '').splitlines()[1:]:
         match = re.fullmatch(r'\s*([^:]+):\s*(.*)', line)
         if match:
             key = LABELS.get(match[1].strip().lower())
@@ -276,7 +291,8 @@ def missing_details(doc):
     if not (country or values.get('country')):
         missing.append('Consignee country')
     for key, label in [('gst_number', 'GST No.'), ('phone', 'Tel/Phone'), ('pic', 'PIC'), ('email', 'Email')]:
-        if not values.get(key): missing.append('Consignee ' + label)
+        if not values.get(key) or (key == 'phone' and len(re.sub(r'[^0-9]', '', values[key])) < 7):
+            missing.append('Consignee ' + label)
     return missing
 
 

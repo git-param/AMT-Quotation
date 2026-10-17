@@ -22,7 +22,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         for(const item of calculated){
           const value=item.path.split('.').reduce((target,key)=>target[key],result.totals);
           if(item.input)item.input.value=value;
-          else item.node.textContent=item.accounting?Number(value).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):(item.amount?(state.document.currency==='INR'?'\u20b9 ':'$ '):'')+value;
+          else item.node.textContent=item.accounting?Number(value).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):(item.amount?({USD:'$ ',INR:'\u20b9 ',AED:'AED ',GBP:'\u00a3 ',EUR:'\u20ac '})[state.document.currency]:'')+value;
         }
         status.textContent='Totals updated in '+state.document.currency+'. Use Update preview to save your changes.';
       }catch(error){if(version===calculationVersion)status.textContent=error.message;}
@@ -161,7 +161,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
   }
   function renderGrid() {
     const doc = state.document;
-    const symbol = doc.currency === "INR" ? "₹" : "$";
+    const symbol = ({USD:'$',INR:'\u20b9',AED:'AED',GBP:'\u00a3',EUR:'\u20ac'})[doc.currency];
     const headerBox = node("div", undefined, "pi-header-box");
     const branding = node("div", undefined, "pi-branding");
     image(branding, "header.png");headerBox.append(branding);paper.append(headerBox);

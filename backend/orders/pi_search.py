@@ -1,4 +1,5 @@
 """Search saved PIs using the same client visibility as order downloads."""
+from backend.common.currencies import CURRENCIES
 from flask import jsonify, request, send_file
 
 from backend.common.auth import authenticated_required, get_current_user
@@ -25,8 +26,8 @@ def search_pi():
         currency = request.args.get('currency', 'all')
         if len(term) > 200:
             raise ValueError('Search is limited to 200 characters.')
-        if currency not in ('all', 'USD', 'INR'):
-            raise ValueError('Choose all currencies, USD or INR.')
+        if currency not in ('all', *CURRENCIES):
+            raise ValueError('Choose a supported invoice currency.')
         scoped, parameters = order_query(get_current_user())
         query = ' FROM order_invoices i JOIN ('+scoped+') o ON o.id=i.order_id WHERE i.deleted_at IS NULL'
         if term:

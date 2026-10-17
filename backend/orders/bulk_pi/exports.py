@@ -1,4 +1,5 @@
 """Render the established company invoice grid without a reference workbook."""
+from backend.common.currencies import currency_symbol
 import base64
 from decimal import Decimal
 from io import BytesIO
@@ -100,7 +101,7 @@ def pdf(doc):
         PageTemplate(id='Later',frames=frame(height-margin,'later')),
         PageTemplate(id='Annexure',frames=frame(height-margin-header_height-2,'annexure'),onPage=first_page)])
     story=[]
-    symbol='₹' if doc['currency']=='INR' else '$'
+    symbol=currency_symbol(doc['currency'])
     annexure_scale=usable/(sum(w*7+5 for w in ANNEXURE_WIDTHS)*.75)
     annex_regular,annex_bold=regular,bold
     for font_path,bold_path in [(Path('C:/Windows/Fonts/times.ttf'),Path('C:/Windows/Fonts/timesbd.ttf'))]:
@@ -233,7 +234,7 @@ def xlsx(doc):
     model=layout(doc)
     for index,width in enumerate(model['widths']):sheet.set_column(index,index,width)
     formats={};format_values={}
-    symbol='₹' if doc['currency']=='INR' else '$'
+    symbol=currency_symbol(doc['currency'])
     for kind in ('','bold','head','bank_title','warning','final_term','title','center','amount','bold_amount','terms'):
         values={'font_name':'Cambria','font_size':20 if kind=='title' else 10 if kind in ('terms','final_term') else 12,
             'font_color':'#FF0000' if kind=='warning' else '#000000','text_wrap':True,'valign':'top',
@@ -357,7 +358,7 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row):
     columns = [0, 1, 5, 6, 8, 9, 11]
     base = {'font_name':'Times New Roman','font_size':12,'border':1,
             'text_wrap':True,'valign':'vcenter','border_color':'#000000'}
-    symbol = '\u20b9' if doc['currency']=='INR' else '$'
+    symbol = currency_symbol(doc['currency'])
     formats = {}
     def fmt(cell):
         kind = cell['style']

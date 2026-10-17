@@ -22,6 +22,7 @@ from flask import jsonify, request, send_file
 from backend.common.auth import authenticated_required, get_current_user
 from backend.database import get_db
 from backend.enquiries.lines import number
+from backend.common.currencies import CURRENCIES, UNITS
 from backend.orders.routes import bp
 from backend.orders.service import details, read_order, record_revision, delivery
 
@@ -74,11 +75,12 @@ def words_integer(value):
 
 
 def amount_words(value, currency):
+    value = money(value)
     whole = int(value)
     cents = int((value - whole) * 100)
-    return (words_integer(whole) + (' US Dollars' if currency == 'USD' else ' Rupees')
-            + (' and ' + words_integer(cents) + (
-                ' Cents' if currency == 'USD' else ' Paisa') if cents else '') + ' Only')
+    major, minor = UNITS[currency]
+    return (words_integer(whole) + ' ' + major
+            + (' and ' + words_integer(cents) + ' ' + minor if cents else '') + ' Only')
 
 
 def template(currency):
@@ -130,18 +132,29 @@ def calculate(state, currency, rate, tax_rate):
     order = state['order']
     sources = {line['currency'] for line in state['lines']} | {order['currency']}
     conversion = any(code != currency for code in sources)
+    exchange_rates = rate if isinstance(rate, dict) else None
     if conversion:
-        if rate is None:
+        if exchange_rates is not None:
+            if any(code not in exchange_rates for code in sources | {currency}):
+                raise ValueError('Configure exchange rates for all item and PI currencies.')
+            exchange_rates = {key: Decimal(str(value)) for key, value in exchange_rates.items()}
+            if any(not value.is_finite() or value <= 0 for value in exchange_rates.values()):
+                raise ValueError('Exchange rates must be positive.')
+        elif not sources.union({currency}).issubset({'USD','INR'}):
+            raise ValueError('Configure exchange rates before converting this PI.')
+        elif rate is None:
             raise ValueError('Enter INR per 1 USD to convert currencies.')
-        scaled = number(rate, 6, Decimal('1000000'), True)
-        rate = Decimal(scaled) / 1000000
+        if exchange_rates is None:
+            scaled = number(rate, 6, Decimal('1000000'), True)
+            rate = Decimal(scaled) / 1000000
     elif rate is not None:
         raise ValueError('No exchange rate is needed when all amounts use PI currency.')
 
     def convert(value, source):
         value = Decimal(value)
         if source != currency:
-            value = value * rate if source == 'USD' else value / rate
+            value = (value / exchange_rates[source] * exchange_rates[currency] if exchange_rates
+                     else value * rate if source == 'USD' else value / rate)
         return money(value)
 
     lines = []
@@ -160,9 +173,10 @@ def calculate(state, currency, rate, tax_rate):
     # Total discounts reduce the goods subtotal before GST is calculated.
     tax = money((subtotal + shipping) * tax_rate)
     grand = money(subtotal + shipping + tax)
-    return {'currency': currency, 'usd_inr_rate': str(rate) if conversion else None,
-            'conversion_rule': '1 USD = rate INR; converted unit rates rounded HALF_UP '
-                               'to 2 decimals before quantity; shipping rounded separately',
+    return {'currency': currency, 'usd_inr_rate': str(rate) if conversion and not exchange_rates else None,
+            'exchange_rates': {key:str(value) for key,value in exchange_rates.items()} if exchange_rates else None,
+            'conversion_rule': ('USD-based rates: source amount / source rate * target rate; rounded HALF_UP to 2 decimals' if exchange_rates else '1 USD = rate INR; converted unit rates rounded HALF_UP '
+                               'to 2 decimals before quantity; shipping rounded separately'),
             'lines': lines, 'subtotal': format(subtotal, '.2f'),
             'summary_discount': format(summary_discount, '.2f'),
             'discount_total': format(discount_total, '.2f'),

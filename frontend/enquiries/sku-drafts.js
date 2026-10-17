@@ -161,7 +161,7 @@
       const duplicate=sku&&existingSku([sku]);
       if(duplicate){rejectExisting(duplicate);return false;}
       const curr=currency(),version=revision,target=JSON.stringify(scope());
-      if(!['USD','INR'].includes(curr)){showError('Choose a deal currency first.');return false;}
+      if(!['USD','INR','AED','GBP','EUR'].includes(curr)){showError('Choose a deal currency first.');return false;}
       const finish=commercial&&!defaultsLoaded?window.skuFeedback?.startRequest('/api/sku-defaults'):null;
       try{
         if(commercial&&!defaultsLoaded){
@@ -185,7 +185,7 @@
       if(fetching||loadingDefaults)return;
       const version=revision;
       const curr=currency();const skus=input.value.split(/[\n,;]+/).map(v=>v.trim()).filter(Boolean);
-      if(!['USD','INR'].includes(curr)||!skus.length){showError('Choose USD/INR and enter at least one SKU.');return;}
+      if(!['USD','INR','AED','GBP','EUR'].includes(curr)||!skus.length){showError('Choose a currency and enter at least one SKU.');return;}
       const seen=new Set(),duplicates=[];
       for(const sku of skus){const key=skuKey(sku);if(seen.has(key))duplicates.push(sku);seen.add(key);}
       if(duplicates.length){showError(`Duplicate SKUs: ${duplicates.join(', ')}. Enter each SKU only once.`);return;}

@@ -1,4 +1,5 @@
 """Order validation, client-scoped queries and immutable delivery snapshots."""
+from backend.common.currencies import CURRENCIES
 
 from datetime import date
 from decimal import Decimal
@@ -87,8 +88,8 @@ def header(data, existing=None):
     if values['destination'].strip().upper()=='INDIA':values['currency']='INR'
     if values['status'] not in STATUSES:
         raise ValueError('Choose a valid order status.')
-    if values['currency'] not in ('USD', 'INR'):
-        raise ValueError('Choose USD or INR currency.')
+    if values['currency'] not in CURRENCIES:
+        raise ValueError('Choose USD, INR, AED, GBP or EUR currency.')
     for key in ('order_date', 'pi_date'):
         if not values[key] and key == 'pi_date':
             continue

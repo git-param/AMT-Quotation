@@ -20,6 +20,10 @@
 .department-prefix-form h3{font-size:14px;margin-bottom:6px}
 .department-prefix-form>p:first-of-type{font-size:12px;line-height:1.7;color:var(--muted);margin-bottom:18px;max-width:640px}
 .settings-input-row select{height:44px}
+.currency-rates-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px}
+.currency-rates-grid .form-field{min-width:0}
+#currencyRatesMessage:not(:empty){margin-top:12px;font-size:13px;color:#166534}
+#currencyRatesMessage.error{color:#9F1239}
 #prefixMessage:empty{display:none}
 #prefixMessage:not(:empty){font-size:12px;margin-top:12px;color:#166534}
 #prefixMessage.error{color:#9F1239}

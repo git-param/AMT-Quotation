@@ -93,7 +93,7 @@
                             <div class="form-field"><label for="pi_reference">Proforma Invoice No.</label><input id="pi_reference" type="text" maxlength="100" placeholder="Enter the PI number"></div>
                             <div class="form-field"><label for="po_reference">Purchase Order No.</label><input id="po_reference" type="text" placeholder="e.g. PO-2026-001"></div>
                             <div class="form-field"><label for="destination">Location / country</label><input id="destination" maxlength="200" list="orderCountries" autocomplete="off" placeholder="Type a country name"><datalist id="orderCountries"></datalist></div>
-                            <div class="form-field"><label for="currency">Deal currency</label><select id="currency" aria-describedby="currencyHelp"><option>USD</option><option>INR</option></select></div>
+                            <div class="form-field"><label for="currency">Deal currency</label><select id="currency" aria-describedby="currencyHelp"><option>USD</option><option>INR</option><option value="AED">AED (UAE dirham)</option><option value="GBP">GBP (British pound)</option><option value="EUR">EUR (Euro)</option></select></div>
                             <div class="form-field"><label for="order_date">Order date <span class="field-required">(required)</span></label><input id="order_date" type="date" required></div>
                         </div>
                         <p id="currencyHelp" class="composer-currency-help">India uses INR. Changing currency does not convert prices.</p>
@@ -215,7 +215,7 @@
                             <div class="form-field"><label for="lineUom">Unit of measure</label><select id="lineUom"><option>PCs</option><option>Lot</option><option>Kit</option><option>set</option></select></div>
                             <div class="form-field"><label for="lineCurrency">Currency</label><select id="lineCurrency">
                                     <option>USD</option>
-                                    <option>INR</option>
+                                    <option>INR</option><option value="AED">AED (UAE dirham)</option><option value="GBP">GBP (British pound)</option><option value="EUR">EUR (Euro)</option>
                                 </select></div>
                         </div></section>
                         <section class="line-editor-group" aria-labelledby="lineInvoiceHeading">
@@ -275,7 +275,7 @@
                                     required>
                                     <option value="">Choose currency</option>
                                     <option>USD</option>
-                                    <option>INR</option>
+                                    <option>INR</option><option value="AED">AED (UAE dirham)</option><option value="GBP">GBP (British pound)</option><option value="EUR">EUR (Euro)</option>
                                 </select></div>
 
                         </div>

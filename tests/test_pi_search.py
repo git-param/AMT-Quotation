@@ -1,5 +1,6 @@
 """Saved PI search, scoped visibility, pagination and existing downloads."""
 import unittest
+import json
 
 import test_clients_orders
 from backend import database
@@ -22,7 +23,7 @@ class PiSearchTests(unittest.TestCase):
             with connection:
                 user=connection.execute('SELECT created_by FROM client_orders WHERE id=?',(order_id,)).fetchone()[0]
                 cursor=connection.execute('INSERT INTO order_invoices(order_id,reference,currency,snapshot_json,workbook,created_by,workbook_format,pdf) '
-                    'VALUES(?,?,?,?,?,?,?,?)',(order_id,reference,currency,'{}',b'Excel fixture',user,'xlsm' if legacy else 'xlsx',None if legacy else b'PDF fixture'))
+                    'VALUES(?,?,?,?,?,?,?,?)',(order_id,reference,currency,json.dumps({'reference':reference,'order':{'po_reference':'SEARCH-PO','destination':'USA'},'delivery':{'consignee_text':'Company\nStreet\nTel/Phone: +12025550123\nPIC: Person\nEmail: person@example.com\nGST No.: 24TEST123'}}),b'Excel fixture',user,'xlsm' if legacy else 'xlsx',None if legacy else b'PDF fixture'))
                 return order_id,cursor.lastrowid
         finally:connection.close()
 
@@ -89,7 +90,7 @@ class PiSearchTests(unittest.TestCase):
 
     def test_invalid_filters_are_rejected(self):
         self.direct()
-        for query in ({'page':0},{'page_size':101},{'currency':'EUR'},{'q':'x'*201}):
+        for query in ({'page':0},{'page_size':101},{'currency':'CHF'},{'q':'x'*201}):
             self.assertEqual(self.search(**query).status_code,400,query)
 
     def test_removing_one_pi_keeps_other_records_with_same_number(self):

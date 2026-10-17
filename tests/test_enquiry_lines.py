@@ -117,7 +117,7 @@ class LineTests(unittest.TestCase):
                        {'quantity': '0.0001'}, {'quantity': True},
                        {'quantity': 'NaN'}, {'quantity': '1e3'},
                        {'unit_price': '-0.01'}, {'unit_price': '1.001'},
-                       {'unit_price': 'Infinity'}, {'currency': 'EUR'},
+                       {'unit_price': 'Infinity'}, {'currency': 'CHF'},
                        {'sku': ''}, {'description': ''},
                        {'line_total': '999'}, {'enquiry_id': 999},
                        {'created_by': self.ids['admin']},

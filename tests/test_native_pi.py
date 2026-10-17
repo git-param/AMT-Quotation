@@ -228,6 +228,27 @@ class NativePiTests(unittest.TestCase):
         for invoice in (first,issued):
             self.assertEqual(self.client.get(invoice.json['pdf_url']).status_code,200)
 
+    def test_prepared_telephone_defaults_to_user_account_and_remains_editable(self):
+        connection = database.get_db()
+        with connection:
+            connection.execute("UPDATE users SET phone_country_code='+91',phone_number='9876543210' WHERE id=?", (self.ids['exec1'],))
+        connection.close()
+        preview = self.preview()
+        self.assertEqual(preview['document']['prepared_phone'], '+919876543210')
+        cells = [cell for section in preview['layout']['sections'] for row in section['rows'] for cell in row]
+        self.assertFalse(next(cell for cell in cells if cell.get('field') == 'prepared_phone').get('readonly'))
+        updated = self.client.put(self.base+'/preview/'+preview['preview_id'], json={'prepared_phone': '+1 202-555-0123'})
+        self.assertEqual(updated.status_code, 200, updated.json)
+        self.assertEqual(updated.json['document']['prepared_phone'], '+12025550123')
+        connection = database.get_db()
+        try:
+            self.assertEqual(connection.execute('SELECT phone_number FROM users WHERE id=?', (self.ids['exec1'],)).fetchone()[0], '9876543210')
+        finally:
+            connection.close()
+        self.assertEqual(self.preview()['document']['prepared_phone'], '+919876543210')
+        self.as_user('admin')
+        self.assertEqual(self.preview()['document']['prepared_phone'], '')
+
     def test_missing_contacts_block_print_pdf_download_and_generation_until_fixed(self):
         import re
         preview = self.preview()

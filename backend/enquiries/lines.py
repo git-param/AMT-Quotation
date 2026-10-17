@@ -1,4 +1,5 @@
 """Decimal SKU lines with scoped access and retained revisions."""
+from backend.common.currencies import CURRENCIES
 
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import json
@@ -56,8 +57,8 @@ def validated(data, existing=None):
         2, Decimal('999999999.99')
     )
     currency = data.get('currency', old.get('currency'))
-    if currency not in ('USD', 'INR'):
-        raise ValueError('Choose USD or INR currency.')
+    if currency not in CURRENCIES:
+        raise ValueError('Choose USD, INR, AED, GBP or EUR currency.')
     values['currency'] = currency
     return values
 
@@ -369,8 +370,8 @@ def bulk_lookup():
     currency = data.get('currency')
     if (not isinstance(skus, list) or not 1 <= len(skus) <= 50
             or any(not isinstance(sku, str) or not 1 <= len(sku.strip()) <= 100
-                   for sku in skus) or currency not in ('USD', 'INR')):
-        return jsonify(error='Provide 1 to 50 SKUs and USD/INR currency.'), 400
+                   for sku in skus) or currency not in CURRENCIES):
+        return jsonify(error='Provide 1 to 50 SKUs and a supported currency.'), 400
     connection = get_db()
 
     def permitted():
@@ -407,7 +408,11 @@ def bulk_lookup():
             rate = None
         results = []
         from backend.settings import shared_hsn
+        from backend.common.currencies import configured_rates
         hsn=shared_hsn(connection)
+        saved_rates = configured_rates(connection)
+        factors = {'USD': Decimal('1'), 'INR': Decimal(saved_rates['INR']) if saved_rates.get('INR') else rate,
+                   **{code:Decimal(saved_rates[code]) if saved_rates.get(code) else None for code in ('AED','GBP','EUR')}}
         for raw in skus:
             sku = raw.strip()
             row = {'sku': sku, 'description': '', 'quantity': '1', 'hsn_code':hsn,
@@ -427,7 +432,7 @@ def bulk_lookup():
                                condition=product.get('condition', ''),
                                url=product.get('url', ''))
                     row['catalog_prices'] = {}
-                    for code, factor in (('USD', Decimal('1')), ('INR', rate)):
+                    for code, factor in factors.items():
                         amounts = {}
                         for name in ('price', 'sale_price'):
                             try:
@@ -442,19 +447,20 @@ def bulk_lookup():
                                 )
                             except (InvalidOperation, TypeError):
                                 continue
-                        row['catalog_prices'][code] = amounts
+                        if amounts or code in ('USD','INR'):
+                            row['catalog_prices'][code] = amounts
                     price = product.get('sale_price')
                     if price is None:
                         price = product.get('price')
                     price = Decimal(str(price))
                     if not price.is_finite() or price < 0:
                         raise InvalidOperation
-                    if currency == 'INR':
-                        if rate is None:
-                            row['error'] = 'Rate unavailable; enter INR price.'
+                    if currency != 'USD':
+                        if factors[currency] is None:
+                            row['error'] = 'Rate unavailable; configure the '+currency+' rate or enter the price manually.'
                             results.append(row)
                             continue
-                        price *= rate
+                        price *= factors[currency]
                     price = price.quantize(
                         Decimal('0.01'), rounding=ROUND_HALF_UP
                     )

@@ -1,4 +1,5 @@
 """Render the established company invoice grid without a reference workbook."""
+from backend.common.currencies import currency_symbol
 import base64
 from decimal import Decimal
 from io import BytesIO
@@ -98,7 +99,7 @@ def pdf(doc):
         PageTemplate(id='First',frames=frame(height-margin-header_height-2,'first'),onPage=first_page,autoNextPageTemplate='Later'),
         PageTemplate(id='Later',frames=frame(height-margin,'later'))])
     story=[]
-    symbol='₹' if doc['currency']=='INR' else '$'
+    symbol=currency_symbol(doc['currency'])
     def paragraph(cell):
         kind=cell['style'];text=cell.get('display_text',cell['text'])
         is_bold=kind in ('bold','head','bank_title','warning','final_term','title','bold_amount')
@@ -184,7 +185,7 @@ def xlsx(doc):
     model=layout(doc)
     for index,width in enumerate(model['widths']):sheet.set_column(index,index,width)
     formats={};format_values={}
-    symbol='₹' if doc['currency']=='INR' else '$'
+    symbol=currency_symbol(doc['currency'])
     for kind in ('','bold','head','bank_title','warning','final_term','title','center','amount','bold_amount','terms'):
         values={'font_name':'Cambria','font_size':20 if kind=='title' else 10 if kind in ('terms','final_term') else 12,
             'font_color':'#FF0000' if kind=='warning' else '#000000','text_wrap':True,'valign':'top',

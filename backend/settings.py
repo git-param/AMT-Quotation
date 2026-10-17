@@ -2,6 +2,8 @@
 import json
 import re
 import sqlite3
+from decimal import Decimal
+from backend.common.currencies import configured_rates
 
 from flask import Blueprint, jsonify, request, send_file
 
@@ -10,6 +12,40 @@ from backend.config import FRONTEND_DIR
 from backend.database import get_db
 
 bp = Blueprint('settings', __name__)
+
+
+@bp.route('/api/currency-rates', methods=['GET'])
+@permission_required('settings.manage')
+def read_currency_rates():
+    connection = get_db()
+    try:
+        return jsonify(rates=configured_rates(connection))
+    finally:
+        connection.close()
+
+
+@bp.route('/api/currency-rates', methods=['PUT'])
+@permission_required('users.manage')
+def save_currency_rates():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or set(data) != {'rates'} or not isinstance(data['rates'], dict) or set(data['rates']) - {'INR','AED','GBP','EUR'}:
+        return jsonify(error='Provide INR, AED, GBP and EUR rates per 1 USD.'), 400
+    rates = {}
+    for code, value in data['rates'].items():
+        if not isinstance(value, str) or not re.fullmatch(r'[0-9]+(?:\.[0-9]{1,6})?', value) or not 0 < Decimal(value) <= 1000000:
+            return jsonify(error='Enter a positive '+code+' rate with up to 6 decimal places.'), 400
+        rates[code] = value
+    user = get_current_user()
+    connection = get_db()
+    try:
+        with connection:
+            before = configured_rates(connection)
+            connection.execute("INSERT INTO app_settings(key,value) VALUES('currency_rates',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (json.dumps(rates),))
+            connection.execute("INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) VALUES(?,?,'currency_rates_update','app_settings','currency_rates',?)",
+                (user['id'],user['username'],json.dumps({'before':before,'after':rates})))
+        return jsonify(rates=rates)
+    finally:
+        connection.close()
 
 
 def shared_hsn(connection):

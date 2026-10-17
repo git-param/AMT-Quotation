@@ -271,6 +271,7 @@ async function load() {
 }
 
 async function prepareClient(clientId,delivery=null,version=formVersion) {
+  await window.orderLocations.ready;
   const result=await api(`/api/leads/${clientId}`);if(version!==formVersion)return false;
   clientData=result;const client=result.lead;
   const saved=client.shipping_address?.line1?client.shipping_address:client.billing_address||{};
@@ -278,8 +279,9 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
   const base={name:client.company||client.name,email:client.email||client.emails?.[0]||contact.email,
     phone:client.phone||client.phones?.[0]||contact.phone,pic:contact.name};
   const defaults=formatPartyBlock(base,saved);
-  const consignee=delivery?.consignee_text??(delivery?.consignee?.name?
+  let consignee=delivery?.consignee_text??(delivery?.consignee?.name?
     formatPartyBlock(delivery.consignee,delivery.shipping_address):defaults);
+  consignee=window.orderLocations.phoneBlock(consignee,delivery?el('destination').value:saved.country||'');
   el('consignee_text').value=window.orderLocations.withGst(consignee,window.orderLocations.gstNumber(consignee));
   for(const [prefix,key,party,address]of [
     ['buyer','buyer_text',delivery?.buyer,delivery?.billing_address],

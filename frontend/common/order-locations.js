@@ -1,6 +1,22 @@
 /* Country suggestions and consignee GST, shared by orders and PI previews. */
 (() => {
   const countries = new Set();
+  let callingCodes = {};
+  function phoneBlock(value, country) {
+    const prefix = callingCodes[country.trim().toUpperCase()];
+    if (!prefix) return value;
+    return value.replace(/^\s*(?:Tel\/Phone|Tel|Telephone|Phone)\s*:[ \t]*(.*)$/gim, (_, raw) => {
+      let number = raw.trim();
+      if (!number || /^\+[0-9]{1,3}$/.test(number)) number = prefix;
+      else if (number.startsWith('00')) number = '+' + number.slice(2);
+      else if (!number.startsWith('+') && /^[0-9 ()-]+$/.test(number)) {
+        let digits = number.replace(/[^0-9]/g, '');
+        if (['UK','UNITED KINGDOM','UAE','UNITED ARAB EMIRATES','INDIA'].includes(country.trim().toUpperCase())) digits = digits.replace(/^0+/, '');
+        number = prefix + ' ' + digits;
+      }
+      return 'Tel/Phone: ' + number;
+    });
+  }
   const gstLine = /^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$/i;
   const contactLine = /^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:/i;
   function addressOnly(value, country = '') {
@@ -34,7 +50,7 @@
       const contact = result.findIndex((line, index) => index > 0 && contactLine.test(line));
       result.splice(contact < 0 ? result.length : contact, 0, country);
     }
-    return result.join('\n');
+    return phoneBlock(result.join('\n'), country);
   }
   function gstNumber(value) {
     return value.split('\n').slice(1).map(line => line.match(gstLine)).find(Boolean)?.[1].trim() || '';
@@ -48,7 +64,11 @@
     }
     return lines.join('\n');
   }
-  const ready = fetch('/static/common/countries.json').then(response => {
+  const callingReady = fetch('/static/common/calling-codes.json').then(response => {
+    if (!response.ok) throw new Error('Unable to load calling codes.');
+    return response.json();
+  }).then(values => { if (!Array.isArray(values)) callingCodes = values; }).catch(() => {});
+  const countriesReady = fetch('/static/common/countries.json').then(response => {
     if (!response.ok) throw new Error('Unable to load country suggestions.');
     return response.json();
   }).then(values => {
@@ -58,5 +78,6 @@
       if (list) { const option = document.createElement('option'); option.value = value; list.append(option); }
     }
   }).catch(() => {});
-  window.orderLocations = {countryBlock, gstNumber, withGst, partyParts, joinParty, addressOnly, ready};
+  const ready = Promise.all([countriesReady, callingReady]);
+  window.orderLocations = {countryBlock, phoneBlock, gstNumber, withGst, partyParts, joinParty, addressOnly, ready};
 })();

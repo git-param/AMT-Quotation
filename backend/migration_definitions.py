@@ -573,6 +573,134 @@ REUSABLE_ORDER_REFERENCES_SCHEMA = (
     'DROP TABLE reference_sequences',
 )
 
+MULTI_CURRENCY_SCHEMA = ('PRAGMA defer_foreign_keys = ON',
+ 'CREATE TEMP TABLE currency_sequences AS SELECT name, seq FROM sqlite_sequence',
+ 'CREATE TABLE client_enquiries_currencies (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id '
+ 'INTEGER NOT NULL REFERENCES client_leads(id) ON DELETE RESTRICT, reference TEXT NOT NULL COLLATE '
+ 'NOCASE UNIQUE CHECK (length(trim(reference)) BETWEEN 1 AND 80), enquiry_date TEXT NOT NULL, '
+ 'subject TEXT NOT NULL CHECK (length(trim(subject)) BETWEEN 1 AND 200), description TEXT NOT NULL '
+ "DEFAULT '' CHECK (length(description) <= 5000), status TEXT NOT NULL DEFAULT 'open' CHECK "
+ "(status IN ('open', 'in_progress', 'closed', 'cancelled')), created_by INTEGER NOT NULL "
+ 'REFERENCES users(id) ON DELETE RESTRICT, updated_by INTEGER NOT NULL REFERENCES users(id) ON '
+ "DELETE RESTRICT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), "
+ "updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), deal_currency TEXT "
+ "CHECK (deal_currency IN ('USD','INR','AED','GBP','EUR')), deleted_at TEXT, deleted_by INTEGER "
+ 'REFERENCES users(id) ON DELETE RESTRICT)',
+ 'INSERT INTO client_enquiries_currencies SELECT * FROM client_enquiries',
+ 'DROP TABLE client_enquiries',
+ 'ALTER TABLE client_enquiries_currencies RENAME TO client_enquiries',
+ 'CREATE INDEX idx_enquiries_client_id ON client_enquiries(client_id, id)',
+ 'CREATE INDEX idx_enquiries_creator_id ON client_enquiries(created_by, id)',
+ 'CREATE INDEX idx_enquiries_not_deleted ON client_enquiries(client_id, deleted_at, id)',
+ 'CREATE INDEX idx_enquiries_status_date ON client_enquiries(status, enquiry_date, id)',
+ 'CREATE UNIQUE INDEX idx_enquiry_client_pair ON client_enquiries(id, client_id)',
+ 'CREATE TABLE enquiry_sku_lines_currencies (id INTEGER PRIMARY KEY AUTOINCREMENT, enquiry_id '
+ 'INTEGER NOT NULL REFERENCES client_enquiries(id) ON DELETE RESTRICT, sku TEXT NOT NULL CHECK '
+ '(length(trim(sku)) BETWEEN 1 AND 100), description TEXT NOT NULL CHECK '
+ '(length(trim(description)) BETWEEN 1 AND 2000), quantity_milli INTEGER NOT NULL CHECK '
+ '(quantity_milli BETWEEN 1 AND 999999999), unit_price_minor INTEGER NOT NULL CHECK '
+ '(unit_price_minor BETWEEN 0 AND 99999999999), currency TEXT NOT NULL CHECK (currency IN '
+ "('USD','INR','AED','GBP','EUR')), is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, "
+ '1)), created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, updated_by INTEGER NOT '
+ 'NULL REFERENCES users(id) ON DELETE RESTRICT, created_at TEXT NOT NULL DEFAULT '
+ "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), updated_at TEXT NOT NULL DEFAULT "
+ "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))",
+ 'INSERT INTO enquiry_sku_lines_currencies SELECT * FROM enquiry_sku_lines',
+ 'DROP TABLE enquiry_sku_lines',
+ 'ALTER TABLE enquiry_sku_lines_currencies RENAME TO enquiry_sku_lines',
+ 'CREATE INDEX idx_enquiry_lines_active ON enquiry_sku_lines(enquiry_id, is_active, id)',
+ 'CREATE TABLE client_orders_currencies (\n'
+ '        id INTEGER PRIMARY KEY AUTOINCREMENT,\n'
+ '        reference TEXT NOT NULL CHECK (length(trim(reference)) > 0),\n'
+ '        client_id INTEGER NOT NULL REFERENCES client_leads(id)\n'
+ '            ON DELETE RESTRICT,\n'
+ '        enquiry_id INTEGER,\n'
+ '        order_date TEXT NOT NULL,\n'
+ "        status TEXT NOT NULL DEFAULT 'draft'\n"
+ "            CHECK (status IN ('draft','confirmed','processing','dispatched',\n"
+ "                             'completed','cancelled')),\n"
+ "        currency TEXT NOT NULL CHECK (currency IN ('USD','INR','AED','GBP','EUR')),\n"
+ "        po_reference TEXT NOT NULL DEFAULT '',\n"
+ "        pi_reference TEXT NOT NULL DEFAULT '',\n"
+ "        pi_date TEXT NOT NULL DEFAULT '',\n"
+ "        payment_terms TEXT NOT NULL DEFAULT '',\n"
+ "        delivery_terms TEXT NOT NULL DEFAULT '',\n"
+ "        delivery_time TEXT NOT NULL DEFAULT '',\n"
+ "        dispatch_method TEXT NOT NULL DEFAULT '',\n"
+ "        notes TEXT NOT NULL DEFAULT '',\n"
+ '        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,\n'
+ '        updated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,\n'
+ '        created_at TEXT NOT NULL DEFAULT\n'
+ "            (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n"
+ '        updated_at TEXT NOT NULL DEFAULT\n'
+ "            (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n"
+ "        destination TEXT NOT NULL DEFAULT '', shipping_minor INTEGER NOT NULL DEFAULT 0 CHECK "
+ '(shipping_minor BETWEEN 0 AND 99999999999), deleted_at TEXT, deleted_by INTEGER REFERENCES '
+ 'users(id) ON DELETE RESTRICT, discount_json TEXT, FOREIGN KEY (enquiry_id, client_id)\n'
+ '            REFERENCES client_enquiries(id, client_id) ON DELETE RESTRICT\n'
+ '    )',
+ 'INSERT INTO client_orders_currencies SELECT * FROM client_orders',
+ 'DROP TABLE client_orders',
+ 'ALTER TABLE client_orders_currencies RENAME TO client_orders',
+ 'CREATE INDEX idx_orders_client ON client_orders(client_id, id)',
+ 'CREATE INDEX idx_orders_enquiry ON client_orders(enquiry_id, id)',
+ 'CREATE INDEX idx_orders_not_deleted ON client_orders(client_id,deleted_at,id)',
+ 'CREATE INDEX idx_orders_reference ON client_orders(reference)',
+ 'CREATE INDEX idx_orders_status_date ON client_orders(status, order_date, id)',
+ 'CREATE TABLE order_sku_lines_currencies (\n'
+ '        id INTEGER PRIMARY KEY AUTOINCREMENT,\n'
+ '        order_id INTEGER NOT NULL REFERENCES client_orders(id)\n'
+ '            ON DELETE RESTRICT,\n'
+ '        source_enquiry_line_id INTEGER REFERENCES enquiry_sku_lines(id)\n'
+ '            ON DELETE RESTRICT,\n'
+ '        source_snapshot_json TEXT CHECK\n'
+ '            (source_snapshot_json IS NULL OR json_valid(source_snapshot_json)),\n'
+ '        sku TEXT NOT NULL CHECK (length(trim(sku)) BETWEEN 1 AND 100),\n'
+ '        description TEXT NOT NULL\n'
+ '            CHECK (length(trim(description)) BETWEEN 1 AND 2000),\n'
+ '        quantity_milli INTEGER NOT NULL CHECK\n'
+ '            (quantity_milli BETWEEN 1000 AND 999999000\n'
+ '             AND quantity_milli % 1000 = 0),\n'
+ '        unit_price_minor INTEGER NOT NULL CHECK\n'
+ '            (unit_price_minor BETWEEN 0 AND 99999999999),\n'
+ "        currency TEXT NOT NULL CHECK (currency IN ('USD','INR','AED','GBP','EUR')),\n"
+ '        is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),\n'
+ '        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,\n'
+ '        updated_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,\n'
+ '        created_at TEXT NOT NULL DEFAULT\n'
+ "            (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n"
+ '        updated_at TEXT NOT NULL DEFAULT\n'
+ "            (strftime('%Y-%m-%dT%H:%M:%fZ','now'))\n"
+ "    , hsn_code TEXT NOT NULL DEFAULT '' CHECK (length(hsn_code) <= 20), item_condition TEXT NOT "
+ "NULL DEFAULT '' CHECK (length(item_condition) <= 100), uom TEXT NOT NULL DEFAULT 'PCs' CHECK "
+ '(length(trim(uom)) BETWEEN 1 AND 30))',
+ 'INSERT INTO order_sku_lines_currencies SELECT * FROM order_sku_lines',
+ 'DROP TABLE order_sku_lines',
+ 'ALTER TABLE order_sku_lines_currencies RENAME TO order_sku_lines',
+ 'CREATE INDEX idx_order_lines_active ON order_sku_lines(order_id, is_active, id)',
+ 'CREATE UNIQUE INDEX idx_order_lines_source ON order_sku_lines(order_id, source_enquiry_line_id) '
+ 'WHERE is_active = 1 AND source_enquiry_line_id IS NOT NULL',
+ 'CREATE TABLE order_invoices_currencies (\n'
+ '        id INTEGER PRIMARY KEY AUTOINCREMENT,\n'
+ '        order_id INTEGER NOT NULL REFERENCES client_orders(id) ON DELETE RESTRICT,\n'
+ '        reference TEXT NOT NULL,\n'
+ "        currency TEXT NOT NULL CHECK (currency IN ('USD','INR','AED','GBP','EUR')),\n"
+ '        snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),\n'
+ '        workbook BLOB NOT NULL,\n'
+ '        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,\n'
+ "        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), workbook_format "
+ "TEXT NOT NULL DEFAULT 'xlsm' CHECK(workbook_format IN ('xlsm','xlsx')), pdf BLOB\n"
+ '    , deleted_at TEXT, deleted_by INTEGER REFERENCES users(id) ON DELETE RESTRICT)',
+ 'INSERT INTO order_invoices_currencies SELECT * FROM order_invoices',
+ 'DROP TABLE order_invoices',
+ 'ALTER TABLE order_invoices_currencies RENAME TO order_invoices',
+ 'CREATE INDEX idx_invoices_visible ON order_invoices(order_id,deleted_at,id)',
+ 'CREATE INDEX idx_order_invoices_order ON order_invoices(order_id, id)',
+ 'CREATE INDEX idx_order_invoices_reference ON order_invoices(reference)',
+ 'UPDATE sqlite_sequence SET seq=max(seq,COALESCE((SELECT seq FROM currency_sequences WHERE '
+ 'name=sqlite_sequence.name),seq))',
+ 'DROP TABLE currency_sequences')
+
 MIGRATIONS = (
     (1, 'legacy_baseline', LEGACY_SCHEMA),
     (2, 'crm_foundation', CRM_FOUNDATION),
@@ -622,4 +750,5 @@ MIGRATIONS = (
         "ALTER TABLE departments ADD COLUMN pi_prefix TEXT NOT NULL DEFAULT '' "
         "CHECK (length(pi_prefix) <= 20)",
     )),
+    (28, 'multi_currency_orders_and_invoices', MULTI_CURRENCY_SCHEMA),
 )

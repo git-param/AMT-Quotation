@@ -45,6 +45,16 @@
     <p id="prefixHint" class="field-hint">Leave blank to remove the default. Saved orders and issued invoices keep their existing numbers.</p>
     <p id="prefixMessage" role="status" aria-live="polite"></p>
   </form>
+</section>
+<section class="panel settings-card" id="currencyRatesSection" hidden>
+  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true">↔</span><div><h2>Currency conversion rates</h2><p>Set how many units of each currency equal 1 USD. Used for SKU lookup and new PI conversions.</p></div></div>
+  <form id="currencyRatesForm"><div class="currency-rates-grid">
+    <div class="form-field"><label for="rateINR">1 USD = INR</label><input id="rateINR" type="number" min="0.000001" max="1000000" step="0.000001" placeholder="Quotation rate if blank"></div>
+    <div class="form-field"><label for="rateAED">1 USD = AED (UAE dirham)</label><input id="rateAED" type="number" min="0.000001" max="1000000" step="0.000001"></div>
+    <div class="form-field"><label for="rateGBP">1 USD = GBP (British pound)</label><input id="rateGBP" type="number" min="0.000001" max="1000000" step="0.000001"></div>
+    <div class="form-field"><label for="rateEUR">1 USD = EUR (Euro)</label><input id="rateEUR" type="number" min="0.000001" max="1000000" step="0.000001"></div>
+  </div><p class="field-hint">Leave a rate blank to disable conversions involving that currency. INR uses the quotation rate when blank. Existing PI previews and invoices retain their saved amounts.</p><div class="user-dialog-actions"><button id="saveCurrencyRates" class="btn-sm btn-add" type="submit">Save rates</button></div></form>
+  <p id="currencyRatesMessage" role="status" aria-live="polite"></p>
 </section></div></main>
 <script src="/static/configuration/configuration.js"></script>
 </body></html>
