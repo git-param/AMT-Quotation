@@ -415,7 +415,7 @@ def generate_invoice(order_id):
             raise ValueError('Complete the order delivery details before generating a PI.')
         from backend.orders.pi_document import validate_ready, party_block
         destination = state['delivery'] or {}
-        validate_ready({'reference': order['pi_reference'], 'order': state['order'], 'delivery': {
+        validate_ready({'reference': order['pi_reference'], 'currency': data['currency'], 'order': state['order'], 'delivery': {
             'consignee_text': destination.get('consignee_text') or party_block(destination.get('consignee'), destination.get('shipping_address')),
         }})
         client = connection.execute('SELECT * FROM client_leads WHERE id = ?', (order['client_id'],)).fetchone()

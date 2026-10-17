@@ -297,6 +297,8 @@ def missing_details(doc):
     if not (country or values.get('country')):
         missing.append('Consignee country')
     for key, label in [('gst_number', 'GST No.'), ('phone', 'Tel/Phone'), ('pic', 'PIC'), ('email', 'Email')]:
+        if key == 'gst_number' and doc.get('currency') != 'INR':
+            continue
         if not values.get(key) or (key == 'phone' and len(re.sub(r'[^0-9]', '', values[key])) < 7):
             missing.append('Consignee ' + label)
     return missing

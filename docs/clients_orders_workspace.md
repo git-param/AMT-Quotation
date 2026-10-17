@@ -137,9 +137,10 @@ Calling-code mappings follow the ITU E.164 country-code list:
 https://www.itu.int/dms_pub/itu-t/opb/sp/T-SP-E.164D-2016-PDF-E.pdf
 
 Before PDF print preview, generation or download, the consignee country,
-GST number, Tel/Phone, PIC and email must be filled, together with the complete
-PI number and purchase order number. Missing fields appear together in a
-dismissible warning at the bottom right. Incomplete drafts remain editable;
+Tel/Phone, PIC and email must be filled, together with the complete
+PI number and purchase order number. GST number is mandatory only when the PI
+currency is INR; it is optional for USD, AED, GBP and EUR. Missing fields appear
+together in a dismissible warning at the bottom right. Incomplete drafts remain editable;
 their PDF endpoints return validation errors instead of files. The same check
 applies to saved PDF downloads and legacy invoice generation.
 
