@@ -10,6 +10,15 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     toolbar;
   let printUrl=null;
   let calculationTimer=null,calculationVersion=0,calculated=[];
+  let rateHeaders=[];
+  function updateRateHeading(){
+    const units=new Set(state.document.totals.lines.map((line,index)=>{
+      const value=inputs.find(item=>item.path===`lines.${index}.uom`)?.input.value||line.uom||'PCs';
+      return value.toLowerCase()==='set'?'Set':value;
+    }));
+    const heading=state.document.pi_format==='bulk'?'Rate / Lot':units.size<=1?'Rate / '+([...units][0]||'PCs'):units.has('PCs')?'Rate / PCs\nor\nRate / Lot':'Rate / Lot';
+    rateHeaders.forEach(header=>{header.textContent=heading;});
+  }
   function scheduleCalculation(){
     if(calculationTimer)clearTimeout(calculationTimer);
     const version=++calculationVersion;
@@ -20,6 +29,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         if(version!==calculationVersion||issued)return;
         state.document.totals=result.totals;
         for(const item of calculated){
+          if(item.autoQuantity&&(state.document.annexure_quantity||inputs.find(entry=>entry.input===item.input)?.modified))continue;
           const value=item.path.split('.').reduce((target,key)=>target[key],result.totals);
           if(item.input)item.input.value=value;
           else item.node.textContent=item.accounting?Number(value).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):(item.amount?({USD:'$ ',INR:'\u20b9 ',AED:'AED ',GBP:'\u00a3 ',EUR:'\u20ac '})[state.document.currency]:'')+value;
@@ -49,7 +59,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     const unit=path.endsWith('.uom');
     const input = node(unit?'select':multiline ? "textarea" : "input");
     if (!multiline&&!unit) input.type = type;
-    if(unit)for(const value of ['PCs','Lot','Kit','set']){const option=node('option',value);option.value=value;input.append(option);}
+    if(unit)for(const value of ['PCs','Lot','Kit','set']){const option=node('option',value==='set'?'Set':value);option.value=value;input.append(option);}
     input.value = value ?? "";
     input.dataset.piField = path;
     input.setAttribute("aria-label", label);
@@ -72,6 +82,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       input.step = path.endsWith("quantity") ? "1" : "0.01";
     }
     input.oninput = () => {
+      const entry=inputs.find(item=>item.input===input);if(entry)entry.modified=true;
       if(multiline)fitText(input);
       status.textContent =
         "Unsaved preview changes. Update preview to review calculated totals and the printed page.";
@@ -83,7 +94,8 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         const price=inputs.find(item=>item.path===base+'unit_price');
         if(quantity>0&&price&&Number.isFinite(Number(input.value)))price.input.value=(Number(input.value)/quantity).toFixed(2);
       }
-      if(path==='shipping_charges'||/^lines\.\d+\.(quantity|unit_price|line_total)$/.test(path))scheduleCalculation();
+      if(path.endsWith('.uom'))updateRateHeading();
+      if(path==='shipping_charges'||/^lines\.\d+\.(quantity|unit_price|line_total|uom)$/.test(path))scheduleCalculation();
     };
     wrap.append(input);
     parent.append(wrap);
@@ -113,7 +125,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     const doc = state.document;
     const data = {date:doc.date,prepared_phone:doc.prepared_phone||'',order:{},delivery:{},shipping_charges:doc.totals.shipping,
       lines:doc.totals.lines.map(line=>Object.fromEntries(["id","sku","description","hsn_code","item_condition","uom","quantity","unit_price"].map(key=>[key,line[key]])))};
-    for(const item of inputs){if(item.path.endsWith('.line_total'))continue;const keys=item.path.split('.');let target=data;for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)]=valueOf(item);}
+    for(const item of inputs){if(item.path.endsWith('.line_total')||(item.path==='annexure_quantity'&&!item.modified&&!doc.annexure_quantity))continue;const keys=item.path.split('.');let target=data;for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)]=valueOf(item);}
     if(String(data.shipping_charges).trim().toLowerCase()==='free')data.shipping_charges='0.00';
     return data;
   }
@@ -135,7 +147,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
   }
   function render(){
     if(calculationTimer)clearTimeout(calculationTimer);calculationVersion++;calculated=[];
-    host.replaceChildren();host.hidden=false;inputs=[];
+    host.replaceChildren();host.hidden=false;inputs=[];rateHeaders=[];
     toolbar=node('div',undefined,'pi-preview-toolbar');host.append(toolbar);
     button('Close preview',async()=>{host.hidden=true;});
     if(!issued){
@@ -208,13 +220,14 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
           } else if (cell.field) {
             const amount = cell.style.includes("amount") && !cell.free;
             const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.free ? 'Free' : cell.value, cell.field, cell.multiline, cell.free ? 'text' : cell.type || "text");
-            if(cell.calculated)calculated.push({path:cell.calculated,input});
+            if(cell.calculated)calculated.push({path:cell.calculated,input,autoQuantity:cell.auto_quantity});
             if (cell.readonly) { input.readOnly = true; input.title = cell.field?.endsWith('.line_total')?'Calculated after discount. Edit quantity or unit price to change this amount.':'Shared HSN code managed in Configuration'; }
             if (!cell.label && !amount) td.lastChild.classList.add("pi-unlabelled");
             if (cell.editor_rows) input.rows = 12;
             else if (cell.multiline) input.rows = cell.field.startsWith("delivery.") ? 5 : 2;
             if (cell.field === 'terms') input.rows = Math.max(5, String(cell.value).split('\n').length);
-            if (cell.uom_field) {field(td, "UOM", cell.uom, cell.uom_field);td.classList.add("pi-quantity-cell");}
+            if (cell.uom_field) {field(td, "UOM", cell.uom==='Set'?'set':cell.uom, cell.uom_field);td.classList.add("pi-quantity-cell");}
+            else if(cell.uom){const wrap=td.lastChild;wrap.classList.add('pi-quantity-inline');wrap.append(node('span',cell.uom,'pi-quantity-uom'));}
             if (cell.discount_note) td.append(node('small',cell.discount_note));
           } else {
             const content=node('div',undefined,'pi-cell-text');let value=content;
@@ -224,6 +237,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
               content.append(node('span',symbol),value);
             }else content.textContent=(cell.style.includes('amount')?symbol+' ':'')+cell.text;
             td.append(content);
+            if(cell.rate_heading){content.classList.add('pi-rate-heading');rateHeaders.push(content);}
             if(cell.calculated)calculated.push({path:cell.calculated,node:value,amount:!cell.accounting&&cell.style.includes('amount'),accounting:cell.accounting});
           }
           tr.append(td);

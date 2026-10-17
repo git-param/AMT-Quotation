@@ -362,7 +362,7 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row):
     formats = {}
     def fmt(cell):
         kind = cell['style']
-        key = (kind,cell['col'],cell.get('accounting',False),cell.get('total_cell',False),cell.get('nowrap',False))
+        key = (kind,cell['col'],cell.get('accounting',False),cell.get('total_cell',False),cell.get('nowrap',False),cell.get('uom'))
         if key not in formats:
             options = {**base,'left':2 if cell['col']==0 else 1,
                        'right':2 if cell['col']==5 or cell['span']==6 else 1}
@@ -382,6 +382,8 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row):
                     options['num_format']='"'+symbol+'" #,##0.00'
             if cell.get('nowrap'):
                 options.update(text_wrap=True,font_size=8)
+            if cell.get('uom'):
+                options['num_format'] = '0 "'+cell['uom']+'"'
             formats[key]=book.add_format(options)
         return formats[key]
     def image(name,row,col,width,height):

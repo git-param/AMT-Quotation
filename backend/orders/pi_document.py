@@ -129,9 +129,13 @@ def prepare(state, user, currency, rate, bulk_description=None):
 
 def edit(document, edits):
     from backend.orders.invoices import calculate
-    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','terms','consignee_gst_number','bulk_description'}:
+    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','terms','consignee_gst_number','bulk_description','annexure_quantity'}:
         raise ValueError('Invalid PI preview fields. Company details and invoice identity cannot be edited.')
     doc = deepcopy(document)
+    if 'annexure_quantity' in edits:
+        if doc.get('pi_format') != 'bulk':
+            raise ValueError('Total annexure quantity is only available for bulk PIs.')
+        doc['annexure_quantity'] = text(edits['annexure_quantity'],200,'total annexure quantity')
     if 'bulk_description' in edits:
         if doc.get('pi_format') != 'bulk':
             raise ValueError('A first-page summary description is only available for bulk PIs.')
@@ -222,7 +226,7 @@ def recalculate(document, edits):
             if not isinstance(line,dict) or type(line.get('id')) is not int or line['id'] not in originals:
                 raise ValueError('Invalid preview item.')
             original=originals[line['id']]
-            values.append({key:line.get(key,original[key]) if key in ('quantity','unit_price') else original[key] for key in LINE_FIELDS})
+            values.append({key:line.get(key,original[key]) if key in ('quantity','unit_price','uom') else original[key] for key in LINE_FIELDS})
         numeric['lines']=values
     if 'shipping_charges' in edits:numeric['shipping_charges']=edits['shipping_charges']
     return edit(document,numeric)
@@ -231,6 +235,8 @@ def recalculate(document, edits):
 def print_document(document, edits):
     """Render in-progress text without saving or applying issuance validation."""
     doc = deepcopy(document)
+    if 'annexure_quantity' in edits:
+        doc['annexure_quantity'] = text(edits['annexure_quantity'],200,'total annexure quantity')
     # Calculate valid numeric changes independently of unfinished contact text.
     numeric = {}
     if isinstance(edits.get('lines'),list):

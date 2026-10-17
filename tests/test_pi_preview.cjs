@@ -72,7 +72,7 @@ test('PI numeric edits refresh displayed totals and UOM uses fixed choices',asyn
   const host=new Element('section');let pending;
   const line={id:1,sku:'PART',description:'Part',quantity:'2',unit_price:'10.00',line_total:'20.00',hsn_code:'85371090',item_condition:'Used',uom:'PCs'};
   const state={preview_id:'p',pdf_url:'/p.pdf',document:{date:'2026-10-15',currency:'INR',prepared_phone:'',order:{destination:'INDIA'},delivery:{},assets:{},
-    totals:{lines:[line],shipping:'0.00',subtotal:'20.00',tax:'3.60',grand_total:'23.60',amount_in_words:'Twenty three'}},layout:{widths:[1],sections:[{name:'items',rows:[[
+    totals:{lines:[line],shipping:'0.00',subtotal:'20.00',tax:'3.60',grand_total:'23.60',amount_in_words:'Twenty three'}},layout:{widths:[1],sections:[{name:'items',rows:[[{span:1,style:'head',text:'Rate / PCs',rate_heading:true}],[
       {span:1,style:'center',field:'lines.0.quantity',label:'Quantity',value:'2',type:'number',uom:'PCs',uom_field:'lines.0.uom'},
       {span:1,style:'amount',field:'lines.0.unit_price',value:'10.00',type:'number'},
       {span:1,style:'amount',field:'lines.0.line_total',value:'20.00',type:'number',calculated:'lines.0.line_total'},
@@ -89,6 +89,10 @@ test('PI numeric edits refresh displayed totals and UOM uses fixed choices',asyn
   },(method,data)=>({method,body:JSON.stringify(data)}),async()=>{});
   preview.open(state,'/preview');
   const uom=host.querySelectorAll('select')[0];assert.deepEqual(uom.children.map(option=>option.value),['PCs','Lot','Kit','set']);
+  uom.value='Lot';uom.oninput();
+  assert.ok(host.querySelectorAll('div').some(node=>node.textContent==='Rate / Lot'));
+  uom.value='set';uom.oninput();
+  assert.ok(host.querySelectorAll('div').some(node=>node.textContent==='Rate / Set'));
   const price=host.querySelectorAll('input').find(input=>input.dataset.piField==='lines.0.unit_price');
   price.value='25.00';price.oninput();await pending();
   const total=host.querySelectorAll('input').find(input=>input.dataset.piField==='lines.0.line_total');assert.equal(total.value,'50.00');
@@ -100,7 +104,9 @@ test('bulk PI summary and annexure remain independently editable in save and pri
   const lines=Array.from({length:5},(_,index)=>({id:index+1,sku:'PART-'+index,description:'Product '+index,hsn_code:'85371090',item_condition:'New',uom:'PCs',quantity:'1',unit_price:'10.00',line_total:'10.00'}));
   const state={preview_id:'bulk',document:{pi_format:'bulk',bulk_description:'Original cover description',date:'2026-10-16',currency:'USD',order:{},delivery:{},assets:{},totals:{shipping:'0',lines}},layout:{widths:[1],sections:[
     {name:'items',rows:[[{span:1,style:'',field:'bulk_description',value:'Original cover description',multiline:true,aria:'First-page description'}]]},
-    {name:'annexure',annexure:true,rows:[[{span:1,style:'',field:'lines.4.description',value:'Product 4',multiline:true}]]}
+    {name:'annexure',annexure:true,rows:[[{span:1,style:'',field:'lines.4.description',value:'Product 4',multiline:true},
+      {span:1,style:'center',field:'lines.4.quantity',value:'1',type:'number',uom:'PCs'},
+      {span:1,style:'bold_center',field:'annexure_quantity',value:'5PCs',calculated:'annexure_quantity',auto_quantity:true}]]}
   ]}};
   const context={window:{},document:{createElement:tag=>new Element(tag)},Date,URL:{createObjectURL:()=> 'blob:bulk',revokeObjectURL(){}},fetch:async(url,options)=>{printed.push(JSON.parse(options.body));return {ok:true,blob:async()=>({})};}};
   vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/orders/pi-preview.js'),'utf8'),context);
@@ -108,9 +114,13 @@ test('bulk PI summary and annexure remain independently editable in save and pri
   preview.open(state,'/bulk-preview');
   let cover=host.querySelectorAll('textarea').find(input=>input.dataset.piField==='bulk_description');
   let product=host.querySelectorAll('textarea').find(input=>input.dataset.piField==='lines.4.description');
+  const totalQuantity=host.querySelectorAll('input').find(input=>input.dataset.piField==='annexure_quantity');
+  totalQuantity.value='1 Lot';totalQuantity.oninput();
   cover.value='Edited cover summary';cover.oninput();product.value='Edited fifth product';product.oninput();
   await host.querySelectorAll('button').find(button=>button.textContent==='Update preview').onclick();
   assert.equal(requests[0].bulk_description,'Edited cover summary');assert.equal(requests[0].lines[4].description,'Edited fifth product');assert.equal(requests[0].lines.length,5);
+  assert.equal(requests[0].annexure_quantity,'1 Lot');
+  assert.ok(host.querySelectorAll('span').some(node=>node.textContent==='PCs'));
   cover=host.querySelectorAll('textarea').find(input=>input.dataset.piField==='bulk_description');cover.value='Unsaved print description';cover.oninput();
   await host.querySelectorAll('button').find(button=>button.textContent==='PDF print preview').onclick();
   assert.equal(printed[0].bulk_description,'Unsaved print description');

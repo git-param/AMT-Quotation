@@ -63,7 +63,7 @@
       if (amounts.price == null && amounts.sale_price == null &&
           row.unit_price != null && row.unit_price !== '' && Number.isFinite(Number(row.unit_price))) {
         if (row.currency === code) amounts.price = row.unit_price;
-        else if (displayRate) amounts.price = row.currency === 'USD'
+        else if (displayRate && ['USD','INR'].includes(row.currency)) amounts.price = row.currency === 'USD'
           ? Number(row.unit_price) * displayRate : Number(row.unit_price) / displayRate;
       }
       const format=value=>`${code==='USD'?'$':'\u20b9'} ${Number(value).toLocaleString(code==='INR'?'en-IN':'en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`;

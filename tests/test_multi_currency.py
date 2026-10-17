@@ -6,7 +6,7 @@ import unittest
 from zipfile import ZipFile
 
 from backend import database
-from backend.orders.invoices import amount_words
+from backend.orders.invoices import amount_words, calculate
 from backend.orders.locations import phone_block, CALLING_CODES, COUNTRIES
 from backend.orders.parties import parse_block
 import test_native_pi
@@ -107,3 +107,11 @@ class CurrencyWordsTests(unittest.TestCase):
         self.assertIn('+971 501234567',phone_block('Company\nTel: 0501234567','UAE'))
         self.assertIn('+919876543210',phone_block('Company\nTel: +919876543210','UK'))
         self.assertEqual(parse_block('Company\nTel/Phone: +1','USA')[1]['phone'],'')
+
+    def test_cross_conversion_uses_both_currency_rates(self):
+        totals = calculate({'order':{'currency':'GBP','shipping_charges':'8'},'lines':[
+            {'id':1,'currency':'GBP','unit_price':'8','quantity':'1'}]}, 'EUR',
+            {'USD':'1','GBP':'0.8','EUR':'0.9'}, Decimal('0'))
+        self.assertEqual(totals['lines'][0]['unit_price'],'9.00')
+        self.assertEqual(totals['shipping'],'9.00')
+        self.assertEqual(totals['amount_in_words'],'Eighteen Euros Only')

@@ -440,3 +440,7 @@ body.embedded #orderForm .consignee-editor textarea {flex:1}
 }
 @media(max-width:1100px){#discountSkuChoices{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.discount-panel{padding:18px}.discount-panel .discount-fields{grid-template-columns:1fr;gap:14px}#discountSkuChoices{grid-template-columns:1fr}.discount-heading{align-items:flex-start;margin-bottom:20px}.discount-actions{flex-wrap:wrap}.discount-actions>div{flex:1;justify-content:flex-end}.discount-sku-amount strong{font-size:11px}}
+.pi-rate-heading{white-space:pre-line}
+.pi-paper .pi-grid-annexure .pi-quantity-inline{display:flex;align-items:center;justify-content:center;gap:4px}
+.pi-paper .pi-grid-annexure .pi-quantity-inline input{flex:1;min-width:0;text-align:center}
+.pi-paper .pi-grid-annexure .pi-quantity-inline .pi-quantity-uom{display:inline;flex:0 0 auto;font:inherit}

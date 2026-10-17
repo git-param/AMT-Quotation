@@ -212,6 +212,44 @@ class BulkPiTests(unittest.TestCase):
                 for edge in ('left','right','top','bottom'):
                     self.assertEqual(border.find('{*}'+edge).get('style'), 'medium')
 
+    def test_annexure_uom_and_editable_total_survive_save_print_and_exports(self):
+        self.items(5)
+        preview = self.preview()
+        section = next(section for section in preview['layout']['sections'] if section['name']=='annexure')
+        quantity = next(cell for row in section['rows'] for cell in row if cell.get('field')=='lines.0.quantity')
+        self.assertEqual(quantity['uom'],'PCs')
+        total = next(cell for row in section['rows'] for cell in row if cell.get('field')=='annexure_quantity')
+        self.assertTrue(total['auto_quantity'])
+        url = self.base+'/preview/'+preview['preview_id']
+        changed = self.client.put(url,json={'annexure_quantity':'1 Lot (packed)'})
+        self.assertEqual(changed.status_code,200,changed.json)
+        self.assertEqual(changed.json['document']['annexure_quantity'],'1 Lot (packed)')
+        original_totals = preview['document']['totals']
+        self.assertEqual(changed.json['document']['totals'],original_totals)
+        response = self.client.post(url+'/calculate',json={'lines':[{'id':preview['document']['totals']['lines'][0]['id'],'quantity':'2','uom':'Lot'}]})
+        self.assertEqual(response.status_code,200,response.json)
+        self.assertEqual(response.json['totals']['annexure_quantity'],'1 Lot (packed)')
+        printed = self.client.post(url+'/print',json={'annexure_quantity':'2 Kits (print only)'})
+        self.assertEqual(printed.status_code,200,printed.json)
+        with ZipFile(BytesIO(pi_exports.xlsx(changed.json['document']))) as book:
+            self.assertIn('1 Lot (packed)',book.read('xl/sharedStrings.xml').decode())
+            self.assertIn('PCs',book.read('xl/styles.xml').decode())
+        self.assertTrue(pi_exports.pdf(changed.json['document']).startswith(b'%PDF-'))
+        reset = self.client.put(url,json={'annexure_quantity':''})
+        reset_section = next(section for section in reset.json['layout']['sections'] if section['name']=='annexure')
+        self.assertNotEqual(next(cell for row in reset_section['rows'] for cell in row if cell.get('field')=='annexure_quantity')['value'],'1 Lot (packed)')
+
+    def test_rate_headings_follow_single_and_mixed_uoms(self):
+        from backend.orders.normal_pi.layout import layout, rate_heading
+        for unit, heading in [('PCs','PCs'),('Lot','Lot'),('Kit','Kit'),('set','Set')]:
+            doc = self.preview()['document']
+            doc['totals']['lines'][0]['uom'] = unit
+            items = next(section for section in layout(doc)['sections'] if section['name']=='items')
+            self.assertEqual(next(cell for cell in items['rows'][0] if cell['col']==8)['text'],'Rate / '+heading)
+        self.assertEqual(rate_heading([{'uom':'PCs'},{'uom':'Lot'}]),'Rate / PCs\nor\nRate / Lot')
+        self.assertEqual(rate_heading([{'uom':'PCs'},{'uom':'Kit'},{'uom':'set'}]),'Rate / PCs\nor\nRate / Lot')
+        self.assertEqual(rate_heading([{'uom':'Kit'},{'uom':'set'}]),'Rate / Lot')
+
     def test_bulk_calculation_refreshes_annexure_words_and_total_quantity(self):
         self.items(5)
         preview = self.preview()

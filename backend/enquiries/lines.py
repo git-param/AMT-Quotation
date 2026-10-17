@@ -476,6 +476,6 @@ def bulk_lookup():
         found = sum(bool(row['found']) for row in results)
         log_search(get_current_user()['username'], _get_ip(), [sku.strip() for sku in skus], found, len(results)-found)
         return jsonify(drafts=results, currency=currency,
-                       usd_inr_rate=str(rate) if rate else None,shared_hsn_code=hsn)
+                       usd_inr_rate=str(factors['INR']) if factors['INR'] else None,shared_hsn_code=hsn)
     finally:
         connection.close()

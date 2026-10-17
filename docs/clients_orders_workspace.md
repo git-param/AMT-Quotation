@@ -112,13 +112,13 @@ and other invoices stay intact. Invoice files and the removal actor/time remain
 stored for history, with a `pi_remove` audit event. An old preview cannot reissue
 the removed invoice; use a new preview when another PI is needed.
 
-The active UI uses **Preview PI** after selecting USD or INR and any required
-exchange rate. Users edit the PI date, PO/commercial fields, consignee/buyer/notify
+The active UI uses **Preview PI** after selecting a supported PI currency.
+Users edit the PI date, PO/commercial fields, consignee/buyer/notify
 text, item descriptions/HSN/condition/quantity/rate/UOM, shipping, instructions and
 notes directly on the invoice page. **Update preview** recalculates amounts on the
 server. **PDF print preview** shows the exact padded A4 document; **Edit invoice**
 returns to the editable page. Preview edits apply to the issued PI, leaving the
-source order intact. Seller/bank details, branding, reference, currency and
+source order intact. Seller/bank details, branding, currency and
 ownership cannot be supplied or overridden by preview edits.
 
 Orders, item lines and native PIs support USD, INR, AED (UAE dirham), GBP

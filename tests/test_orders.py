@@ -274,7 +274,7 @@ class OrderTests(unittest.TestCase):
             {'source_line_ids': [], 'lines': []},
             {'source_line_ids': [self.line_id, self.line_id]},
             {'order_date': '2026-02-30'}, {'pi_date': 'bad'},
-            {'currency': 'EUR'}, {'status': 'deleted'},
+            {'currency': 'CHF'}, {'status': 'deleted'},
             {'reference': 'USER-REF'},
             {'delivery': {'shipping_address': {'line1': 'Street'},
                           'consignee': {'name': 'Receiver'}}},

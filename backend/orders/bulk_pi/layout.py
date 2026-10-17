@@ -2,7 +2,7 @@
 from copy import deepcopy
 from decimal import Decimal
 
-from backend.orders.normal_pi.layout import WIDTHS, layout as normal_layout, terms
+from backend.orders.normal_pi.layout import WIDTHS, layout as normal_layout, terms, display_uom
 from backend.orders.invoices import amount_words
 
 # Original Annexure-1 workbook columns B:G.
@@ -10,9 +10,11 @@ ANNEXURE_WIDTHS = [8.5703125, 53, 14, 14.140625, 15, 16.140625]
 
 
 def quantity_summary(doc):
+    if doc.get('annexure_quantity'):
+        return doc['annexure_quantity']
     units = {}
     for line in doc['totals']['lines']:
-        unit = line.get('uom') or 'PCs'
+        unit = display_uom(line.get('uom') or 'PCs')
         units[unit] = units.get(unit, Decimal('0')) + Decimal(line['quantity'])
     return '; '.join(f'{value:g}{unit}' for unit, value in units.items())
 
@@ -77,7 +79,7 @@ def annexure_section(doc):
             cell(0, index+1, 'center'),
             cell(1, line['description'], field=prefix+'description', value=line['description'], multiline=True),
             cell(2, line['item_condition'], field=prefix+'item_condition', value=line['item_condition']),
-            cell(3, line['quantity'], 'center', field=prefix+'quantity', value=line['quantity'], type='number'),
+            cell(3, line['quantity'], 'center', field=prefix+'quantity', value=line['quantity'], type='number', uom=display_uom(line.get('uom') or 'PCs')),
             cell(4, line['unit_price'], 'amount', field=prefix+'unit_price', value=line['unit_price'], type='number', accounting=True),
             cell(5, line['line_total'], 'amount', field=prefix+'line_total', value=line['line_total'], type='number',
                  accounting=True, calculated=prefix+'line_total')])
@@ -109,7 +111,7 @@ def annexure_section(doc):
     rows.append([cell(0, 'Amount\nin\nWords', 'bold', nowrap=True),
                  cell(1, annexure_words(doc), 'bold', calculated='annexure_amount_in_words'),
                  cell(2, 'Total', 'bold_center'),
-                 cell(3, quantity_summary(doc), 'bold_center', calculated='annexure_quantity'),
+                 cell(3, quantity_summary(doc), 'bold_center', field='annexure_quantity', value=quantity_summary(doc), aria='Total quantity', calculated='annexure_quantity', auto_quantity=True),
                  cell(4, 'Total ('+doc['currency']+')', 'bold_center'),
                  cell(5, totals['subtotal'], 'bold_amount', accounting=True, calculated='subtotal')])
     for total_cell in rows[-1]:

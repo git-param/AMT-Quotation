@@ -234,7 +234,7 @@ function updatePiReadiness(){
   el('completeItemDetails').hidden=!current.order.can_edit||!missing.length;
   el('piReadiness').className='pi-readiness'+(dirty||missing.length||empty||legacy?' needs-attention':' is-ready');
   el('readinessTitle').textContent=dirty?'Save your item changes':empty?'Add items to this order':missing.length?`${missing.length} item${missing.length===1?' needs':'s need'} PI details`:legacy?'Review historical quantities':'Item details are complete';
-  el('readinessHint').textContent=dirty?'Save item details below before generating your PI.':empty?'You can add SKU lines, quantities and agreed prices, or generate an invoice using the PI and purchase order numbers.':missing.length?`Optional: complete HSN code and item condition in the highlighted fields (${missing.slice(0,3).map(line=>line.sku).join(', ')}${missing.length>3?' and '+(missing.length-3)+' more':''}).`:legacy?'Historical quantities are available to review below.':'Choose the invoice currency below. Amounts use your saved order prices and the quotation tool exchange rate.';
+  el('readinessHint').textContent=dirty?'Save item details below before generating your PI.':empty?'You can add SKU lines, quantities and agreed prices, or generate an invoice using the PI and purchase order numbers.':missing.length?`Optional: complete HSN code and item condition in the highlighted fields (${missing.slice(0,3).map(line=>line.sku).join(', ')}${missing.length>3?' and '+(missing.length-3)+' more':''}).`:legacy?'Historical quantities are available to review below.':'Choose the invoice currency below. Amounts use your saved prices and the configured exchange rates.';
   el('itemDetailsHint').textContent=dirty?'You have unsaved item details.':current.shared_hsn_code?'HSN code is shared across all SKUs and managed by TLs/admins in Configuration. Review each item condition before saving.':'TLs/admins can set a shared HSN code in Configuration. Only PI number and purchase order number are required for generation.';
 }
 el('completeItemDetails').onclick=()=>{
@@ -465,7 +465,8 @@ el('next').onclick=()=>{if(page<pages){page++;load().catch(error=>message(error.
 el('piCurrency').onchange=()=>{
   const currency=el('piCurrency').value;
   const convert=Boolean(currency)&&[current.order.currency,...current.lines.map(line=>line.currency)].some(code=>code!==currency);
-  el('conversionHint').textContent=convert?'The quotation tool exchange rate will be applied automatically.':'Amounts already in the selected currency use their saved prices.';
+  const legacyPair=[currency,current.order.currency,...current.lines.map(line=>line.currency)].every(code=>['USD','INR'].includes(code));
+  el('conversionHint').textContent=convert?(legacyPair?'The configured INR rate or quotation tool exchange rate will be applied automatically.':'Admin-configured exchange rates will be applied. Missing rates can be added in Configuration.'):'Amounts already in the selected currency use their saved prices.';
 };
 function appendInvoice(invoice,id){
   const row=document.createElement('div');row.className='pi-download-row';

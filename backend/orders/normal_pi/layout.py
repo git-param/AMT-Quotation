@@ -11,6 +11,17 @@ WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
           15.7109375,8.7109375,8,16,8.7109375,8.140625]
 
 
+def display_uom(unit):
+    return 'Set' if unit.lower() == 'set' else unit
+
+
+def rate_heading(lines):
+    units = {display_uom(line.get('uom') or 'PCs') for line in lines}
+    if len(units) <= 1:
+        return 'Rate / ' + next(iter(units), 'PCs')
+    return 'Rate / PCs\nor\nRate / Lot' if 'PCs' in units else 'Rate / Lot'
+
+
 def terms(doc):
     if 'terms' in doc:
         return doc['terms']
@@ -73,7 +84,8 @@ def layout(doc):
     parties[-1][0].update(text=secondary,bottom_aligned=True)
     item_header=[c(start,span,label,'head') for start,span,label in
         [(0,1,'Sno'),(1,3,'Description'),(4,1,'HSN Code'),(5,1,'Condition'),
-         (6,2,'QTY'),(8,1,'Rate / PCs'),(9,2,'Total Amount')]]
+         (6,2,'QTY'),(8,1,rate_heading(total['lines'])),(9,2,'Total Amount')]]
+    next(cell for cell in item_header if cell['col'] == 8)['rate_heading'] = True
     items=[item_header]
     for index,line in enumerate(total['lines']):
         prefix=f'lines.{index}.'
@@ -81,7 +93,7 @@ def layout(doc):
             editable(1,3,'',line['description'],prefix+'description',multiline=True),
             editable(4,1,'',line['hsn_code'],prefix+'hsn_code','center',readonly=bool(doc.get('shared_hsn_code'))),
             editable(5,1,'',line['item_condition'],prefix+'item_condition','center'),
-            editable(6,2,'',line['quantity'],prefix+'quantity','center',uom=line['uom'],uom_field=prefix+'uom',type='number'),
+            editable(6,2,'',line['quantity'],prefix+'quantity','center',uom=display_uom(line['uom']),uom_field=prefix+'uom',type='number'),
             editable(8,1,'',line['unit_price'],prefix+'unit_price','amount',type='number'),
             editable(9,2,'',line['line_total'],prefix+'line_total','amount',numeric=True,type='number',calculated=f'lines.{index}.line_total')])
         if line.get('discount_label'):
