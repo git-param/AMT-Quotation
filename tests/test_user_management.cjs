@@ -36,7 +36,8 @@ function setup() {
       const body = options.body ? JSON.parse(options.body) : undefined; calls.push({url, body});
       if (failure) return {ok: false, status: 409, json: async () => ({error: 'Username already exists'})};
       const target = users.find(u => u.id === Number(url.split('/')[4]));
-      if (url.endsWith('/deactivate')) target.is_active = 0;
+      if (url.endsWith('/add')) users.push({id: 4, ...body});
+      else if (url.endsWith('/deactivate')) target.is_active = 0;
       else if (url.endsWith('/activate')) target.is_active = 1;
       else Object.assign(target, body);
       return {ok: true, status: 200, json: async () => ({ok: true})};
@@ -44,7 +45,7 @@ function setup() {
   };
   vm.createContext(context);
   const source = fs.readFileSync('frontend/manager_dashboard/manager.js', 'utf8');
-  vm.runInContext(source.slice(source.indexOf('let _users ='), source.indexOf('async function addUser()')), context);
+  vm.runInContext(source.slice(source.indexOf('let _users ='), source.indexOf('async function updateUser(')), context);
   return {get, context, calls, fail: () => {failure = true;}};
 }
 
@@ -57,7 +58,7 @@ test('compact rows open full details with safe text and an explicit edit mode', 
   row.onclick();
   assert.equal(get('userDetailsDialog').open, true);
   assert.equal(get('editUserForm').hidden, true);
-  assert.equal(get('userDetails').children.length, 14);
+  assert.equal(get('userDetails').children.length, 16);
   assert.equal(get('userDetails').children[9].textContent, 'Team Lead');
   context.editSelectedUser();
   assert.equal(get('editUserForm').hidden, false);
@@ -81,7 +82,7 @@ test('edit saves all settings together and refreshes details and compact list', 
   assert.equal(get('editSupervisor').value, '');
   await get('editUserForm').onsubmit({preventDefault() {}});
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0].body, {username: 'Updated', department: 'Operations', role: 'sales_executive', is_active: 0, supervisor_user_id: null});
+  assert.deepEqual(calls[0].body, {username: 'Updated', department: 'Operations', role: 'sales_executive', is_active: 0, supervisor_user_id: null, phone_country_code: '', phone_number: ''});
   assert.equal(get('editUserForm').hidden, true);
   assert.equal(get('userDetails').children[5].textContent, 'Operations');
   assert.equal(get('usersList').children[1].children[0].children[0].textContent, 'Updated');
@@ -114,4 +115,29 @@ test('details provide deactivate and reactivate without requiring a department e
   assert.equal(calls[1].url, '/api/manager/users/2/activate');
   assert.equal(get('toggleUserStatus').textContent, 'Deactivate user');
   assert.equal(get('usersList').children[1].children[2].children[0].textContent, 'Active');
+});
+
+test('phone fields validate pairs, save international numbers, populate edits and display details', async () => {
+  const {get, context, calls} = setup();
+  await context.loadUsers(); context.openUserDetails(2); context.editSelectedUser();
+  get('editPhoneCountryCode').value = '+91';
+  get('editPhoneNumber').value = '';
+  await get('editUserForm').onsubmit({preventDefault() {}});
+  assert.equal(calls.length, 0);
+  get('editPhoneNumber').value = '(98765) 43210';
+  await get('editUserForm').onsubmit({preventDefault() {}});
+  assert.equal(calls[0].body.phone_country_code, '+91');
+  assert.equal(calls[0].body.phone_number, '9876543210');
+  assert.equal(get('userDetails').children[15].textContent, '+91 9876543210');
+  context.editSelectedUser();
+  assert.equal(get('editPhoneCountryCode').value, '+91');
+  assert.equal(get('editPhoneNumber').value, '9876543210');
+  get('newUsername').value = 'New phone user'; get('newPassword').value = 'fixture-pass';
+  get('newRole').value = 'sales_executive'; get('newDepartment').value = 'Sales';
+  get('newPhoneCountryCode').value = '1'; get('newPhoneNumber').value = '202-555-0123';
+  await context.addUser();
+  assert.equal(calls[1].body.phone_country_code, '+1');
+  assert.equal(calls[1].body.phone_number, '2025550123');
+  assert.equal(get('newPhoneCountryCode').value, '');
+  assert.equal(get('newPhoneNumber').value, '');
 });

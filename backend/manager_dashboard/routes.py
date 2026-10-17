@@ -1,6 +1,7 @@
 """Permission-controlled activity statistics and account administration."""
 
 import sqlite3
+import re
 
 from flask import Blueprint, jsonify, request, send_file, session
 from werkzeug.security import generate_password_hash
@@ -101,6 +102,28 @@ def _request_data():
     return data if isinstance(data, dict) else {}
 
 
+def _user_phone(data):
+    """Accept optional paired phone fields; omitted fields preserve an edit."""
+    if not {'phone_country_code', 'phone_number'} & data.keys():
+        return None, None
+    code = data.get('phone_country_code', '')
+    number = data.get('phone_number', '')
+    if not isinstance(code, str) or not isinstance(number, str):
+        raise ValueError('Enter a valid country code and phone number')
+    code, number = code.strip(), number.strip()
+    if not code and not number:
+        return '', ''
+    if not re.fullmatch(r'\+?[1-9][0-9]{0,2}', code):
+        raise ValueError('Enter a country code such as +91 or +1')
+    if len(number) > 40 or not re.fullmatch(r'[0-9 ()-]+', number):
+        raise ValueError('Enter a phone number using digits, spaces, parentheses or hyphens')
+    code = '+' + code.lstrip('+')
+    number = re.sub(r'[^0-9]', '', number)
+    if len(number) < 4 or not 7 <= len(code[1:] + number) <= 15:
+        raise ValueError('Enter a phone number with 7 to 15 digits including the country code')
+    return code, number
+
+
 @bp.route('/api/manager/users')
 @permission_required('users.manage')
 def api_manager_users():
@@ -108,7 +131,7 @@ def api_manager_users():
     connection = get_db()
     try:
         rows = connection.execute(
-            'SELECT id, username, department, role, is_active, created_at, '
+            'SELECT id, username, department, phone_country_code, phone_number, role, is_active, created_at, '
             'supervisor_user_id '
             'FROM users ORDER BY id'
         ).fetchall()
@@ -136,6 +159,10 @@ def api_manager_add_user():
     department = department.strip()
     if len(department) > 100:
         return jsonify(error='Department must be 100 characters or fewer'), 400
+    try:
+        phone_code, phone_number = _user_phone(data)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
     connection = get_db()
     try:
         with connection:
@@ -146,9 +173,10 @@ def api_manager_add_user():
                 return jsonify(error='Choose a department from Configuration'), 400
             department = configured['name']
             connection.execute(
-                'INSERT INTO users (username, password_hash, role, department) '
-                'VALUES (?, ?, ?, ?)',
-                (username, generate_password_hash(password), role, department),
+                'INSERT INTO users (username, password_hash, role, department, '
+                'phone_country_code, phone_number) VALUES (?, ?, ?, ?, ?, ?)',
+                (username, generate_password_hash(password), role, department,
+                 phone_code or '', phone_number or ''),
             )
         return jsonify(ok=True)
     except sqlite3.IntegrityError:
@@ -304,6 +332,10 @@ def edit_user(uid):
             (supervisor is not None and
              (type(supervisor) is not int or not 1 <= supervisor <= 9223372036854775807))):
         return jsonify(error='Invalid supervisor ID'), 400
+    try:
+        phone_code, phone_number = _user_phone(data)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
     connection = get_db()
     try:
         connection.execute('BEGIN IMMEDIATE')
@@ -341,8 +373,11 @@ def edit_user(uid):
                 return jsonify(error='Select an active Sales TL'), 400
         connection.execute(
             'UPDATE users SET username = ?, department = ?, role = ?, '
-            'is_active = ?, supervisor_user_id = ? WHERE id = ?',
-            (username.strip(), department.strip(), role, active, supervisor, uid),
+            'is_active = ?, supervisor_user_id = ?, '
+            'phone_country_code = COALESCE(?, phone_country_code), '
+            'phone_number = COALESCE(?, phone_number) WHERE id = ?',
+            (username.strip(), department.strip(), role, active, supervisor,
+             phone_code, phone_number, uid),
         )
         connection.commit()
         if uid == session['user_id']:

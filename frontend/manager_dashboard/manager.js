@@ -365,6 +365,7 @@ function openUserDetails(id) {
     ['Supervisor', supervisor ? supervisor.username : user.supervisor_user_id ? 'Unavailable supervisor' : 'Unassigned'],
     ['Created', Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleString('en-GB')],
     ['Status', user.is_active ? 'Active' : 'Inactive'],
+    ['Phone number', user.phone_number ? `${user.phone_country_code || ''} ${user.phone_number}`.trim() : 'Not provided'],
   ];
   values.forEach(([label, value]) => {
     const dt = document.createElement('dt'); dt.textContent = label;
@@ -380,6 +381,8 @@ function editSelectedUser() {
   if (!user) return;
   document.getElementById('editUsername').value = user.username;
   fillDepartmentOptions(document.getElementById('editDepartment'), user.department);
+  document.getElementById('editPhoneCountryCode').value = user.phone_country_code || '';
+  document.getElementById('editPhoneNumber').value = user.phone_number || '';
   const roles = document.getElementById('editRole');
   const choices = {sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
   if (!Object.hasOwn(choices, user.role)) choices[user.role] = userRoleLabels[user.role] || user.role;
@@ -445,6 +448,18 @@ document.getElementById('toggleUserStatus').onclick = async () => {
 document.getElementById('cancelUserEdit').onclick = () => { if (!_savingUser) openUserDetails(_selectedUserId); };
 document.getElementById('closeUserDetails').onclick = () => { if (!_savingUser) document.getElementById('userDetailsDialog').close(); };
 document.getElementById('userDetailsDialog').addEventListener('cancel', event => { if (_savingUser) event.preventDefault(); });
+function userPhoneFields(prefix) {
+  let code = document.getElementById(`${prefix}PhoneCountryCode`).value.trim();
+  let number = document.getElementById(`${prefix}PhoneNumber`).value.trim();
+  if (!code && !number) return {phone_country_code: '', phone_number: ''};
+  if (!/^\+?[1-9][0-9]{0,2}$/.test(code)) throw new Error('Enter a country code such as +91 or +1');
+  if (number.length > 40 || !/^[0-9 ()-]+$/.test(number)) throw new Error('Enter a valid phone number');
+  code = '+' + code.replace(/^\+/, '');
+  number = number.replace(/[^0-9]/g, '');
+  const length = code.length - 1 + number.length;
+  if (number.length < 4 || length < 7 || length > 15) throw new Error('Enter a phone number with 7 to 15 digits including the country code');
+  return {phone_country_code: code, phone_number: number};
+}
 document.getElementById('editUserForm').onsubmit = async event => {
   event.preventDefault();
   if (_savingUser) return;
@@ -458,6 +473,8 @@ document.getElementById('editUserForm').onsubmit = async event => {
     supervisor_user_id: document.getElementById('editSupervisor').value ? Number(document.getElementById('editSupervisor').value) : null,
   };
   if (!body.username || !body.department) { showMsg(msg, 'Name and department are required', false); return; }
+  try { Object.assign(body, userPhoneFields('edit')); }
+  catch (error) { showMsg(msg, error.message, false); return; }
   _savingUser = true;
   document.getElementById('saveUserEdit').disabled = true;
   try {
@@ -490,10 +507,13 @@ async function addUser() {
   if (!username || !password) { showMsg(msg, 'Username and password are required', false); return; }
   if (!department) { showMsg(msg, 'Department is required', false); document.getElementById('newDepartment').focus(); return; }
   if (department.length > 100) { showMsg(msg, 'Department must be 100 characters or fewer', false); return; }
+  let phone;
+  try { phone = userPhoneFields('new'); }
+  catch (error) { showMsg(msg, error.message, false); return; }
 
   const resp = await fetch('/api/manager/users/add', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ username, password, role, department })
+    body: JSON.stringify({ username, password, role, department, ...phone })
   });
   if ([401, 403].includes(resp.status)) { showAccessError(resp.status); return; }
   const data = await resp.json();
@@ -502,6 +522,8 @@ async function addUser() {
     document.getElementById('newUsername').value = '';
     document.getElementById('newPassword').value = '';
     document.getElementById('newDepartment').value = '';
+    document.getElementById('newPhoneCountryCode').value = '';
+    document.getElementById('newPhoneNumber').value = '';
     loadUsers();
   } else {
     showMsg(msg, data.error || 'Failed to add user', false);

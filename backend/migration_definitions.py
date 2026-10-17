@@ -612,4 +612,10 @@ MIGRATIONS = (
         "INSERT OR IGNORE INTO departments(name) "
         "SELECT trim(department) FROM users WHERE trim(department) <> '' ORDER BY id",
     )),
+    (26, 'user_phone_numbers', (
+        "ALTER TABLE users ADD COLUMN phone_country_code TEXT NOT NULL DEFAULT '' "
+        "CHECK (length(phone_country_code) <= 4)",
+        "ALTER TABLE users ADD COLUMN phone_number TEXT NOT NULL DEFAULT '' "
+        "CHECK (length(phone_number) <= 15)",
+    )),
 )

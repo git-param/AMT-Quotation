@@ -117,6 +117,12 @@ body{
 .account-editor-footer a,.user-edit-grid a{color:var(--brand-dark);text-decoration:none;font-weight:500}
 .account-editor-footer a:hover,.user-edit-grid a:hover{text-decoration:underline}
 .required-mark{color:var(--brand);margin-left:3px}
+.optional-label{font-weight:400;text-transform:none;letter-spacing:normal;color:var(--muted)}
+.user-phone-field{grid-column:1/-1}
+.account-editor>.user-phone-field{margin-top:18px}
+.user-phone-inputs{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px}
+.user-phone-inputs input{min-width:0}
+.user-phone-field small{font-size:11px;color:var(--muted);line-height:1.6}
 .form-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 .form-field{display:flex;flex-direction:column;gap:6px;flex:1;min-width:140px}
 .form-field label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}

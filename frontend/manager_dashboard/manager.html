@@ -158,6 +158,11 @@
             </select>
           </div>
         </div>
+        <div class="form-field user-phone-field">
+          <label for="newPhoneNumber">Phone number <span class="optional-label">(optional)</span></label>
+          <div class="user-phone-inputs"><input type="tel" id="newPhoneCountryCode" aria-label="Country calling code" placeholder="+91" autocomplete="tel-country-code" maxlength="4"><input type="tel" id="newPhoneNumber" placeholder="98765 43210" autocomplete="tel-national" maxlength="40"></div>
+          <small>Include a country code when adding a phone number.</small>
+        </div>
         <div class="account-editor-footer"><p>Manage departments in <a href="/configuration">Configuration</a>.</p><button class="btn-sm btn-add" type="button" onclick="addUser()">Add user</button></div>
         <div class="msg" id="addMsg"></div>
       </div>
@@ -208,6 +213,7 @@
       <div class="form-field"><label for="editRole">Role</label><select id="editRole"></select></div>
       <div class="form-field"><label for="editStatus">Status</label><select id="editStatus"><option value="1">Active</option><option value="0">Inactive</option></select></div>
       <div class="form-field"><label for="editSupervisor">Supervisor</label><select id="editSupervisor"></select></div>
+      <div class="form-field user-phone-field"><label for="editPhoneNumber">Phone number <span class="optional-label">(optional)</span></label><div class="user-phone-inputs"><input type="tel" id="editPhoneCountryCode" aria-label="Country calling code" placeholder="+91" autocomplete="tel-country-code" maxlength="4"><input type="tel" id="editPhoneNumber" placeholder="98765 43210" autocomplete="tel-national" maxlength="40"></div><small>Include a country code when adding a phone number.</small></div>
     </div>
     <div class="user-dialog-actions">
       <button type="submit" class="btn-sm btn-add" id="saveUserEdit">Save changes</button>

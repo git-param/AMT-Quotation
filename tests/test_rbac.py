@@ -235,6 +235,38 @@ class RBACTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/manager/users/99999/edit',
                                          json=body).status_code, 404)
 
+    def test_admin_can_add_edit_and_clear_international_phone(self):
+        self.session_as('admin')
+        base = {'username': 'phone-user', 'password': 'fixture-pass', 'role': 'sales_executive',
+                'department': 'Sales', 'is_active': 1, 'supervisor_user_id': None}
+        phone = {'phone_country_code': '91', 'phone_number': '(98765) 43210'}
+        self.assertEqual(self.client.post('/api/manager/users/add', json={**base, **phone}).status_code, 200)
+        def current():
+            return next(u for u in self.client.get('/api/manager/users').json['users'] if u['username'] == 'phone-user')
+        user = current()
+        uid = user['id']
+        self.assertEqual((user['phone_country_code'], user['phone_number']), ('+91', '9876543210'))
+        # Existing clients that omit phone fields must retain the saved phone.
+        self.assertEqual(self.client.post(f'/api/manager/users/{uid}/edit', json=base).status_code, 200)
+        self.assertEqual(current()['phone_number'], '9876543210')
+        invalid = [('', '1234567890'), ('+91', ''), ('+9999', '1234567890'), ('+0', '1234567890'),
+                   ('+91', 'call-me'), ('+91', '123'), ('+91', '1' * 14), (91, '1234567890'),
+                   ('+91', None)]
+        for code, number in invalid:
+            with self.subTest(code=code, number=number):
+                data = {**base, 'phone_country_code': code, 'phone_number': number}
+                self.assertEqual(self.client.post('/api/manager/users/add', json={**data, 'username': 'invalid-phone'}).status_code, 400)
+                self.assertEqual(self.client.post(f'/api/manager/users/{uid}/edit', json=data).status_code, 400)
+                self.assertEqual(current()['phone_number'], '9876543210')
+        self.assertEqual(self.client.post(f'/api/manager/users/{uid}/edit', json={
+            **base, 'phone_country_code': '+1', 'phone_number': '202-555-0123',
+        }).status_code, 200)
+        self.assertEqual((current()['phone_country_code'], current()['phone_number']), ('+1', '2025550123'))
+        self.assertEqual(self.client.post(f'/api/manager/users/{uid}/edit', json={
+            **base, 'phone_country_code': '', 'phone_number': '',
+        }).status_code, 200)
+        self.assertEqual((current()['phone_country_code'], current()['phone_number']), ('', ''))
+
     def test_admin_create_assign_deactivate_preserves_account(self):
         self.session_as('admin')
         self.assertEqual(self.client.post('/api/manager/users/add', json={
