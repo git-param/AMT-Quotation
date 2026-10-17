@@ -43,6 +43,7 @@ class SettingsTests(unittest.TestCase):
         connection.close()
         self.as_user(None)
         self.assertEqual(self.client.get('/api/sku-defaults').status_code, 401)
+
         self.as_user('exec1')
         response = self.client.get('/api/sku-defaults')
         self.assertEqual(response.status_code, 200)
@@ -54,3 +55,29 @@ class SettingsTests(unittest.TestCase):
             connection.execute('UPDATE users SET is_active=0 WHERE id=?', (self.ids['exec1'],))
         connection.close()
         self.assertEqual(self.client.get('/api/sku-defaults').status_code, 401)
+
+    def test_departments_admin_creation_validation_and_dropdown_choices(self):
+        for name, expected in [(None, 401), ('exec1', 403), ('tl1', 403), ('admin', 201), ('manager', 201)]:
+            self.as_user(name)
+            response = self.client.post('/api/departments', json={'name': name or 'Anonymous'})
+            self.assertEqual(response.status_code, expected)
+        self.as_user('admin')
+        for payload in ({}, [], {'name': ''}, {'name': ' '}, {'name': None},
+                        {'name': 123}, {'name': 'x' * 101}):
+            self.assertEqual(self.client.post('/api/departments', json=payload).status_code, 400)
+        self.assertEqual(self.client.post('/api/departments', json={'name': '  Sales  '}).status_code, 201)
+        self.assertEqual(self.client.post('/api/departments', json={'name': 'sales'}).status_code, 409)
+        choices = self.client.get('/api/manager/users').json['departments']
+        self.assertIn('Sales', choices)
+        user = {'username': 'dept-user', 'password': 'test-password', 'department': 'Unconfigured'}
+        self.assertEqual(self.client.post('/api/manager/users/add', json=user).status_code, 400)
+        self.assertEqual(self.client.post('/api/manager/users/add', json={**user, 'department': 'sales'}).status_code, 200)
+        created = next(u for u in self.client.get('/api/manager/users').json['users'] if u['username'] == 'dept-user')
+        self.assertEqual(created['department'], 'Sales')
+        self.as_user('tl1')
+        self.assertIn('Sales', self.client.get('/api/departments').json['departments'])
+        connection = database.get_db()
+        try:
+            self.assertEqual(connection.execute("SELECT count(*) FROM audit_logs WHERE action='department_create'").fetchone()[0], 3)
+        finally:
+            connection.close()

@@ -147,7 +147,8 @@
           </div>
           <div class="form-field">
             <label for="newDepartment">Department (required)</label>
-            <input type="text" id="newDepartment" placeholder="e.g. Sales" maxlength="100" required>
+            <select id="newDepartment" required><option value="">Choose department</option></select>
+            <small>Add departments in <a href="/configuration">Configuration</a>.</small>
           </div>
           <div class="form-field" style="min-width:160px">
             <label for="newRole">Role</label>
@@ -204,7 +205,7 @@
   <form id="editUserForm" hidden>
     <div class="user-edit-grid">
       <div class="form-field"><label for="editUsername">Name / username</label><input id="editUsername" maxlength="40" required></div>
-      <div class="form-field"><label for="editDepartment">Department</label><input id="editDepartment" maxlength="100" required></div>
+      <div class="form-field"><label for="editDepartment">Department</label><select id="editDepartment" required></select><small>Add departments in <a href="/configuration">Configuration</a>.</small></div>
       <div class="form-field"><label for="editRole">Role</label><select id="editRole"></select></div>
       <div class="form-field"><label for="editStatus">Status</label><select id="editStatus"><option value="1">Active</option><option value="0">Inactive</option></select></div>
       <div class="form-field"><label for="editSupervisor">Supervisor</label><select id="editSupervisor"></select></div>
@@ -214,7 +215,7 @@
       <button type="button" class="btn-sm" id="cancelUserEdit">Cancel</button>
     </div>
   </form>
-  <div class="user-dialog-actions" id="userDetailsActions"><button type="button" class="btn-sm btn-add" id="editUserButton">Edit user</button></div>
+  <div class="user-dialog-actions" id="userDetailsActions"><button type="button" class="btn-sm btn-del" id="toggleUserStatus">Deactivate user</button><button type="button" class="btn-sm btn-add" id="editUserButton">Edit user</button></div>
   <div class="msg" id="userDetailsMsg" role="status" aria-live="polite"></div>
 </dialog>
 

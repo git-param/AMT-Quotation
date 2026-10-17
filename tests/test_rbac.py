@@ -53,6 +53,8 @@ class RBACTests(unittest.TestCase):
         connection = database.get_db()
         try:
             with connection:
+                connection.executemany('INSERT INTO departments(name) VALUES (?)',
+                                       [('Sales',), ('Sales & Support',), ('Management',)])
                 for role in ROLE_LABELS:
                     cursor = connection.execute(
                         'INSERT INTO users (username, password_hash, role) '
@@ -191,7 +193,7 @@ class RBACTests(unittest.TestCase):
         self.assertEqual(target['supervisor_user_id'], self.ids['sales_tl'])
         for changes in (
                 {'username': 'admin'}, {'department': ' '},
-                {'department': 'x' * 101}, {'username': 'x' * 41},
+                {'department': 'x' * 101}, {'department': 'Unconfigured'}, {'username': 'x' * 41},
                 {'role': 'unknown'}, {'is_active': True},
                 {'supervisor_user_id': uid},
                 {'supervisor_user_id': self.ids['admin']},

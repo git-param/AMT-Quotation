@@ -605,4 +605,11 @@ MIGRATIONS = (
         "ALTER TABLE users ADD COLUMN department TEXT NOT NULL DEFAULT '' "
         "CHECK (length(department) <= 100)",
     )),
+    (25, 'configured_departments', (
+        "CREATE TABLE departments (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "name TEXT NOT NULL COLLATE NOCASE UNIQUE "
+        "CHECK (length(trim(name)) BETWEEN 1 AND 100))",
+        "INSERT OR IGNORE INTO departments(name) "
+        "SELECT trim(department) FROM users WHERE trim(department) <> '' ORDER BY id",
+    )),
 )

@@ -32,10 +32,13 @@ function setup() {
     showMsg(el, text, ok) { el.textContent = text; el.className = ok ? 'msg ok' : 'msg err'; },
     showAccessError() {},
     fetch: async (url, options) => {
-      if (!options) return {ok: true, json: async () => ({users: structuredClone(users)})};
-      const body = JSON.parse(options.body); calls.push({url, body});
+      if (!options) return {ok: true, json: async () => ({users: structuredClone(users), departments: ['Management', 'Operations', 'Sales']})};
+      const body = options.body ? JSON.parse(options.body) : undefined; calls.push({url, body});
       if (failure) return {ok: false, status: 409, json: async () => ({error: 'Username already exists'})};
-      Object.assign(users.find(u => u.id === Number(url.split('/')[4])), body);
+      const target = users.find(u => u.id === Number(url.split('/')[4]));
+      if (url.endsWith('/deactivate')) target.is_active = 0;
+      else if (url.endsWith('/activate')) target.is_active = 1;
+      else Object.assign(target, body);
       return {ok: true, status: 200, json: async () => ({ok: true})};
     },
   };
@@ -58,6 +61,10 @@ test('compact rows open full details with safe text and an explicit edit mode', 
   assert.equal(get('userDetails').children[9].textContent, 'Team Lead');
   context.editSelectedUser();
   assert.equal(get('editUserForm').hidden, false);
+  assert.equal(get('editDepartment').value, 'Sales');
+  assert.deepEqual(get('editDepartment').options.map(o => o.value), ['', 'Management', 'Operations', 'Sales']);
+  assert.deepEqual(get('newDepartment').options.map(o => o.value), ['', 'Management', 'Operations', 'Sales']);
+  context.fillDepartmentOptions(get('editDepartment'), 'sales');
   assert.equal(get('editDepartment').value, 'Sales');
   get('editDepartment').value = 'Cancelled';
   get('cancelUserEdit').onclick();
@@ -86,10 +93,25 @@ test('self controls stay disabled and rejected edits preserve inputs for correct
   assert.equal(get('editRole').value, 'manager');
   assert.equal(get('editRole').disabled, true);
   assert.equal(get('editStatus').disabled, true);
+  assert.equal(get('toggleUserStatus').disabled, true);
   get('editUsername').value = 'Duplicate'; fail();
   await get('editUserForm').onsubmit({preventDefault() {}});
   assert.equal(get('editUserForm').hidden, false);
   assert.equal(get('editUsername').value, 'Duplicate');
   assert.equal(get('userDetailsMsg').textContent, 'Username already exists');
   assert.equal(get('saveUserEdit').disabled, false);
+});
+
+test('details provide deactivate and reactivate without requiring a department edit', async () => {
+  const {get, context, calls} = setup();
+  await context.loadUsers(); context.openUserDetails(2);
+  assert.equal(get('toggleUserStatus').textContent, 'Deactivate user');
+  await get('toggleUserStatus').onclick();
+  assert.equal(calls[0].url, '/api/manager/users/2/deactivate');
+  assert.equal(get('toggleUserStatus').textContent, 'Activate user');
+  assert.equal(get('usersList').children[1].children[2].children[0].textContent, 'Inactive');
+  await get('toggleUserStatus').onclick();
+  assert.equal(calls[1].url, '/api/manager/users/2/activate');
+  assert.equal(get('toggleUserStatus').textContent, 'Deactivate user');
+  assert.equal(get('usersList').children[1].children[2].children[0].textContent, 'Active');
 });

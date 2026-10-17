@@ -14,6 +14,18 @@
 <p id="message" role="status" aria-live="polite"></p>
 <section class="panel"><h1>HSN code</h1><p>Set one HSN code for every SKU. This applies to order items and new PI previews. Existing previews and issued invoices retain their saved code.</p>
 <form id="settingsForm"><div class="form-row"><div class="form-field"><label for="hsnCode">Shared HSN code</label><input id="hsnCode" name="hsn_code" inputmode="numeric" pattern="[0-9]{4}|[0-9]{6}|[0-9]{8}" maxlength="8" required aria-describedby="hsnHint"><small id="hsnHint">Enter 4, 6 or 8 digits.</small></div><div class="form-actions"><button id="save" class="btn-sm btn-add" disabled>Save configuration</button></div></div></form>
+</section>
+<section class="panel">
+  <h2>Departments</h2>
+  <p>Departments available when creating or editing users.</p>
+  <form id="departmentForm" hidden>
+    <div class="form-row">
+      <div class="form-field"><label for="departmentName">Department name</label><input id="departmentName" maxlength="100" placeholder="e.g. Sales" required></div>
+      <button id="addDepartment" class="btn-sm btn-add" type="submit">Add department</button>
+    </div>
+  </form>
+  <p id="departmentMessage" role="status" aria-live="polite"></p>
+  <ul id="departmentsList" aria-label="Configured departments"></ul>
 </section></main>
 <script src="/static/configuration/configuration.js"></script>
 </body></html>

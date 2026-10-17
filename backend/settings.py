@@ -1,6 +1,7 @@
 """Shared application configuration managed by team leads and administrators."""
 import json
 import re
+import sqlite3
 
 from flask import Blueprint, jsonify, request, send_file
 
@@ -14,6 +15,48 @@ bp = Blueprint('settings', __name__)
 def shared_hsn(connection):
     row = connection.execute("SELECT value FROM app_settings WHERE key='hsn_code'").fetchone()
     return row[0] if row else ''
+
+
+def department_names(connection):
+    return [row[0] for row in connection.execute(
+        'SELECT name FROM departments ORDER BY name COLLATE NOCASE'
+    )]
+
+
+@bp.route('/api/departments', methods=['GET'])
+@permission_required('settings.manage')
+def list_departments():
+    connection = get_db()
+    try:
+        return jsonify(departments=department_names(connection))
+    finally:
+        connection.close()
+
+
+@bp.route('/api/departments', methods=['POST'])
+@permission_required('users.manage')
+def add_department():
+    """Administrators manage the choices shared by user creation and editing."""
+    data = request.get_json(silent=True)
+    name = data.get('name') if isinstance(data, dict) else None
+    if not isinstance(name, str) or not 1 <= len(name.strip()) <= 100:
+        return jsonify(error='Enter a department name (100 characters or fewer).'), 400
+    name = name.strip()
+    user = get_current_user()
+    connection = get_db()
+    try:
+        with connection:
+            cursor = connection.execute('INSERT INTO departments(name) VALUES (?)', (name,))
+            connection.execute(
+                'INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
+                "VALUES(?,?,'department_create','departments',?,?)",
+                (user['id'], user['username'], str(cursor.lastrowid), json.dumps({'name': name})),
+            )
+        return jsonify(departments=department_names(connection)), 201
+    except sqlite3.IntegrityError:
+        return jsonify(error='This department already exists.'), 409
+    finally:
+        connection.close()
 
 
 @bp.route('/api/sku-defaults', methods=['GET'])

@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request, send_file, session
 from werkzeug.security import generate_password_hash
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
+from backend.settings import department_names
 from backend.common.auth import (
     ROLE_LABELS, manager_required, permission_required,
 )
@@ -111,7 +112,8 @@ def api_manager_users():
             'supervisor_user_id '
             'FROM users ORDER BY id'
         ).fetchall()
-        return jsonify(users=[dict(row) for row in rows], roles=ROLE_LABELS)
+        return jsonify(users=[dict(row) for row in rows], roles=ROLE_LABELS,
+                       departments=department_names(connection))
     finally:
         connection.close()
 
@@ -137,6 +139,12 @@ def api_manager_add_user():
     connection = get_db()
     try:
         with connection:
+            configured = connection.execute(
+                'SELECT name FROM departments WHERE name = ?', (department,)
+            ).fetchone()
+            if not configured:
+                return jsonify(error='Choose a department from Configuration'), 400
+            department = configured['name']
             connection.execute(
                 'INSERT INTO users (username, password_hash, role, department) '
                 'VALUES (?, ?, ?, ?)',
@@ -304,6 +312,12 @@ def edit_user(uid):
         ).fetchone()
         if not target:
             return jsonify(error='User not found'), 404
+        configured = connection.execute(
+            'SELECT name FROM departments WHERE name = ?', (department.strip(),)
+        ).fetchone()
+        if not configured:
+            return jsonify(error='Choose a department from Configuration'), 400
+        department = configured['name']
         if uid == session['user_id'] and (
                 role != target['role'] or active != target['is_active']):
             return jsonify(error='Cannot change your own role or status'), 400

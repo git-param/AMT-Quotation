@@ -282,6 +282,7 @@ window.addEventListener('resize', () => {
 
 // ── User management ───────────────────────────────────────────────────────────
 let _users = [];
+let _departments = [];
 let _selectedUserId = null;
 let _savingUser = false;
 const userRoleLabels = {user: 'Sales Executive', manager: 'Admin', sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
@@ -292,6 +293,10 @@ async function loadUsers() {
   if (!resp.ok) { showAccessError(resp.status); return; }
   const data = await resp.json();
   _users = data.users || [];
+  _departments = data.departments || [];
+  const departmentInput = document.getElementById('newDepartment');
+  const currentDepartment = departmentInput.value;
+  fillDepartmentOptions(departmentInput, currentDepartment);
   const tbody = document.getElementById('usersList');
   tbody.replaceChildren();
   _users.forEach(user => {
@@ -325,6 +330,12 @@ async function loadUsers() {
   document.getElementById('resetUserId').replaceChildren(..._users.map(u => new Option(u.username, u.id)));
 }
 
+function fillDepartmentOptions(select, selected = '') {
+  select.replaceChildren(new Option(_departments.length ? 'Choose department' : 'Add departments in Configuration', ''),
+    ..._departments.map(name => new Option(name, name)));
+  select.value = _departments.find(name => name.toLowerCase() === String(selected || '').trim().toLowerCase()) || '';
+}
+
 function openUserDetails(id) {
   const user = _users.find(u => u.id === id);
   if (!user) return;
@@ -333,6 +344,10 @@ function openUserDetails(id) {
   document.getElementById('userDetailsMsg').className = 'msg';
   document.getElementById('editUserForm').hidden = true;
   document.getElementById('userDetailsActions').hidden = false;
+  const toggleStatus = document.getElementById('toggleUserStatus');
+  toggleStatus.textContent = user.is_active ? 'Deactivate user' : 'Activate user';
+  toggleStatus.className = `btn-sm ${user.is_active ? 'btn-del' : 'btn-activate'}`;
+  toggleStatus.disabled = user.id === _currentUserId;
   const details = document.getElementById('userDetails');
   details.hidden = false;
   details.replaceChildren();
@@ -359,7 +374,7 @@ function editSelectedUser() {
   const user = _users.find(u => u.id === _selectedUserId);
   if (!user) return;
   document.getElementById('editUsername').value = user.username;
-  document.getElementById('editDepartment').value = user.department || '';
+  fillDepartmentOptions(document.getElementById('editDepartment'), user.department);
   const roles = document.getElementById('editRole');
   const choices = {sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
   if (!Object.hasOwn(choices, user.role)) choices[user.role] = userRoleLabels[user.role] || user.role;
@@ -395,6 +410,33 @@ function updateEditSupervisor() {
 document.getElementById('editRole').onchange = updateEditSupervisor;
 document.getElementById('editStatus').onchange = updateEditSupervisor;
 document.getElementById('editUserButton').onclick = editSelectedUser;
+document.getElementById('toggleUserStatus').onclick = async () => {
+  const user = _users.find(u => u.id === _selectedUserId);
+  if (!user || _savingUser || user.id === _currentUserId) return;
+  const button = document.getElementById('toggleUserStatus');
+  const msg = document.getElementById('userDetailsMsg');
+  const active = user.is_active ? 0 : 1;
+  _savingUser = true;
+  button.disabled = true;
+  document.getElementById('editUserButton').disabled = true;
+  try {
+    const response = await fetch(`/api/manager/users/${user.id}/${active ? 'activate' : 'deactivate'}`, {method: 'POST'});
+    if ([401, 403].includes(response.status)) {
+      document.getElementById('userDetailsDialog').close(); showAccessError(response.status); return;
+    }
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Unable to change account status');
+    user.is_active = active;
+    openUserDetails(user.id);
+    showMsg(msg, active ? 'User activated.' : 'User deactivated.', true);
+    try { await loadUsers(); } catch (_) { showMsg(msg, 'Status saved. Reload to refresh the list.', true); }
+  } catch (error) { showMsg(msg, error.message || 'Unable to change account status', false); }
+  finally {
+    _savingUser = false;
+    button.disabled = user.id === _currentUserId;
+    document.getElementById('editUserButton').disabled = false;
+  }
+};
 document.getElementById('cancelUserEdit').onclick = () => { if (!_savingUser) openUserDetails(_selectedUserId); };
 document.getElementById('closeUserDetails').onclick = () => { if (!_savingUser) document.getElementById('userDetailsDialog').close(); };
 document.getElementById('userDetailsDialog').addEventListener('cancel', event => { if (_savingUser) event.preventDefault(); });
