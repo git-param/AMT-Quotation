@@ -37,7 +37,7 @@ precedence over current client defaults when editing.
 The delivery API accepts `consignee_text`, `buyer_text`, `notify_text` (up to 4,000
 characters each) and optional `instructions`. The first nonblank line is the
 legal name, following freeform lines hold address/location and unique additions.
-Recognized `Tel:`, `PIC:`, `Email:`, `GST:`/`GSTIN:` and `Country:` labels populate
+Recognized `Tel/Phone:` (also legacy `Tel:`), `PIC:`, `Email:`, `GST:`/`GSTIN:` and `Country:` labels populate
 validated contact snapshots. Email/telephone validation remains active. Country
 can also come from the saved order destination. PI readiness still requires a
 consignee name and location/country. Mixed text and structured input is rejected;
@@ -120,6 +120,13 @@ server. **PDF print preview** shows the exact padded A4 document; **Edit invoice
 returns to the editable page. Preview edits apply to the issued PI, leaving the
 source order intact. Seller/bank details, branding, reference, currency and
 ownership cannot be supplied or overridden by preview edits.
+
+Before PDF print preview, generation or download, the consignee country,
+GST number, Tel/Phone, PIC and email must be filled, together with the complete
+PI number and purchase order number. Missing fields appear together in a
+dismissible warning at the bottom right. Incomplete drafts remain editable;
+their PDF endpoints return validation errors instead of files. The same check
+applies to saved PDF downloads and legacy invoice generation.
 
 **Generate XLSX** and **Generate PDF** issue both formats together from one saved
 snapshot and PI reference. Subsequent downloads return the stored bytes. Issuance

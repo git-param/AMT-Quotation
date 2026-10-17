@@ -101,7 +101,7 @@ test('new orders prefill the department prefix and keep the full PI reference ed
 test('party blocks are prefilled from editable client data without removed order header fields',async()=>{
   const fixture=setup();await settle();await fixture.context.createOrder();
   const block=fixture.element('consignee_text').value;
-  assert.match(block,/Company/);assert.match(block,/Saved shipping/);assert.match(block,/Tel: \+12345678901/);assert.match(block,/Email: pic@example.com/);
+  assert.match(block,/Company/);assert.match(block,/Saved shipping/);assert.match(block,/Tel\/Phone: \+12345678901/);assert.match(block,/Email: pic@example.com/);
   assert.equal(fixture.element('buyer_text').value,fixture.context.window.orderLocations.addressOnly(block));assert.equal(fixture.element('notify_text').value,fixture.context.window.orderLocations.addressOnly(block));
   fixture.element('consignee_text').value=block+'\nOrder-only instruction';fixture.element('consignee_text').oninput();
   await fixture.element('orderForm').onsubmit({preventDefault(){}});

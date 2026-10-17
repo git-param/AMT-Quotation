@@ -228,6 +228,53 @@ class NativePiTests(unittest.TestCase):
         for invoice in (first,issued):
             self.assertEqual(self.client.get(invoice.json['pdf_url']).status_code,200)
 
+    def test_missing_contacts_block_print_pdf_download_and_generation_until_fixed(self):
+        import re
+        preview = self.preview()
+        url = self.base+'/preview/'+preview['preview_id']
+        complete = preview['document']['delivery']['consignee_text']
+        for label, display in [('GST No.', 'GST No.'), ('Tel/Phone', 'Tel/Phone'), ('PIC', 'PIC'), ('Email', 'Email')]:
+            incomplete = re.sub(r'^'+re.escape(label)+r':.*\n?', '', complete, flags=re.M)
+            changes = {'delivery': {'consignee_text': incomplete}}
+            printed = self.client.post(url+'/print', json=changes)
+            self.assertEqual(printed.status_code, 400, printed.json)
+            self.assertIn('Consignee '+display, printed.json['missing_fields'])
+            self.assertEqual(self.client.put(url+'?for_generation=1', json=changes).status_code, 400)
+            saved = self.client.put(url, json=changes)
+            self.assertEqual(saved.status_code, 200, saved.json)
+            self.assertEqual(self.client.get(saved.json['pdf_url']).status_code, 400)
+            self.assertEqual(self.issue(saved.json).status_code, 400)
+            self.assertEqual(self.client.put(url, json={'delivery': {'consignee_text': complete}}).status_code, 200)
+        self.assertEqual(self.client.get(preview['pdf_url']).status_code, 200)
+        issued = self.issue(preview)
+        self.assertEqual(issued.status_code, 201, issued.json)
+        self.assertEqual(self.client.get(issued.json['pdf_url']).status_code, 200)
+        connection = database.get_db()
+        with connection:
+            invoice = connection.execute('SELECT snapshot_json FROM order_invoices WHERE id=?', (issued.json['id'],)).fetchone()
+            snapshot = json.loads(invoice[0]);snapshot['delivery']['consignee_text'] = 'Consignee\nAddress'
+            connection.execute('UPDATE order_invoices SET snapshot_json=? WHERE id=?', (json.dumps(snapshot), issued.json['id']))
+        connection.close()
+        self.assertEqual(self.client.get(issued.json['pdf_url']).status_code, 400)
+
+    def test_country_is_required_and_legacy_generation_cannot_bypass_details(self):
+        from backend.orders.pi_document import validate_pdf_details, PiDetailsRequired
+        preview = self.preview()
+        document = deepcopy(preview['document'])
+        document['order']['destination'] = ''
+        document['delivery']['consignee_text'] = document['delivery']['consignee_text'].replace('USA\n', '')
+        with self.assertRaises(PiDetailsRequired) as caught:
+            validate_pdf_details(document)
+        self.assertIn('Consignee country', caught.exception.missing_fields)
+        self.client.put(f'/api/orders/{self.order_id}', json={
+            'pi_reference': '', 'po_reference': '',
+            'delivery': {'consignee_text': 'Company\nStreet address'},
+        })
+        response = self.client.post(self.base, json={'currency': 'USD'})
+        self.assertEqual(response.status_code, 400)
+        for field in ('Proforma Invoice No.', 'Purchase Order No.', 'Consignee GST No.', 'Consignee Tel/Phone', 'Consignee PIC', 'Consignee Email'):
+            self.assertIn(field, response.json['error'])
+
     def test_print_preview_blocks_unfinished_fields_without_saving(self):
         preview=self.preview()
         changes=self.edits(preview['document'])
@@ -277,7 +324,7 @@ class NativePiTests(unittest.TestCase):
             'consignee_text':block,'buyer_text':block,'notify_text':block}})
         preview=self.preview(currency='INR',usd_inr_rate='80')
         doc=preview['document']
-        self.assertIn('Tel:',doc['delivery']['consignee_text'])
+        self.assertIn('Tel/Phone:',doc['delivery']['consignee_text'])
         for key in ('buyer_text','notify_text'):
             self.assertEqual(doc['delivery'][key],address_only(block))
             self.assertNotIn('PIC:',doc['delivery'][key])
@@ -335,7 +382,7 @@ class NativePiTests(unittest.TestCase):
         self.assertEqual(len(cells),3)
         consignee=next(cell for cell in cells if cell['field']=='delivery.consignee_text')
         self.assertEqual(consignee['text'],'Consignee\nOrder destination')
-        self.assertEqual(parties['rows'][-1][0]['text'],'USA')
+        self.assertTrue(parties['rows'][-1][0]['text'].startswith('USA\n'))
         self.assertTrue(parties['rows'][-1][0]['bottom_aligned'])
         with ZipFile(BytesIO(pi_exports.xlsx(preview['document']))) as book:
             self.assertIn('Consignee\nOrder destination',book.read('xl/sharedStrings.xml').decode())
@@ -515,11 +562,11 @@ class NativePiTests(unittest.TestCase):
         self.assertIn('USA',doc['delivery']['consignee_text'].splitlines())
         url=self.base+'/preview/'+preview['preview_id']
         saved=self.client.put(url,json={'order':{'destination':'india'},'delivery':{
-            'consignee_text':'Updated consignee\nStreet address\nCountry: USA\nTel: +919876543210'}})
+            'consignee_text':'Updated consignee\nStreet address\nCountry: USA\nGST No.: 24TEST123\nTel/Phone: +919876543210\nPIC: Person\nEmail: person@example.com'}})
         self.assertEqual(saved.status_code,200,saved.json)
         self.assertEqual(saved.json['document']['order']['destination'],'INDIA')
         self.assertEqual(saved.json['document']['delivery']['consignee_text'],
-            'Updated consignee\nStreet address\nINDIA\nTel: +919876543210')
+            'Updated consignee\nStreet address\nINDIA\nGST No.: 24TEST123\nTel/Phone: +919876543210\nPIC: Person\nEmail: person@example.com')
         again=self.client.put(url,json={})
         self.assertEqual(again.json['document']['delivery'],saved.json['document']['delivery'])
         issued=self.issue(again.json)

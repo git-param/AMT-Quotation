@@ -280,7 +280,7 @@ def missing_details(doc):
     return missing
 
 
-def validate_ready(doc):
+def validate_pdf_details(doc):
     missing = missing_details(doc)
     if missing:
         raise PiDetailsRequired(missing)
@@ -288,6 +288,10 @@ def validate_ready(doc):
         parse_block(doc['delivery']['consignee_text'], doc['order'].get('destination', ''))
     except ValueError as error:
         raise ValueError('Consignee details: ' + str(error)) from error
+
+
+def validate_ready(doc):
+    validate_pdf_details(doc)
     if doc.get('pi_format') == 'bulk':
         if not text(doc.get('bulk_description',''),2000,'first-page description'):
             raise ValueError('Enter the first-page description for this bulk PI.')

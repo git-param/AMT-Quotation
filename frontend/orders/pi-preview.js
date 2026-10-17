@@ -1,15 +1,4 @@
 /* Editable commercial snapshot; the server owns identity, bank details and totals. */
-window.downloadPiFile = async function(url, filename) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || 'Unable to download the PI.');
-  }
-  const objectUrl = URL.createObjectURL(await response.blob());
-  const link = document.createElement('a'); link.href = objectUrl; link.download = filename;
-  document.body.append(link); link.click(); link.remove();
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-};
 window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}) {
   let state = null,
     issued = null,

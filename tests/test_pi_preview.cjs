@@ -60,6 +60,12 @@ test('PI party textareas keep multiline address and contact sections in one cont
   assert.equal(printed[0].url,'/api/preview/preview/print');
   assert.equal(printed[0].body.delivery.consignee_text,'');
   assert.equal(host.querySelectorAll('iframe')[0].src,'blob:print-preview');
+  const warnings=[];context.window.skuFeedback={show:(text,error)=>warnings.push({text,error})};
+  context.fetch=async()=>({ok:false,json:async()=>({error:'Missing: Consignee GST No., Consignee Tel/Phone, Consignee PIC, Consignee Email'})});
+  await host.querySelectorAll('button').find(button=>button.textContent==='PDF print preview').onclick();
+  assert.equal(warnings.length,1);assert.equal(warnings[0].error,true);
+  assert.match(warnings[0].text,/Consignee GST No\./);
+  assert.match(warnings[0].text,/Consignee Tel\/Phone/);
 });
 
 test('PI numeric edits refresh displayed totals and UOM uses fixed choices',async()=>{

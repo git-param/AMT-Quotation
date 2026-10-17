@@ -13,6 +13,7 @@
   }
   function download(label,url,className){
     const link=node('a',null,className);link.href=url;link.setAttribute('download','');
+    link.onclick=async event=>{event.preventDefault();try{await window.downloadPiFile(url);}catch(error){window.skuFeedback?.show(error.message,true);}};
     const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.setAttribute('viewBox','0 0 24 24');icon.setAttribute('fill','none');icon.setAttribute('stroke','currentColor');icon.setAttribute('stroke-width','1.7');icon.setAttribute('aria-hidden','true');
     const shape=document.createElementNS('http://www.w3.org/2000/svg','path');shape.setAttribute('d','M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5');icon.append(shape);link.append(icon,node('span',label));return link;
   }

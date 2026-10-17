@@ -9,7 +9,7 @@ from backend.common.auth import authenticated_required,get_current_user
 from backend.database import get_db
 from backend.orders.routes import bp
 from backend.orders.service import details,read_order,record_revision
-from backend.orders.pi_document import prepare,edit,validate_ready,print_document,recalculate,missing_details
+from backend.orders.pi_document import prepare,edit,validate_ready,validate_pdf_details,print_document,recalculate,missing_details
 from backend.orders import pi_exports
 from backend.orders.pi_layout import layout
 from backend.orders.filenames import invoice_filename
@@ -85,7 +85,7 @@ def save_preview(order_id,preview_id=None):
         # Keep the editor available for incomplete drafts without producing a PDF.
         missing = missing_details(doc)
         if not missing:
-            validate_ready(doc)
+            validate_pdf_details(doc)
             pi_exports.pdf(doc)
         connection.commit()
         return jsonify(preview_id=preview_id,document=doc,layout=layout(doc),
@@ -106,7 +106,7 @@ def preview_pdf(order_id,preview_id):
         row=preview_row(connection,order_id,preview_id,user)
         if not row:return jsonify(error='PI preview not found.'),404
         doc=json.loads(row['document_json'])
-        validate_ready(doc)
+        validate_pdf_details(doc)
         return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',
                          download_name=invoice_filename(doc['reference'],'pdf'),max_age=0)
     except ValueError as error:return validation_error(error)
@@ -125,7 +125,7 @@ def print_preview(order_id,preview_id):
         data=request.get_json(silent=True)
         if not isinstance(data,dict):return jsonify(error='Provide PI preview fields.'),400
         doc=print_document(json.loads(row['document_json']),data)
-        validate_ready(doc)
+        validate_pdf_details(doc)
         return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',download_name=invoice_filename(doc['reference'],'pdf'),max_age=0)
     except ValueError as error:return validation_error(error)
     finally:connection.close()

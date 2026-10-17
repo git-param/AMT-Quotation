@@ -68,7 +68,7 @@ class WorkspaceTests(unittest.TestCase):
             'destination': 'USA', 'delivery_time': '6 days', 'dispatch_method': 'Courier',
             'shipping_charges': '10.00', 'po_reference': 'PO/123',
             'delivery': {'shipping_address': {'line1': 'Order destination', 'country': 'USA'},
-                         'consignee': {'name': 'Consignee'},
+                         'consignee': {'name': 'Consignee', 'phone': '+12025550123', 'email': 'consignee@example.com', 'pic': 'Fixture Contact', 'gst_number': '24TEST123'},
                          'notify_party': {'name': 'Notify', 'address': {
                              'line1': 'Notify address', 'country': 'USA'}}},
             'lines': [{'sku': 'PART', 'description': '=Not an Excel formula', 'quantity': '3',
@@ -108,7 +108,7 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_direct_order_and_invoice_permissions_rechecked_for_each_request(self):
         self.templates()
-        order_id = self.direct()['order']['id']
+        order_id = self.direct(pi_reference='AMT/1234')['order']['id']
         path = f'/api/orders/{order_id}'
         invoice = self.client.post(path + '/invoices', json={'currency': 'USD'})
         self.assertEqual(invoice.status_code, 201, invoice.json)
@@ -136,7 +136,7 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_pi_currency_conversion_and_immutable_workbook(self):
         self.templates()
-        state = self.direct()
+        state = self.direct(pi_reference='AMT/1234')
         order_id = state['order']['id']
         path = f'/api/orders/{order_id}'
         for currency, rate in (('EUR', None), ('INR', None), ('INR', '0'), ('INR', '-1'),
@@ -186,8 +186,8 @@ class WorkspaceTests(unittest.TestCase):
                      'Tel: +12345678901\nPIC: Alice\nEmail: buyer@example.com')
         buyer = consignee + '\nBuyer registration: BUYER-123'
         notify = consignee + '\nNotify reference: N-456'
-        state = self.direct(payment_terms='', delivery={
-            'consignee_text': consignee, 'buyer_text': buyer, 'notify_text': notify,
+        state = self.direct(pi_reference='AMT/1234', payment_terms='', delivery={
+            'consignee_text': consignee+'\nGST No.: 24TEST123', 'buyer_text': buyer, 'notify_text': notify,
         })
         path = f"/api/orders/{state['order']['id']}"
         self.assertEqual(state['delivery']['consignee']['email'], 'buyer@example.com')
@@ -273,7 +273,7 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_missing_pi_fields_are_actionable_and_commercial_batch_is_scoped_and_atomic(self):
         self.templates()
-        state = self.direct()
+        state = self.direct(pi_reference='AMT/1234')
         order_id, line_id = state['order']['id'], state['lines'][0]['id']
         path = f'/api/orders/{order_id}'
         self.client.put(path + '/lines/' + str(line_id), json={'hsn_code': '', 'item_condition': ''})

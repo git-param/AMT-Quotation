@@ -399,6 +399,11 @@ def generate_invoice(order_id):
                            code='pi_lines_incomplete', missing_lines=missing), 400
         if not state['delivery']:
             raise ValueError('Complete the order delivery details before generating a PI.')
+        from backend.orders.pi_document import validate_ready, party_block
+        destination = state['delivery'] or {}
+        validate_ready({'reference': order['pi_reference'], 'order': state['order'], 'delivery': {
+            'consignee_text': destination.get('consignee_text') or party_block(destination.get('consignee'), destination.get('shipping_address')),
+        }})
         client = connection.execute('SELECT * FROM client_leads WHERE id = ?', (order['client_id'],)).fetchone()
         validated_delivery, _, _ = delivery(connection, client, {}, state['delivery'],
                                              destination=order['destination'])
@@ -412,7 +417,7 @@ def generate_invoice(order_id):
             state['order']['payment_terms'] = company_payment_terms(raw, sheet)
             payment_source = 'company_template'
         totals = calculate(state, data['currency'], data.get('usd_inr_rate'), tax)
-        reference = 'AMT/PI/' + uuid4().hex[:16].upper()
+        reference = order['pi_reference']
         issued = datetime.now(timezone(timedelta(hours=5, minutes=30))).date().isoformat()
         workbook = render(raw, sheet, first, state, totals, reference, issued, user['username'])
         snapshot = {'state': state, 'totals': totals, 'reference': reference, 'date': issued,
@@ -434,7 +439,7 @@ def generate_invoice(order_id):
         return jsonify(id=cursor.lastrowid, reference=reference, totals=totals,
                        download_url=f'/api/orders/{order_id}/invoices/{cursor.lastrowid}/download'), 201
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=str(error), missing_fields=getattr(error, 'missing_fields', [])), 400
     finally:
         connection.rollback()
         connection.close()
@@ -481,9 +486,9 @@ def download_invoice(order_id, invoice_id):
         if output_format=='pdf':
             if invoice['pdf'] is None:
                 return jsonify(error='This historical PI does not have a saved PDF.'),404
-            from backend.orders.pi_document import validate_ready
+            from backend.orders.pi_document import validate_pdf_details
             try:
-                validate_ready(json.loads(invoice['snapshot_json']))
+                validate_pdf_details(json.loads(invoice['snapshot_json']))
             except ValueError as error:
                 return jsonify(error=str(error), missing_fields=getattr(error, 'missing_fields', [])), 400
             return send_file(BytesIO(invoice['pdf']),as_attachment=True,
