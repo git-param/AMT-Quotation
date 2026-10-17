@@ -1,6 +1,15 @@
 const byId = id => document.getElementById(id);
 let clients = [];
-function message(text, error = false) { byId('message').textContent = text; byId('message').className = error ? 'error' : ''; }
+let messageTimer;
+
+function message(text, error = false) {
+  const box = byId('message');
+  box.textContent = text;
+  box.className = error ? 'error' : '';
+  clearTimeout(messageTimer);
+  if (!error) messageTimer = setTimeout(() => { box.textContent = ''; }, 5000);
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, options);
   if ([401, 403].includes(response.status)) {
@@ -11,28 +20,44 @@ async function api(path, options = {}) {
   if (!response.ok) throw new Error(data.error || 'Unable to complete this action.');
   return data;
 }
+
 function cell(row, value) { const td = document.createElement('td'); td.textContent = value; row.append(td); return td; }
+
 function empty(id, columns, text) {
-  const row = document.createElement('tr'); const td = cell(row, text);
-  td.colSpan = columns; td.className = 'source-empty'; byId(id).append(row);
+  const row = document.createElement('tr');
+  const td = cell(row, text);
+  td.colSpan = columns; td.className = 'empty';
+  byId(id).append(row);
 }
-function date(value) { return value ? new Date(value).toLocaleString() : 'Not recorded'; }
+
+const dateFormat = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+function date(value) {
+  if (!value) return 'Not recorded';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? String(value) : dateFormat.format(parsed);
+}
+
+const selectedClient = () => clients.find(c => String(c.id) === byId('client').value);
+
 async function details() {
   byId('shares').replaceChildren(); byId('events').replaceChildren();
-  if (!byId('client').value) { empty('shares', 6, 'No manageable clients yet. Create a lead first.'); return; }
+  if (!byId('client').value) { empty('shares', 6, 'No clients available.'); return; }
   const current = byId('client').value;
-  byId('grant').disabled = !clients.find(c => String(c.id) === current)?.is_active;
+  byId('grant').disabled = !selectedClient()?.is_active;
   const data = await api(`/api/client-access/${current}`);
   if (byId('client').value !== current) return;
   byId('shares').replaceChildren(); byId('events').replaceChildren();
+
   data.shares.forEach(share => {
     const row = document.createElement('tr');
-    cell(row, share.username);
+    const name = cell(row, share.username); name.className = 'account-name';
     const state = cell(row, ''); const badge = document.createElement('span');
     badge.className = `badge ${share.is_active ? 'badge-ok' : 'badge-warn'}`;
-    badge.textContent = share.is_active ? (share.account_active ? 'Granted' : 'Granted / account inactive') : 'Revoked'; state.append(badge);
+    badge.textContent = share.is_active ? (share.account_active ? 'Active' : 'Active / account inactive') : 'Revoked';
+    state.append(badge);
+
     const levelCell = cell(row, '');
-    if (share.is_active && share.account_active && clients.find(c => String(c.id) === current)?.is_active) {
+    if (share.is_active && share.account_active && selectedClient()?.is_active) {
       const selector = document.createElement('select');
       selector.className = 'role-select';
       selector.setAttribute('aria-label', `Access level for ${share.username}`);
@@ -41,55 +66,88 @@ async function details() {
         selector.disabled = true;
         try {
           await api(`/api/client-access/${current}/level`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: share.user_id, access_level: selector.value})});
-          await details(); message('Access level updated. Ownership is unchanged.');
+          await details(); message('Access updated.');
         } catch (error) { selector.value = share.access_level; message(error.message, true); }
         finally { selector.disabled = false; }
       };
       levelCell.append(selector);
     } else { levelCell.textContent = share.access_level; }
-    cell(row, date(share.granted_at)); cell(row, share.revoked_at ? date(share.revoked_at) : '-');
+
+    cell(row, date(share.granted_at)).className = 'muted-sm';
+    cell(row, share.revoked_at ? date(share.revoked_at) : '–').className = 'muted-sm';
+
     const actions = cell(row, '');
     if (share.is_active) {
-      const button = document.createElement('button'); button.className = 'btn-sm btn-del'; button.textContent = 'Revoke';
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'btn-sm btn-del'; button.textContent = 'Revoke';
       button.setAttribute('aria-label', `Revoke access for ${share.username}`);
       button.onclick = async () => {
         button.disabled = true;
         try {
           await api(`/api/client-access/${current}/revoke`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: share.user_id})});
-          await details(); message('Share revoked. Independent access, if any, remains.');
+          await details(); message('Access revoked.');
         } catch (error) { message(error.message, true); }
         finally { button.disabled = false; }
       };
       actions.append(button);
-    } else { actions.textContent = '-'; }
+    } else { actions.textContent = '–'; }
     byId('shares').append(row);
   });
+
   data.events.forEach(event => {
     const row = document.createElement('tr');
-    [event.action === 'grant' ? (event.previous_access_level ? 'Level changed' : 'Granted') : 'Revoked', event.recipient_name, event.previous_access_level && event.action === 'grant' ? `${event.previous_access_level} ? ${event.access_level}` : event.access_level, event.actor_name, date(event.occurred_at)].forEach(value => cell(row, value));
+    const action = event.action === 'grant' ? (event.previous_access_level ? 'Level changed' : 'Granted') : 'Revoked';
+    const change = event.previous_access_level && event.action === 'grant'
+      ? `${event.previous_access_level} → ${event.access_level}` : event.access_level;
+    [action, event.recipient_name, change, event.actor_name, date(event.occurred_at)].forEach((value, index) => {
+      const td = cell(row, value);
+      if (index === 4) td.className = 'muted-sm';
+    });
     byId('events').append(row);
   });
-  if (!data.shares.length) empty('shares', 6, 'No executives have been granted access to this client.');
-  if (!data.events.length) empty('events', 5, 'No sharing changes recorded. Imported shares may have no attribution.');
+
+  if (!data.shares.length) empty('shares', 6, 'Not shared with anyone yet.');
+  if (!data.events.length) empty('events', 5, 'No history yet.');
 }
-async function load() {
+
+// Fill the "User" filter with the people who own the clients.
+function renderOwners() {
+  const current = byId('owner').value;
+  const owners = [...new Set(clients.map(lead => lead.creator_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  byId('owner').replaceChildren(new Option('All users', ''), ...owners.map(name => new Option(name, name)));
+  byId('owner').value = owners.includes(current) ? current : '';
+}
+
+// Fill the client list, limited to the chosen user, keeping the current client if it is still listed.
+function renderClients() {
   const selected = byId('client').value;
+  const owner = byId('owner').value;
+  const visible = owner ? clients.filter(lead => lead.creator_name === owner) : clients;
+  byId('client').replaceChildren(...visible.map(lead => new Option(`${lead.name} / ${lead.creator_name}${lead.is_active ? '' : ' / Inactive'}`, lead.id)));
+  if (visible.some(lead => String(lead.id) === selected)) byId('client').value = selected;
+}
+
+async function load() {
   const data = await api('/api/client-access'); clients = data.leads;
   byId('hdrUser').textContent = data.username;
-  byId('client').replaceChildren(...clients.map(lead => new Option(`${lead.name} / ${lead.creator_name}${lead.is_active ? '' : ' / Inactive'}`, lead.id)));
-  if (clients.some(lead => String(lead.id) === selected)) byId('client').value = selected;
+  renderOwners();
+  renderClients();
   byId('executive').replaceChildren(new Option('Choose an executive', ''), ...data.executives.map(user => new Option(user.username, user.id)));
-  byId('grant').disabled = !clients.length || !data.executives.length || !clients.find(c => String(c.id) === byId('client').value)?.is_active;
+  byId('grant').disabled = !clients.length || !data.executives.length || !selectedClient()?.is_active;
   await details();
 }
+
+byId('owner').onchange = () => { renderClients(); details().catch(error => message(error.message, true)); };
 byId('client').onchange = () => details().catch(error => message(error.message, true));
 byId('refresh').onclick = () => load().catch(error => message(error.message, true));
 byId('grantForm').onsubmit = async event => {
   event.preventDefault(); byId('grant').disabled = true;
   try {
     await api(`/api/client-access/${byId('client').value}/grant`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: Number(byId('executive').value), access_level: byId('accessLevel').value})});
-    await details(); message(`${byId('accessLevel').value} access granted. Ownership is unchanged.`);
+    await details(); message(`${byId('accessLevel').value} access granted.`);
+    byId('executive').value = '';
   } catch (error) { message(error.message, true); }
-  finally { byId('grant').disabled = !clients.find(c => String(c.id) === byId('client').value)?.is_active; }
+  finally { byId('grant').disabled = !selectedClient()?.is_active; }
 };
+
 (async () => { try { await load(); byId('content').hidden = false; } catch (error) { message(error.message, true); } })();

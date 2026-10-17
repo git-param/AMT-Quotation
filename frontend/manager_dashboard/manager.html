@@ -11,145 +11,185 @@
 <link rel="stylesheet" href="/static/common/sidebar.css"><script src="/static/common/sidebar.js" defer></script></head>
 <body>
 
-<div class="hdr">
-  <div>
-    <div class="hdr-logo">AMT Manager Dashboard</div>
-    <div class="hdr-sub">Quotation activity overview</div>
+<header class="hdr">
+  <div class="hdr-brand">
+    <div class="hdr-mark" aria-hidden="true">📊</div>
+    <div>
+      <div class="hdr-logo">AMT Manager Dashboard</div>
+      <div class="hdr-sub">Quotation activity overview</div>
+    </div>
   </div>
-  <div style="display:flex;align-items:center;gap:12px">
-    <button class="refresh-btn" onclick="loadStats()">↺ Refresh</button>
-    <span class="last-updated" id="lastUpdated"></span>
-    <span id="hdrUser" style="font-size:12px;color:#93C5FD"></span>
-     <a class="back-link" id="accessLink" href="/client-access" style="display:none">Client Access / Sharing</a> <a class="back-link" href="/clients-orders">Clients &amp; Orders</a> <a href="/sources" id="sourcesLink" class="back-link" style="display:none">Enquiry Sources</a>
-    <a href="/" class="back-link">← Quotation Tool</a>
-    <a href="/logout" class="back-link" style="border-color:#F87171;color:#F87171">Sign Out</a>
-  </div>
-</div>
+  <nav class="hdr-nav" aria-label="Main">
+    <span class="hdr-user" id="hdrUser"></span>
+    <a class="nav-link" id="accessLink" href="/client-access" style="display:none">Client Access / Sharing</a>
+    <a class="nav-link" href="/clients-orders">Clients &amp; Orders</a>
+    <a class="nav-link" id="sourcesLink" href="/sources" style="display:none">Enquiry Sources</a>
+    <a class="nav-link" href="/">← Quotation Tool</a>
+    <a class="nav-link is-signout" href="/logout">Sign Out</a>
+  </nav>
+</header>
 
 <p id="accessStatus" role="alert"></p>
-<div class="wrap" id="dashboardContent" hidden>
 
-  <!-- Summary cards -->
-  <div class="cards">
-    <div class="card"><span class="card-icon">🔍</span><div class="card-val" id="c-searches">—</div><div class="card-lbl">Searches Today</div></div>
-    <div class="card"><span class="card-icon">📦</span><div class="card-val" id="c-skus">—</div><div class="card-lbl">SKUs Looked Up Today</div></div>
-    <div class="card"><span class="card-icon">✅</span><div class="card-val" id="c-found">—</div><div class="card-lbl">SKUs Found Today</div></div>
-    <div class="card"><span class="card-icon">📋</span><div class="card-val" id="c-copies">—</div><div class="card-lbl">Quotations Copied Today</div></div>
-  </div>
+<main class="wrap" id="dashboardContent" hidden>
 
-  <!-- Charts -->
-  <div class="charts-row">
-    <div class="panel">
-      <div class="panel-title">Searches per Day — Last 14 Days</div>
-      <canvas id="chartDays" height="120"></canvas>
+  <div class="page-head">
+    <div>
+      <h1>Team activity at a glance</h1>
+      <p>See how your team is using the quotation tool today.</p>
     </div>
-    <div class="panel">
-      <div class="panel-title">Top Users by SKUs Searched</div>
-      <canvas id="chartUsers" height="160"></canvas>
-    </div>
-    <div class="panel">
-      <div class="panel-title">Copy Type Breakdown</div>
-      <canvas id="chartCopies" height="160"></canvas>
+    <div class="page-actions">
+      <span class="last-updated" id="lastUpdated"></span>
+      <button class="refresh-btn" type="button" onclick="loadStats()">↻ Refresh</button>
     </div>
   </div>
 
-  <!-- Tables -->
-  <div class="tables-row">
+  <!-- Tabs (only shown to people who can manage users) -->
+  <div class="tabs" id="tabs" role="tablist" hidden>
+    <button class="tab is-active" type="button" role="tab" data-tab="overview" aria-selected="true">Activity</button>
+    <button class="tab" type="button" role="tab" data-tab="users" aria-selected="false">Team &amp; Access</button>
+  </div>
+
+  <!-- ================= ACTIVITY ================= -->
+  <section id="viewOverview">
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-top"><span class="card-lbl">Searches Today</span><span class="card-icon ic-blue" aria-hidden="true">🔍</span></div>
+        <div class="card-val" id="c-searches">—</div>
+        <div class="card-hint">Search requests made</div>
+      </div>
+      <div class="card">
+        <div class="card-top"><span class="card-lbl">SKUs Looked Up</span><span class="card-icon ic-violet" aria-hidden="true">📦</span></div>
+        <div class="card-val" id="c-skus">—</div>
+        <div class="card-hint">Item codes checked today</div>
+      </div>
+      <div class="card">
+        <div class="card-top"><span class="card-lbl">SKUs Found</span><span class="card-icon ic-green" aria-hidden="true">✅</span></div>
+        <div class="card-val" id="c-found">—</div>
+        <div class="card-hint">Matches found today</div>
+      </div>
+      <div class="card">
+        <div class="card-top"><span class="card-lbl">Quotations Copied</span><span class="card-icon ic-amber" aria-hidden="true">📋</span></div>
+        <div class="card-val" id="c-copies">—</div>
+        <div class="card-hint">Copied today</div>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="panel">
+        <div class="panel-title">SKUs searched per day</div>
+        <div class="panel-sub">Last 14 days</div>
+        <div class="chart-box"><canvas id="chartDays"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Top users</div>
+        <div class="panel-sub">By SKUs searched</div>
+        <div class="chart-box"><canvas id="chartUsers"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">What gets copied</div>
+        <div class="panel-sub">Copy type breakdown</div>
+        <div class="chart-box"><canvas id="chartCopies"></canvas></div>
+      </div>
+    </div>
+
+    <div class="tables-row">
+      <div class="panel">
+        <div class="panel-title">Recent searches</div>
+        <div class="panel-sub">The latest lookups from your team</div>
+        <div class="table-scroll">
+          <table class="tbl">
+            <thead><tr><th>User</th><th>SKUs</th><th>Found</th><th>Not Found</th><th>Time</th></tr></thead>
+            <tbody id="tblRecent"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Most searched SKUs</div>
+        <div class="panel-sub">All time</div>
+        <div class="table-scroll">
+          <table class="tbl">
+            <thead><tr><th>SKU</th><th>Times Searched</th></tr></thead>
+            <tbody id="tblTopSkus"><tr><td colspan="2" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <div class="panel">
-      <div class="panel-title">Recent Searches</div>
-      <div style="overflow-x:auto;max-height:340px;overflow-y:auto">
+      <div class="panel-title">User activity</div>
+      <div class="panel-sub">All time, per person</div>
+      <div class="table-scroll is-flat">
         <table class="tbl">
-          <thead><tr>
-            <th>User</th><th>SKUs</th><th>Found</th><th>Not Found</th><th>Time</th>
-          </tr></thead>
-          <tbody id="tblRecent"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+          <thead><tr><th>User</th><th>Searches</th><th>SKUs Looked Up</th><th>SKUs Found</th><th>Hit Rate</th><th>Last Active</th></tr></thead>
+          <tbody id="tblUsers"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
-    <div class="panel">
-      <div class="panel-title">Top Searched SKUs (All Time)</div>
-      <div style="overflow-x:auto;max-height:340px;overflow-y:auto">
+  </section>
+
+  <!-- ================= TEAM & ACCESS ================= -->
+  <section id="viewUsers" hidden>
+
+    <div class="user-grid" id="userManagement">
+      <div class="panel">
+        <div class="panel-title">Add a new user</div>
+        <div class="panel-sub">They can sign in right away with these details.</div>
+        <div class="form-row">
+          <div class="form-field">
+            <label for="newUsername">Username</label>
+            <input type="text" id="newUsername" placeholder="e.g. priya" maxlength="40">
+          </div>
+          <div class="form-field">
+            <label for="newPassword">Password</label>
+            <input type="password" id="newPassword" placeholder="min 4 characters" maxlength="80">
+          </div>
+          <div class="form-field" style="min-width:160px">
+            <label for="newRole">Role</label>
+            <select id="newRole">
+              <option value="sales_executive">Sales Executive</option>
+              <option value="sales_tl">Sales TL</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <button class="btn-sm btn-add" type="button" onclick="addUser()">Add user</button>
+        </div>
+        <div class="msg" id="addMsg"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Reset a password</div>
+        <div class="panel-sub">Pick a person and set a new password for them.</div>
+        <div class="form-row">
+          <div class="form-field">
+            <label for="resetUserId">User</label>
+            <select id="resetUserId"></select>
+          </div>
+          <div class="form-field">
+            <label for="resetPassword">New password</label>
+            <input type="password" id="resetPassword" placeholder="min 4 characters" maxlength="80">
+          </div>
+          <button class="btn-sm btn-pwd" type="button" onclick="resetPassword()">Reset</button>
+        </div>
+        <div class="msg" id="resetMsg"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="userListPanel">
+      <div class="panel-title">All users</div>
+      <div class="panel-sub">Change roles, assign a supervisor, or switch accounts on and off.</div>
+      <div class="table-scroll is-flat">
         <table class="tbl">
-          <thead><tr><th>SKU</th><th>Times Searched</th></tr></thead>
-          <tbody id="tblTopSkus"><tr><td colspan="2" class="empty">Loading…</td></tr></tbody>
+          <thead><tr><th>Username</th><th>Role</th><th>Supervisor</th><th>Created</th><th>Status</th></tr></thead>
+          <tbody id="usersList"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
+      <div class="msg" id="deleteMsg"></div>
     </div>
-  </div>
+  </section>
 
-  <!-- User Management -->
-  <div class="user-grid" id="userManagement" style="margin-bottom:18px;display:none">
-    <!-- Add user -->
-    <div class="panel">
-      <div class="panel-title">Add New User</div>
-      <div class="form-row">
-        <div class="form-field">
-          <label>Username</label>
-          <input type="text" id="newUsername" placeholder="e.g. priya" maxlength="40">
-        </div>
-        <div class="form-field">
-          <label>Password</label>
-          <input type="password" id="newPassword" placeholder="min 4 chars" maxlength="80">
-        </div>
-        <div class="form-field" style="min-width:160px">
-          <label>Role</label>
-          <select id="newRole">
-            <option value="sales_executive">Sales Executive</option>
-            <option value="sales_tl">Sales TL</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
-        <button class="btn-sm btn-add" onclick="addUser()">Add</button>
-      </div>
-      <div class="msg" id="addMsg"></div>
-    </div>
-
-    <!-- Reset password -->
-    <div class="panel">
-      <div class="panel-title">Reset User Password</div>
-      <div class="form-row">
-        <div class="form-field">
-          <label>Select User</label>
-          <select id="resetUserId"></select>
-        </div>
-        <div class="form-field">
-          <label>New Password</label>
-          <input type="password" id="resetPassword" placeholder="min 4 chars" maxlength="80">
-        </div>
-        <button class="btn-sm btn-pwd" onclick="resetPassword()">Reset</button>
-      </div>
-      <div class="msg" id="resetMsg"></div>
-    </div>
-  </div>
-
-  <!-- User list -->
-  <div class="panel" id="userListPanel" style="margin-bottom:18px;display:none">
-    <div class="panel-title">All Users</div>
-    <div style="overflow-x:auto">
-      <table class="tbl">
-        <thead><tr>
-          <th>Username</th><th>Role</th><th>Supervisor</th><th>Created</th><th>Actions</th>
-        </tr></thead>
-        <tbody id="usersList"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-      </table>
-    </div>
-    <div class="msg" id="deleteMsg"></div>
-  </div>
-
-  <!-- User breakdown -->
-  <div class="panel">
-    <div class="panel-title">User Activity (All Time)</div>
-    <div style="overflow-x:auto">
-      <table class="tbl">
-        <thead><tr>
-          <th>User</th><th>Searches</th><th>SKUs Looked Up</th><th>SKUs Found</th><th>Hit Rate</th><th>Last Active</th>
-        </tr></thead>
-        <tbody id="tblUsers"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-
-</div>
+</main>
 
 <script src="/static/manager_dashboard/manager.js"></script>
 </body>

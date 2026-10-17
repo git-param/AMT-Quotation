@@ -1,1 +1,31 @@
-#grantForm{margin-top:20px}#grantForm .form-row{align-items:flex-end;gap:16px}#grantForm .form-field{max-width:450px}.access-history{margin-top:22px}.source-toolbar p{max-width:650px;line-height:1.6}.source-table td{overflow-wrap:anywhere}#client{max-width:700px}.form-field select{width:100%}@media(max-width:650px){#grantForm .form-row{flex-direction:column;align-items:stretch}#grantForm .form-field{max-width:none}.source-toolbar{gap:12px}}
+/* Client Access — uses the shared tokens and components from manager.css */
+.access-wrap{max-width:1100px}
+#content>.panel+.panel{margin-top:20px}
+
+/* One-row grant form */
+.access-bar{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px;align-items:end}
+.access-bar .f-owner{grid-column:span 4}
+.access-bar .f-client{grid-column:span 8}
+.access-bar .f-exec{grid-column:span 5}
+.access-bar .f-level{grid-column:span 4}
+.access-bar .btn-sm{grid-column:span 3;min-height:40px}
+
+/* Panel heading with an action on the right */
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.panel-head h2.panel-title{margin:0}
+
+/* Status message */
+#message{margin-bottom:16px}
+#message:not(:empty){padding:11px 16px;border-radius:12px;font-size:13px;font-weight:600;background:var(--ok-soft);color:#166534}
+#message.error:not(:empty){background:var(--err-soft);color:#9F1239}
+
+.hdr h1.hdr-logo{font-size:17px}
+
+@media(max-width:850px){
+  .access-bar .f-owner,.access-bar .f-client{grid-column:1/-1}
+  .access-bar .f-exec,.access-bar .f-level{grid-column:span 6}
+  .access-bar .btn-sm{grid-column:1/-1}
+}
+@media(max-width:560px){
+  .access-bar .f-exec,.access-bar .f-level{grid-column:1/-1}
+}

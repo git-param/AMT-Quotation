@@ -14,11 +14,17 @@
 
 <body>
     <header class="hdr">
-        <div>
-            <div class="hdr-logo">TL Dashboard</div>
-            <div class="hdr-sub">Team performance and lookup activity</div>
+        <div class="hdr-brand">
+            <div class="hdr-mark" aria-hidden="true">👥</div>
+            <div>
+                <div class="hdr-logo">TL Dashboard</div>
+                <div class="hdr-sub">Team performance and lookup activity</div>
+            </div>
         </div>
-        <nav><a href="/clients-orders">Clients &amp; Orders</a><a href="/logout">Sign Out</a></nav>
+        <nav class="hdr-nav" aria-label="Main">
+            <a class="nav-link" href="/clients-orders">Clients &amp; Orders</a>
+            <a class="nav-link is-signout" href="/logout">Sign Out</a>
+        </nav>
     </header>
     <main class="tl-page">
         <div class="tl-intro">
@@ -27,26 +33,44 @@
                 <p>Track client creation, generated PIs and the SKUs your team searches.</p>
             </div><span id="tlScope" class="tl-scope">Loading team...</span>
         </div>
+
         <form id="tlFilters" class="tl-filters">
+            <div class="tl-chips" role="group" aria-label="Quick date ranges">
+                <span>Quick range</span>
+                <button type="button" class="tl-chip" data-range="today">Today</button>
+                <button type="button" class="tl-chip" data-range="7">Last 7 days</button>
+                <button type="button" class="tl-chip" data-range="30">Last 30 days</button>
+                <button type="button" class="tl-chip" data-range="month">This month</button>
+            </div>
             <div class="tl-field tl-user-field"><label for="tlUser">User</label><select id="tlUser">
                     <option value="">All accessible users</option>
                 </select></div>
             <div class="tl-field"><label for="tlFrom">From date</label><input id="tlFrom" type="date"></div>
-            <div class="tl-field"><label for="tlTo">To date</label><input id="tlTo" type="date"></div><button
-                id="tlApply" class="tl-primary" type="submit">Apply filters</button><button id="tlClear"
-                type="button">Clear</button>
-            <p>Dates and times are in IST. Filters apply to both sections.</p>
+            <div class="tl-field"><label for="tlTo">To date</label><input id="tlTo" type="date"></div>
+            <button id="tlApply" class="tl-primary" type="submit">Apply filters</button>
+            <button id="tlClear" type="button">Clear</button>
+            <p>Dates and times are in IST. Filters apply to both sections below.</p>
         </form>
+
         <div class="tl-stats" aria-label="Team totals">
-            <article><span>Clients created</span><strong id="tlClients">—</strong><small>Current client records</small>
+            <article>
+                <div class="tl-stat-top"><span>Clients created</span><i class="tl-ico ic-blue" aria-hidden="true">🧑‍💼</i></div>
+                <strong id="tlClients">—</strong><small>Current client records</small>
             </article>
-            <article><span>PIs generated</span><strong id="tlPis">—</strong><small>Saved, available invoices</small>
+            <article>
+                <div class="tl-stat-top"><span>PIs generated</span><i class="tl-ico ic-green" aria-hidden="true">🧾</i></div>
+                <strong id="tlPis">—</strong><small>Saved, available invoices</small>
             </article>
-            <article><span>Lookup requests</span><strong id="tlRequests">—</strong><small>Quotation and item
-                    searches</small></article>
-            <article><span>Unique SKUs searched</span><strong id="tlSkus">—</strong><small>Across the selected users and
-                    dates</small></article>
+            <article>
+                <div class="tl-stat-top"><span>Lookup requests</span><i class="tl-ico ic-violet" aria-hidden="true">🔍</i></div>
+                <strong id="tlRequests">—</strong><small>Quotation and item searches</small>
+            </article>
+            <article>
+                <div class="tl-stat-top"><span>Unique SKUs searched</span><i class="tl-ico ic-amber" aria-hidden="true">📦</i></div>
+                <strong id="tlSkus">—</strong><small>Across the selected users and dates</small>
+            </article>
         </div>
+
         <section class="tl-panel">
             <div class="tl-section-heading">
                 <div><span class="tl-eyebrow">Production</span>
@@ -70,6 +94,7 @@
                 </table>
             </div>
         </section>
+
         <section class="tl-panel">
             <div class="tl-section-heading">
                 <div><span class="tl-eyebrow">Activity</span>
@@ -99,6 +124,7 @@
                         1 of 1</span><button id="tlLookupNext" type="button" disabled>Next</button></div>
             </div>
         </section>
+
         <section id="tlCleanup" class="tl-cleanup" hidden>
             <div><span class="tl-eyebrow">Admin controls</span>
                 <h2>Clean up older lookup history</h2>
@@ -111,6 +137,7 @@
             </form>
         </section>
     </main>
+
     <dialog id="tlPiDialog" class="tl-pi-dialog" aria-labelledby="tlPiTitle">
         <div class="tl-dialog-heading">
             <div><span class="tl-eyebrow">Client distribution</span>
@@ -137,8 +164,10 @@
                     1</span><button id="tlPiNext" type="button" disabled>Next</button></div>
         </div>
     </dialog>
+
     <script src="/static/common/sku-feedback.js"></script>
     <script src="/static/manager_dashboard/team.js"></script>
+    <script src="/static/manager_dashboard/team-presets.js"></script>
 </body>
 
 </html>
