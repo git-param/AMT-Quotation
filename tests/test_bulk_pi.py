@@ -226,7 +226,9 @@ class BulkPiTests(unittest.TestCase):
         self.assertEqual(changed.json['document']['annexure_quantity'],'1 Lot (packed)')
         original_totals = preview['document']['totals']
         self.assertEqual(changed.json['document']['totals'],original_totals)
-        response = self.client.post(url+'/calculate',json={'lines':[{'id':preview['document']['totals']['lines'][0]['id'],'quantity':'2','uom':'Lot'}]})
+        response = self.client.post(url+'/calculate',json={'lines':[
+            {'id':line['id'],'quantity':'2','uom':'Lot' if index==0 else line['uom']}
+            for index,line in enumerate(preview['document']['totals']['lines'])]})
         self.assertEqual(response.status_code,200,response.json)
         self.assertEqual(response.json['totals']['annexure_quantity'],'1 Lot (packed)')
         printed = self.client.post(url+'/print',json={'annexure_quantity':'2 Kits (print only)'})

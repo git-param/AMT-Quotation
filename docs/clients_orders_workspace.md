@@ -143,6 +143,12 @@ dismissible warning at the bottom right. Incomplete drafts remain editable;
 their PDF endpoints return validation errors instead of files. The same check
 applies to saved PDF downloads and legacy invoice generation.
 
+Rate headings follow the UOM: PCs, Lot, Kit or Set.
+Mixed units use "Rate / PCs or Rate / Lot" when pieces are included, grouping
+Kit/Set with Lot in mixed headings. Annexure quantities include their UOM.
+The annexure total quantity is editable display text; it does not alter item
+quantities or invoice amounts. Clearing it restores the automatic grouped total.
+
 **Generate XLSX** and **Generate PDF** issue both formats together from one saved
 snapshot and PI reference. Subsequent downloads return the stored bytes. Issuance
 is idempotent for the same preview ID, rejects a changed source order, rechecks
