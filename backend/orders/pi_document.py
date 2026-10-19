@@ -296,8 +296,12 @@ def missing_details(doc):
             if key: values[key] = match[2].strip()
     if not (country or values.get('country')):
         missing.append('Consignee country')
+    consignee_country = country or values.get('country', '')
+    india = consignee_country.strip().casefold() == 'india'
+    if not india:
+        india = any(line.strip().casefold() == 'india' for line in doc.get('delivery', {}).get('consignee_text', '').splitlines())
     for key, label in [('gst_number', 'GST No.'), ('phone', 'Tel/Phone'), ('pic', 'PIC'), ('email', 'Email')]:
-        if key == 'gst_number' and doc.get('currency') != 'INR':
+        if key == 'gst_number' and not india:
             continue
         if not values.get(key) or (key == 'phone' and len(re.sub(r'[^0-9]', '', values[key])) < 7):
             missing.append('Consignee ' + label)

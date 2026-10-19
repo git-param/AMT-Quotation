@@ -9,7 +9,6 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     status,
     toolbar;
   let printUrl=null;
-  let showRequired=false;
   let calculationTimer=null,calculationVersion=0,calculated=[];
   let rateHeaders=[];
   function updateRateHeading(){
@@ -56,15 +55,14 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     return window.orderLocations.joinParty(item.primaryInput.value,secondary);
   }
   function contactWarnings(notify=false){
-    if(!showRequired)return;
     const party=inputs.find(item=>item.path==='delivery.consignee_text');
+    const destination=inputs.find(item=>item.path==='order.destination')?.input.value||state.document.order.destination||'';
+    const india=String(destination).trim().toLowerCase()==='india';
     const missing=[];
     for(const contact of party?.contacts||[]){
       const value=contact.input.value.trim();
       const absent=contact.key==='phone'?value.replace(/\D/g,'').length<7:!value;
-      const required=absent&&(contact.key!=='gst'||state.document.currency==='INR');
-      contact.mark.hidden=!required;
-      contact.input.setAttribute('aria-invalid',String(required));
+      const required=absent&&(contact.key!=='gst'||india);
       if(required)missing.push(contact.label);
     }
     if(notify&&missing.length){
@@ -158,10 +156,8 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       const line=lines.find(line=>pattern.test(line));
       const control=field(group,label,line?line.slice(line.indexOf(':')+1).trim():'',path+'.'+key,false,key==='phone'?'tel':'text');
       inputs.pop();
-      const mark=node('span',' *required','pi-required-message');mark.hidden=true;
-      control.parentElement.firstChild.append(mark);
       control.addEventListener('input',()=>{entry.modified=true;contactWarnings();});
-      entry.contacts.push({key,label,pattern,input:control,mark});
+      entry.contacts.push({key,label,pattern,input:control});
     }
     fitText(primaryInput);fitText(input);
     return input;
@@ -205,7 +201,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       button('Update preview',save);
       button('Edit invoice',async()=>{printFrame.hidden=true;paper.hidden=false;});
       button('PDF print preview',async()=>{
-        showRequired=true;contactWarnings(true);
+        contactWarnings(true);
         const response=await fetch(state.base+'/'+state.preview_id+'/print',json('POST',collect()));
         if(!response.ok){const error=await response.json();throw new Error(error.error||'Unable to open print preview.');}
         const blob=await response.blob();clearPrintUrl();printUrl=URL.createObjectURL(blob);
@@ -214,7 +210,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       });
     }
     for(const format of ['xlsx','pdf'])button('Generate '+format.toUpperCase(),async()=>{
-      showRequired=true;contactWarnings(true);
+      contactWarnings(true);
       if(!issued){await save(true);issued=await api(state.base.replace('/preview','/issue'),json('POST',{preview_id:state.preview_id}));await onIssued(issued);render();}
       await window.downloadPiFile(issued[format+'_url'],issued[format+'_filename']||issued.reference.replace(/[<>:"/\\|?*\u0000-\u001f]/g,'-')+'.'+format);
     },true);
@@ -310,7 +306,6 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       clearPrintUrl();
       state = { ...data, base };
       issued = null;
-      showRequired=false;
       render();
       host.scrollIntoView({ behavior: "smooth", block: "start" });
     },

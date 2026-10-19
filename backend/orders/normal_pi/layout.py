@@ -11,6 +11,17 @@ WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
           15.7109375,8.7109375,8,16,8.7109375,8.140625]
 
 
+def india_destination(doc):
+    country=(doc.get('order',{}).get('destination') or '').strip()
+    if not country:
+        match=re.search(r'^\s*Country\s*:\s*(.+)$',doc.get('delivery',{}).get('consignee_text',''),re.I|re.M)
+        country=match[1].strip() if match else ''
+    if not country:
+        country=next((line.strip() for line in doc.get('delivery',{}).get('consignee_text','').splitlines()
+                      if line.strip().casefold()=='india'),'')
+    return country.casefold()=='india'
+
+
 def display_uom(unit):
     return 'Set' if unit.lower() == 'set' else unit
 
@@ -50,7 +61,7 @@ def layout(doc):
             required=[('phone','Tel/Phone',re.compile(r'^\s*(?:Tel(?:/Phone)?|Telephone|Phone)\s*:\s*(.*)$',re.I)),
                       ('pic','PIC',re.compile(r'^\s*PIC\s*:\s*(.*)$',re.I)),
                       ('email','Email',re.compile(r'^\s*E-?mail\s*:\s*(.*)$',re.I))]
-            if doc['currency']=='INR':required.append(('gst','GST No.',re.compile(r'^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$',re.I)))
+            if india_destination(doc):required.append(('gst','GST No.',re.compile(r'^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$',re.I)))
             display_lines=display.splitlines()
             seen=set()
             for key,label,pattern in required:
@@ -59,7 +70,9 @@ def layout(doc):
                     match=pattern.match(line)
                     if match:
                         seen.add(key)
-                        line=(line[:line.index(':')+1]+' *required') if not match[1].strip() else line
+                        missing_value=not match[1].strip()
+                        if key=='phone':missing_value=len(re.sub(r'[^0-9]','',match[1]))<7
+                        line=(line[:line.index(':')+1]+' *required') if missing_value else line
                     replacement.append(line)
                 display_lines=replacement
             for key,label,_ in required:

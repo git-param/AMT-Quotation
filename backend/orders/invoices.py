@@ -497,19 +497,27 @@ def download_invoice(order_id, invoice_id):
         if not invoice:
             return jsonify(error='PI not found.'), 404
         output_format=request.args.get('format',invoice['workbook_format'])
+        from backend.orders.pi_document import missing_details
+        from backend.orders import pi_exports
+        document=json.loads(invoice['snapshot_json'])
+        missing=missing_details(document)
+        has_missing_contacts=any(field in missing for field in (
+            'Consignee Tel/Phone','Consignee PIC','Consignee Email','Consignee GST No.'))
         if output_format=='pdf':
             if invoice['pdf'] is None:
                 return jsonify(error='This historical PI does not have a saved PDF.'),404
             from backend.orders.pi_document import validate_pdf_details
             try:
-                validate_pdf_details(json.loads(invoice['snapshot_json']))
+                validate_pdf_details(document)
             except ValueError as error:
                 return jsonify(error=str(error), missing_fields=getattr(error, 'missing_fields', [])), 400
-            return send_file(BytesIO(invoice['pdf']),as_attachment=True,
+            output=pi_exports.pdf(document) if has_missing_contacts else invoice['pdf']
+            return send_file(BytesIO(output),as_attachment=True,
                 download_name=invoice_filename(invoice['reference'],'pdf'),mimetype='application/pdf')
         if output_format!=invoice['workbook_format']:
             return jsonify(error='The requested PI format is not available.'),400
-        return send_file(BytesIO(invoice['workbook']), as_attachment=True,
+        output=pi_exports.xlsx(document) if has_missing_contacts and output_format=='xlsx' else invoice['workbook']
+        return send_file(BytesIO(output), as_attachment=True,
                          download_name=invoice_filename(invoice['reference'],output_format),
                          mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if output_format=='xlsx'
                          else 'application/vnd.ms-excel.sheet.macroEnabled.12')

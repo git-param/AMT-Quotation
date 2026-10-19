@@ -11,8 +11,14 @@ SHOP = os.getenv("SHOPIFY_SHOP", "")
 CLIENT_ID = os.getenv("SHOPIFY_CLIENT_ID", "")
 CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
 
-if not all((SHOP, CLIENT_ID, CLIENT_SECRET)):
-    raise RuntimeError("Shopify credentials are missing from environment variables")
+def _require_credentials():
+    """Fail only when a Shopify API call is made, not while importing the app."""
+    if not all((SHOP, CLIENT_ID, CLIENT_SECRET)):
+        raise RuntimeError(
+            "Shopify credentials are missing. Set SHOPIFY_SHOP, "
+            "SHOPIFY_CLIENT_ID, and SHOPIFY_CLIENT_SECRET in the environment "
+            "or the project .env file."
+        )
 
 CONDITION_KEYS = ['condition','product_condition','item_condition','google_product_condition']
 CONDITION_NS   = ['next_cart','custom','global','mm-google-shopping','google','google_shopping']
@@ -34,6 +40,7 @@ def _cond_suffix(c):
     return ''
 
 def _get_token():
+    _require_credentials()
     now = time.time()
     with _token_lock:
         if _token_cache['token'] and now < _token_cache['expires']:

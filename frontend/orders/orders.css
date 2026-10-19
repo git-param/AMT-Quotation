@@ -447,8 +447,6 @@ body.embedded #orderForm .consignee-editor textarea {flex:1}
 .pi-paper .pi-grid-annexure .pi-cell-bold_center input{text-align:center;font-weight:700}
 
 /* Missing contact details warn without blocking invoice exports. */
-.pi-paper .pi-required-message{color:#dc2626;font:600 11px Arial,sans-serif}
-.pi-paper .pi-required-message[hidden]{display:none}
 .pi-consignee-cell .pi-party-editor>.pi-field:last-child{margin-top:0}
 .pi-consignee-cell .pi-party-editor>.pi-contact-details{margin-top:auto}
 .pi-paper .pi-company-grid .pi-field [aria-invalid="true"]{border-color:#dc2626;background:#fff5f5}
