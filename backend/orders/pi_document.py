@@ -305,7 +305,10 @@ def missing_details(doc):
 
 
 def validate_pdf_details(doc):
-    missing = missing_details(doc)
+    # Contact/GST omissions are advisory; invoice identity and country still
+    # gate exports. Keep missing_details complete for editor warnings.
+    missing = [field for field in missing_details(doc)
+               if field not in ('Consignee GST No.', 'Consignee Tel/Phone', 'Consignee PIC', 'Consignee Email')]
     if missing:
         raise PiDetailsRequired(missing)
     try:

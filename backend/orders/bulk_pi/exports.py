@@ -19,6 +19,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, PageBreak, NextPageTemplate
 
+from backend.orders.normal_pi.exports import section_borders
 from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words, WIDTHS
 
 
@@ -207,8 +208,7 @@ def pdf(doc):
             table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),
                 ('LEFTPADDING',(0,0),(-1,-1),3),('RIGHTPADDING',(0,0),(-1,-1),3),
                 ('TOPPADDING',(0,0),(-1,-1),1.5),('BOTTOMPADDING',(0,0),(-1,-1),1.5),
-                *([('LINEBEFORE',(0,0),(0,-1),.9,colors.black),('LINEAFTER',(-1,0),(-1,-1),.9,colors.black),
-                   ('LINEBELOW',(0,-1),(-1,-1),.9,colors.black)] if section['name']=='header' else [('BOX',(0,0),(-1,-1),.9,colors.black)]),*commands,*total_commands,
+                *section_borders(section['name']),*commands,*total_commands,
                 *([('LINEBELOW',(0,0),(-1,0),.8,colors.black)] if section['name']=='items' else []),
                 *([('LINEABOVE',(0,-1),(-1,-1),.8,colors.black)] if section['name']=='bank' else [])]))
             story.append(table)
@@ -292,9 +292,9 @@ def xlsx(doc):
                 for cell,parts in zip(row,chunks):
                     lines=parts[chunk_index] if chunk_index<len(parts) else ['']
                     value='\n'.join(lines);col=cell['col'];end=col+cell['span']-1
-                    top=((index==0 and chunk_index==0 and section['name']!='header') or (section['name']=='bank' and index==len(section['rows'])-1 and chunk_index==0)
+                    top=((index==0 and chunk_index==0 and section['name']!='header' and not (section['name']=='bank' and col>=8)) or (section['name']=='bank' and index==len(section['rows'])-1 and chunk_index==0)
                          or (cell.get('line_top') and chunk_index==0))
-                    bottom=((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1) or cell['style']=='head'
+                    bottom=((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1 and not (section['name']=='items' and col>=8)) or cell['style']=='head'
                             or (cell.get('line_bottom') and chunk_index==len(parts)-1))
                     key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False))
                     if key not in formats:

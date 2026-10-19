@@ -9,6 +9,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     status,
     toolbar;
   let printUrl=null;
+  let showRequired=false;
   let calculationTimer=null,calculationVersion=0,calculated=[];
   let rateHeaders=[];
   function updateRateHeading(){
@@ -46,7 +47,31 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     return n;
   };
   function valueOf(item) {
-    return item.primaryInput ? window.orderLocations.joinParty(item.primaryInput.value,item.input.value) : item.input.value;
+    if(!item.primaryInput)return item.input.value;
+    let secondary=item.input.value;
+    if(item.contacts){
+      secondary=secondary.split('\n').filter(line=>!/^\s*(?:Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail|GST(?:IN|\s*(?:No\.?|Number))?)\s*:/i.test(line)).join('\n');
+      secondary+='\n'+item.contacts.map(contact=>contact.label+': '+contact.input.value).join('\n');
+    }
+    return window.orderLocations.joinParty(item.primaryInput.value,secondary);
+  }
+  function contactWarnings(notify=false){
+    if(!showRequired)return;
+    const party=inputs.find(item=>item.path==='delivery.consignee_text');
+    const missing=[];
+    for(const contact of party?.contacts||[]){
+      const value=contact.input.value.trim();
+      const absent=contact.key==='phone'?value.replace(/\D/g,'').length<7:!value;
+      const required=absent&&(contact.key!=='gst'||state.document.currency==='INR');
+      contact.mark.hidden=!required;
+      contact.input.setAttribute('aria-invalid',String(required));
+      if(required)missing.push(contact.label);
+    }
+    if(notify&&missing.length){
+      const message='Missing consignee details: '+missing.join(', ')+'. PDF/Excel generation can continue.';
+      status.textContent=message;status.classList.add('error');
+      window.skuFeedback?.show(message,true);
+    }
   }
   function fitText(input) {
     input.rows=Math.max(1,input.value.split('\n').length);
@@ -73,6 +98,15 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
           const value=window.orderLocations.countryBlock(valueOf(consignee), input.value, [state.document.order.destination]);
           if(consignee.primaryInput){const [primary,secondary]=window.orderLocations.partyParts(value,input.value);consignee.primaryInput.value=primary;consignee.input.value=secondary;}
           else consignee.input.value=value;
+          for(const contact of consignee.contacts||[]){
+            const match=value.split('\n').find(line=>contact.pattern.test(line));
+            if(match)contact.input.value=match.slice(match.indexOf(':')+1).trim();
+          }
+          if(consignee.contacts){
+            consignee.input.value=consignee.input.value.split('\n').filter(line=>!consignee.contacts.some(contact=>contact.pattern.test(line))).join('\n');
+            fitText(consignee.input);
+          }
+          contactWarnings();
         }
       };
     }
@@ -96,6 +130,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       }
       if(path.endsWith('.uom'))updateRateHeading();
       if(path==='shipping_charges'||/^lines\.\d+\.(quantity|unit_price|line_total|uom)$/.test(path))scheduleCalculation();
+      contactWarnings();
     };
     wrap.append(input);
     parent.append(wrap);
@@ -110,8 +145,24 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     }
     const [primary,secondary]=window.orderLocations.partyParts(value,state.document.order.destination);
     const primaryInput=field(group,'Company / address details',primary,path+'.primary',true);inputs.pop();
-    const input=field(group,'Country / GST / contact details',secondary,path,true);
-    inputs.at(-1).primaryInput=primaryInput;
+    const definitions=[
+      ['phone','Tel/Phone',/^\s*(?:Tel(?:\/Phone)?|Telephone|Phone)\s*:/i],
+      ['pic','PIC',/^\s*PIC\s*:/i],['email','Email',/^\s*E-?mail\s*:/i],
+      ['gst','GST No.',/^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:/i]
+    ];
+    const lines=secondary.split('\n');
+    const input=field(group,'Country / additional details',lines.filter(line=>!definitions.some(([, ,pattern])=>pattern.test(line))).join('\n'),path,true);
+    input.parentElement.classList.add('pi-contact-details');
+    const entry=inputs.at(-1);entry.primaryInput=primaryInput;entry.contacts=[];
+    for(const [key,label,pattern] of definitions){
+      const line=lines.find(line=>pattern.test(line));
+      const control=field(group,label,line?line.slice(line.indexOf(':')+1).trim():'',path+'.'+key,false,key==='phone'?'tel':'text');
+      inputs.pop();
+      const mark=node('span',' *required','pi-required-message');mark.hidden=true;
+      control.parentElement.firstChild.append(mark);
+      control.addEventListener('input',()=>{entry.modified=true;contactWarnings();});
+      entry.contacts.push({key,label,pattern,input:control,mark});
+    }
     fitText(primaryInput);fitText(input);
     return input;
   }
@@ -154,6 +205,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       button('Update preview',save);
       button('Edit invoice',async()=>{printFrame.hidden=true;paper.hidden=false;});
       button('PDF print preview',async()=>{
+        showRequired=true;contactWarnings(true);
         const response=await fetch(state.base+'/'+state.preview_id+'/print',json('POST',collect()));
         if(!response.ok){const error=await response.json();throw new Error(error.error||'Unable to open print preview.');}
         const blob=await response.blob();clearPrintUrl();printUrl=URL.createObjectURL(blob);
@@ -162,6 +214,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       });
     }
     for(const format of ['xlsx','pdf'])button('Generate '+format.toUpperCase(),async()=>{
+      showRequired=true;contactWarnings(true);
       if(!issued){await save(true);issued=await api(state.base.replace('/preview','/issue'),json('POST',{preview_id:state.preview_id}));await onIssued(issued);render();}
       await window.downloadPiFile(issued[format+'_url'],issued[format+'_filename']||issued.reference.replace(/[<>:"/\\|?*\u0000-\u001f]/g,'-')+'.'+format);
     },true);
@@ -170,6 +223,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     const scroll=node('div',undefined,'pi-paper-scroll');paper=node('article',undefined,'pi-paper');scroll.append(paper);host.append(scroll);
     printFrame=node('iframe');printFrame.title='Exact PI PDF print preview';printFrame.className='pi-print-frame';printFrame.hidden=true;host.append(printFrame);
     renderGrid();
+    contactWarnings();
   }
   function renderGrid() {
     const doc = state.document;
@@ -249,13 +303,14 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     }
     footer(annexurePaper||paper,!annexurePaper);
     for(const textarea of host.querySelectorAll('textarea'))fitText(textarea);
-    if (issued) for (const { input, primaryInput } of inputs) {input.disabled = true;if(primaryInput)primaryInput.disabled=true;}
+    if (issued) for (const { input, primaryInput, contacts } of inputs) {input.disabled = true;if(primaryInput)primaryInput.disabled=true;for(const contact of contacts||[])contact.input.disabled=true;}
   }
   return {
     open(data, base) {
       clearPrintUrl();
       state = { ...data, base };
       issued = null;
+      showRequired=false;
       render();
       host.scrollIntoView({ behavior: "smooth", block: "start" });
     },
