@@ -1,5 +1,7 @@
 # AMT Quotation
 
+For production serving, concurrent-user testing and the versioned scalability change log, see [Scalability](docs/scalability.md).
+
 The active CRM workflow is now **Clients & Orders** at `/clients-orders`: search
 clients, manage their profiles, save independent pending orders, and generate
 USD/INR proforma invoices. Company seller/bank details remain in server-configured

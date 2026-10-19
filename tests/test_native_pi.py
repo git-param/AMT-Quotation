@@ -51,6 +51,53 @@ class NativePiTests(unittest.TestCase):
     def issue(self,preview):
         return self.client.post(self.base+'/issue',json={'preview_id':preview['preview_id']})
 
+    def test_pi_rendering_does_not_hold_sqlite_writer_lock(self):
+        preview=self.preview()
+        original=pi_exports.xlsx
+        def render(document):
+            other=database.get_db()
+            try:
+                other.execute('BEGIN IMMEDIATE')
+            finally:
+                other.rollback();other.close()
+            return original(document)
+        with patch('backend.orders.pi_exports.xlsx',side_effect=render):
+            issued=self.issue(preview)
+        self.assertEqual(issued.status_code,201,issued.json)
+
+    def test_preview_rendering_does_not_hold_sqlite_writer_lock(self):
+        original=pi_exports.pdf
+        def render(document):
+            other=database.get_db()
+            try:other.execute('BEGIN IMMEDIATE')
+            finally:other.rollback();other.close()
+            return original(document)
+        with patch('backend.orders.pi_exports.pdf',side_effect=render):
+            preview=self.preview()
+        self.assertTrue(preview['preview_id'])
+
+    def test_pi_issue_rejects_preview_changed_during_render(self):
+        preview=self.preview()
+        original=pi_exports.xlsx
+        def render(document):
+            other=database.get_db()
+            try:
+                row=other.execute('SELECT document_json FROM invoice_previews WHERE id=?',
+                                  (preview['preview_id'],)).fetchone()
+                changed=json.loads(row[0]);changed['render_race_marker']=True
+                with other:
+                    other.execute('UPDATE invoice_previews SET document_json=? WHERE id=?',
+                                  (json.dumps(changed),preview['preview_id']))
+            finally:other.close()
+            return original(document)
+        with patch('backend.orders.pi_exports.xlsx',side_effect=render):
+            response=self.issue(preview)
+        self.assertEqual(response.status_code,409,response.json)
+        connection=database.get_db()
+        try:self.assertEqual(connection.execute('SELECT COUNT(*) FROM order_invoices WHERE order_id=?',
+                                                (self.order_id,)).fetchone()[0],0)
+        finally:connection.close()
+
     def edits(self,doc):
         return {'lines':[{k:line[k] for k in ('id','sku','description','hsn_code','item_condition','uom','quantity','unit_price')}
                           for line in doc['totals']['lines']]}

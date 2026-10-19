@@ -1,16 +1,13 @@
-import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash
 from backend.config import DB_PATH, DATABASE_DIR
+from backend.scalability.sqlite import connect, enable_wal
 
 _db_lock = threading.Lock()
 
 def get_db():
-    con = sqlite3.connect(DB_PATH, check_same_thread=False)
-    con.execute('PRAGMA foreign_keys = ON')
-    con.row_factory = sqlite3.Row
-    return con
+    return connect(DB_PATH)
 
 
 def init_db():
@@ -65,4 +62,5 @@ def log_copy(user_name, user_ip, copy_type, sku_count):
 def initialize_database():
     DATABASE_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
+    enable_wal(DB_PATH)
     _seed_users()
