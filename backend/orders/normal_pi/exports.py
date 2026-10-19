@@ -128,15 +128,30 @@ def pdf(doc):
     story=[]
     item_table=None
     symbol=currency_symbol(doc['currency'])
-    def paragraph(cell):
+    def paragraph(cell,available_width):
         kind=cell['style'];text=cell.get('display_text',cell['text'])
         is_bold=kind in ('bold','head','bank_title','warning','final_term','title','bold_amount')
         size=14 if kind=='title' else 7 if kind in ('terms','final_term') else 8
         alignment=2 if 'amount' in kind else 1 if kind in ('title','head','center') else 0
         style=ParagraphStyle('cell',fontName=bold if is_bold else regular,fontSize=size,
             leading=size+2,alignment=alignment,textColor=colors.red if kind=='warning' else colors.black)
+        if 'amount' in kind and not cell.get('free'):
+            amount=format(Decimal(cell['text']),',.2f')
+            face=bold if is_bold else regular
+            gap=4
+            text_width=pdfmetrics.stringWidth(symbol,face,size)+pdfmetrics.stringWidth(amount,face,size)
+            money_size=size*min(1,max(available_width-gap-1,1)/max(text_width,1))
+            symbol_width=pdfmetrics.stringWidth(symbol,face,money_size)+gap
+            left=Paragraph(escape(symbol),ParagraphStyle('currency',parent=style,
+                alignment=0,fontSize=money_size,leading=money_size+2,splitLongWords=0))
+            right=Paragraph(escape(amount),ParagraphStyle('money',parent=style,
+                alignment=2,fontSize=money_size,leading=money_size+2,splitLongWords=0))
+            money=Table([[left,right]],colWidths=[symbol_width,available_width-symbol_width])
+            money.setStyle(TableStyle([('LEFTPADDING',(0,0),(-1,-1),0),
+                ('RIGHTPADDING',(0,0),(-1,-1),0),('TOPPADDING',(0,0),(-1,-1),0),
+                ('BOTTOMPADDING',(0,0),(-1,-1),0)]))
+            return money
         if 'uom' in cell:text+=' '+cell['uom']
-        if 'amount' in kind and not cell.get('free'):text=symbol+' '+text
         content=escape(text).replace('\n','<br/>')
         if cell.get('party') and cell.get('field')=='delivery.consignee_text':
             content=content.replace('*required','<font color="#dc2626">*required</font>')
@@ -150,7 +165,7 @@ def pdf(doc):
             chunks=[]
             for cell in row:
                 w=sum(columns[cell['col']:cell['col']+cell['span']])-6
-                pending=[paragraph(cell)];parts=[]
+                pending=[paragraph(cell,w)];parts=[]
                 while pending:
                     part=pending.pop(0)
                     if part.wrap(w,10000)[1]>160:
@@ -242,7 +257,7 @@ def xlsx(doc):
         if kind=='warning':values['bg_color']='#FFFF00'
         if kind=='final_term':values['bg_color']='#FFF2CC'
         if kind in ('title','head','center'):values['align']='center'
-        if 'amount' in kind:values.update(align='right',num_format='"'+symbol+'" #,##0.00')
+        if 'amount' in kind:values.update(align='right',num_format='"'+symbol+'"* #,##0.00')
         format_values[kind]=values
         formats[kind]=book.add_format(values)
     required_format=book.add_format({'font_color':'#dc2626'})
