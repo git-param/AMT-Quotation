@@ -45,7 +45,27 @@ def layout(doc):
             if (consignee and normalize(value)==consignee) or value.strip()=='(Same as consignee)':
                 value='(Same as consignee)'
         primary,secondary=party_parts(value)
-        return c(col,span,'\n\n'.join(part for part in (primary,secondary) if part),field=path,value=value,
+        display='\n\n'.join(part for part in (primary,secondary) if part)
+        if path=='delivery.consignee_text':
+            required=[('phone','Tel/Phone',re.compile(r'^\s*(?:Tel(?:/Phone)?|Telephone|Phone)\s*:\s*(.*)$',re.I)),
+                      ('pic','PIC',re.compile(r'^\s*PIC\s*:\s*(.*)$',re.I)),
+                      ('email','Email',re.compile(r'^\s*E-?mail\s*:\s*(.*)$',re.I))]
+            if doc['currency']=='INR':required.append(('gst','GST No.',re.compile(r'^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$',re.I)))
+            display_lines=display.splitlines()
+            seen=set()
+            for key,label,pattern in required:
+                replacement=[]
+                for line in display_lines:
+                    match=pattern.match(line)
+                    if match:
+                        seen.add(key)
+                        line=(line[:line.index(':')+1]+' *required') if not match[1].strip() else line
+                    replacement.append(line)
+                display_lines=replacement
+            for key,label,_ in required:
+                if key not in seen:display_lines.append(label+': *required')
+            display='\n'.join(display_lines)
+        return c(col,span,display,field=path,value=value,
                  multiline=True,party=True,**extra)
     order,total=doc['order'],doc['totals']
     seller=list(doc['company']['seller'])
@@ -107,9 +127,6 @@ def layout(doc):
             items[-1][-1]['readonly'] = True
     # The original reserves four ruled item rows, even for a one-line invoice.
     while len(items)<5:items.append([c(cell['col'],cell['span']) for cell in item_header])
-    for row in items[1:]:
-        next(cell for cell in row if cell['col'] == 8)['open_right'] = True
-        next(cell for cell in row if cell['col'] == 9)['open_left'] = True
     bank=[c(0,8,'BANK DETAIL','bank_title')]+[c(0,8,value,'bold') for value in doc['company']['bank']]
     bank.append(c(0,8,doc['company'].get('bank_charges',''),'warning'))
     tax_label=f'GST {(Decimal(total["tax_rate"])*100).normalize():f}%'
@@ -132,11 +149,11 @@ def layout(doc):
         left=bank[index] if index<len(bank) else c(0,8)
         start=count-len(summaries)
         if index>=start:
-            amount,label=summaries[index-start];right=[c(8,1,label,'center',open_right=True),{**amount,'open_left':True}]
-        else:right=[c(8,1,open_right=True),c(9,2,open_left=True)]
+            amount,label=summaries[index-start];right=[c(8,1,label,'center'),amount]
+        else:right=[c(8,1),c(9,2)]
         bank_rows.append([left,*right])
     bank_rows.append([c(0,2,'Amount In Word','bold'),c(2,6,total['amount_in_words'],'bold',calculated='amount_in_words'),
-                      c(8,1,'Grand Total','bold',open_right=True),c(9,2,total['grand_total'],'bold_amount',numeric=True,calculated='grand_total',open_left=True)])
+                      c(8,1,'Grand Total','bold'),c(9,2,total['grand_total'],'bold_amount',numeric=True,calculated='grand_total')])
     clauses=[[c(0,11,'Terms & Conditions:-','bold')]]
     term_text = terms(doc)
     for index,value in enumerate(term_text.splitlines() or ['']):

@@ -82,6 +82,19 @@ def section_borders(name):
     return edges
 
 
+def rich_required(sheet,row,col,value,cell_format,required_format):
+    """Write required-field prompts with their marker in red in Excel."""
+    parts=value.split('*required')
+    if len(parts)==1:
+        sheet.write_string(row,col,value,cell_format)
+        return
+    rich=[]
+    for index,part in enumerate(parts):
+        if part:rich.append(part)
+        if index<len(parts)-1:rich.extend((required_format,'*required'))
+    sheet.write_rich_string(row,col,*rich,cell_format)
+
+
 def pdf(doc):
     regular,bold=fonts()
     output=BytesIO();width,height=A4;margin=12*mm;usable=width-2*margin
@@ -124,6 +137,8 @@ def pdf(doc):
         if 'uom' in cell:text+=' '+cell['uom']
         if 'amount' in kind and not cell.get('free'):text=symbol+' '+text
         content=escape(text).replace('\n','<br/>')
+        if cell.get('party') and cell.get('field')=='delivery.consignee_text':
+            content=content.replace('*required','<font color="#dc2626">*required</font>')
         if kind=='bank_title':content='<u>'+content+'</u>'
         return Paragraph(content,style)
     def physical_rows(rows):
@@ -211,6 +226,7 @@ def xlsx(doc):
         if 'amount' in kind:values.update(align='right',num_format='"'+symbol+'" #,##0.00')
         format_values[kind]=values
         formats[kind]=book.add_format(values)
+    required_format=book.add_format({'font_color':'#dc2626'})
     def image(name,row,col,w,h):
         data=asset(doc,name)
         with PILImage.open(data) as im:
@@ -268,6 +284,8 @@ def xlsx(doc):
                         decimal=Decimal(cell['text'])
                         if len(decimal.as_tuple().digits)<=15:sheet.write_number(row_index,col,float(decimal),fmt)
                         else:sheet.write_string(row_index,col,symbol+' '+cell['text'],fmt)
+                    elif cell.get('party') and cell.get('field')=='delivery.consignee_text':
+                        rich_required(sheet,row_index,col,value,fmt,required_format)
                     else:sheet.write_string(row_index,col,value,fmt)
                     if chunk_index==0 and (cell.get('calculated') in ('goods_total','subtotal','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
                         formula_cells.append((row_index,col,fmt,cell['calculated'],cell['text']))

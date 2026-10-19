@@ -139,14 +139,15 @@ https://www.itu.int/dms_pub/itu-t/opb/sp/T-SP-E.164D-2016-PDF-E.pdf
 Before PDF print preview, generation or download, consignee country, complete
 PI number and purchase order number remain mandatory. Missing Tel/Phone, PIC
 and Email produce a bottom-right warning and individual red `*required` labels
-in the editor, but PDF and Excel generation can continue. Missing GST receives
-this warning only for INR. Labels update as users fill the fields; contact and
+in the editor and in generated PDF/Excel files, but generation can continue.
+Missing GST receives this warning and printed marker only for INR. Editor labels
+update as users fill the fields; contact and
 GST omissions do not block saved PDF downloads or legacy issuance. Supplied
 invalid contact values still undergo validation.
 
-The normal PI and bulk cover use an open shipping/subtotal/tax summary, without
-internal summary dividers or a border across the top of that area. Outer edges,
-bank boundaries, and the grand-total separator remain in PDF, Excel and editor.
+The normal PI and bulk cover omit the horizontal rule above the shipping summary.
+Vertical dividers remain between the rate and amount columns and throughout the
+summary in PDF and Excel.
 
 Rate headings follow the UOM: PCs, Lot, Kit or Set.
 Mixed units use "Rate / PCs or Rate / Lot" when pieces are included, grouping

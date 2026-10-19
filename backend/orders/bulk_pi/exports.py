@@ -19,7 +19,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, PageBreak, NextPageTemplate
 
-from backend.orders.normal_pi.exports import section_borders
+from backend.orders.normal_pi.exports import section_borders, rich_required
 from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words, WIDTHS
 
 
@@ -146,6 +146,8 @@ def pdf(doc):
         if 'uom' in cell:text+=' '+cell['uom']
         if 'amount' in kind and not cell.get('free'):text=symbol+' '+text
         content=escape(text).replace('\n','<br/>')
+        if cell.get('party') and cell.get('field')=='delivery.consignee_text':
+            content=content.replace('*required','<font color="#dc2626">*required</font>')
         if kind=='bank_title':content='<u>'+content+'</u>'
         return Paragraph(content,style)
     def physical_rows(rows,section_columns):
@@ -256,6 +258,7 @@ def xlsx(doc):
         if 'amount' in kind:values.update(align='right',num_format='"'+symbol+'" #,##0.00')
         format_values[kind]=values
         formats[kind]=book.add_format(values)
+    required_format=book.add_format({'font_color':'#dc2626'})
     def image(name,row,col,w,h):
         data=asset(doc,name)
         with PILImage.open(data) as im:
@@ -313,6 +316,8 @@ def xlsx(doc):
                         decimal=Decimal(cell['text'])
                         if len(decimal.as_tuple().digits)<=15:sheet.write_number(row_index,col,float(decimal),fmt)
                         else:sheet.write_string(row_index,col,symbol+' '+cell['text'],fmt)
+                    elif cell.get('party') and cell.get('field')=='delivery.consignee_text':
+                        rich_required(sheet,row_index,col,value,fmt,required_format)
                     else:sheet.write_string(row_index,col,value,fmt)
                     if chunk_index==0 and (cell.get('calculated') in ('subtotal','goods_total','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
                         formula_cells.append((row_index,col,fmt,cell['calculated'],cell['text']))
