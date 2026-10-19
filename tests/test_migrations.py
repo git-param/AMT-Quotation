@@ -3,6 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import hashlib
+import os
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -184,11 +185,12 @@ class MigrationTests(unittest.TestCase):
             connection.execute("UPDATE sqlite_sequence SET seq=100 WHERE name='client_orders'")
             before = {table: connection.execute('SELECT * FROM '+table).fetchall() for table in tables}
             indexes = connection.execute("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").fetchall()
-        self.assertEqual(migrate_database(self.path),[28])
+        self.assertEqual(migrate_database(self.path),[28,29])
         with test_connection(self.path) as connection:
             for table in tables:
                 self.assertEqual(connection.execute('SELECT * FROM '+table).fetchall(),before[table])
-            self.assertEqual(connection.execute("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").fetchall(),indexes)
+            current_indexes = connection.execute("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").fetchall()
+            self.assertTrue(set(indexes).issubset(set(current_indexes)))
             cursor=connection.execute("INSERT INTO client_orders(reference,client_id,order_date,currency,created_by,updated_by) VALUES('ORDER-2',1,'2026-10-17','AED',1,1)")
             self.assertEqual(cursor.lastrowid,101)
             connection.execute("UPDATE order_sku_lines SET currency='GBP'")
@@ -415,7 +417,8 @@ class MigrationTests(unittest.TestCase):
 
     def test_application_initializer_uses_migrations(self):
         with patch.object(database, 'DB_PATH', str(self.path)), \
-                patch.object(database, 'DATABASE_DIR', self.path.parent):
+                patch.object(database, 'DATABASE_DIR', self.path.parent), \
+                patch.dict(os.environ, {'AMT_BOOTSTRAP_ADMIN_PASSWORD': 'fixture-admin-pass'}):
             database.initialize_database()
             database.initialize_database()
             connection = database.get_db()

@@ -1,3 +1,21 @@
+/* Attach the server-issued synchronizer token to every state-changing request. */
+(() => {
+  const originalFetch=fetch.bind(globalThis);
+  window.fetch=(input,options={})=>{
+    const isRequest=typeof Request!=='undefined'&&input instanceof Request;
+    const method=String(options.method||(isRequest?input.method:'GET')).toUpperCase();
+    if(['POST','PUT','PATCH','DELETE'].includes(method)){
+      const match=document.cookie.match(/(?:^|; )amt_csrf_v2=([^;]*)/);
+      if(match){
+        const headers=new Headers(options.headers||(isRequest?input.headers:undefined));
+        headers.set('X-CSRF-Token',decodeURIComponent(match[1]));
+        options={...options,headers};
+      }
+    }
+    return originalFetch(input,options);
+  };
+})();
+
 /* Shared navigation preserves existing link IDs and page permission handlers. */
 (() => {
   if(new URLSearchParams(location.search).get('embedded')==='1')return;
@@ -35,6 +53,11 @@
     if(location.pathname===url||(url==='/clients-orders'&&['/leads','/orders','/enquiries'].includes(location.pathname))){link.classList.add('is-current');link.setAttribute('aria-current','page');}
     const row=document.createElement('div');row.className='sidebar-item';row.append(link);nav.append(row);
     if(url==='/logout')row.classList.add('sidebar-signout');
+    if(url==='/logout')link.onclick=async event=>{
+      event.preventDefault();
+      const response=await fetch('/logout',{method:'POST'});
+      location.href=response.redirected?response.url:'/login';
+    };
     if(permission){row.hidden=true;restricted.push({row,link,permission,url});}
   }
   document.body.classList.add('has-sidebar');document.body.prepend(sidebar);

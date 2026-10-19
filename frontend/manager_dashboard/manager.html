@@ -143,7 +143,7 @@
           </div>
           <div class="form-field">
             <label for="newPassword">Password</label>
-            <input type="password" id="newPassword" placeholder="min 4 characters" maxlength="80">
+            <input type="password" id="newPassword" placeholder="min 12 characters" minlength="12" maxlength="128">
           </div>
           <div class="form-field">
             <label for="newDepartment">Department <span class="required-mark" aria-label="required">*</span></label>
@@ -177,10 +177,10 @@
           </div>
           <div class="form-field">
             <label for="resetPassword">New password</label>
-            <input type="password" id="resetPassword" placeholder="min 4 characters" maxlength="80">
+            <input type="password" id="resetPassword" placeholder="min 12 characters" minlength="12" maxlength="128">
           </div>
         </div>
-        <div class="account-editor-footer"><p>Use at least 4 characters.</p><button class="btn-sm btn-pwd" type="button" onclick="resetPassword()">Reset password</button></div>
+        <div class="account-editor-footer"><p>Use 12 to 128 characters.</p><button class="btn-sm btn-pwd" type="button" onclick="resetPassword()">Reset password</button></div>
         <div class="msg" id="resetMsg"></div>
       </div>
     </div>

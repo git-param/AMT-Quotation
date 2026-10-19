@@ -1,16 +1,14 @@
-import sqlite3
 import threading
+import os
 from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash
 from backend.config import DB_PATH, DATABASE_DIR
+from backend.scalability.sqlite import connect, enable_wal
 
 _db_lock = threading.Lock()
 
 def get_db():
-    con = sqlite3.connect(DB_PATH, check_same_thread=False)
-    con.execute('PRAGMA foreign_keys = ON')
-    con.row_factory = sqlite3.Row
-    return con
+    return connect(DB_PATH)
 
 
 def init_db():
@@ -23,9 +21,17 @@ def init_db():
 def _seed_users():
     con = get_db()
     if not con.execute("SELECT 1 FROM users WHERE role IN ('manager', 'admin') LIMIT 1").fetchone():
-        con.execute("INSERT OR IGNORE INTO users (username,password_hash,role) VALUES (?,?,?)",
-                    ('manager', generate_password_hash('admin123'), 'manager'))
-        con.commit()
+        password = os.getenv('AMT_BOOTSTRAP_ADMIN_PASSWORD', '')
+        if password:
+            from backend.security.passwords import error
+            problem = error(password)
+            if problem:
+                con.close()
+                raise RuntimeError('Invalid AMT_BOOTSTRAP_ADMIN_PASSWORD: ' + problem)
+            con.execute("INSERT OR IGNORE INTO users (username,password_hash,role) VALUES (?,?,?)",
+                        (os.getenv('AMT_BOOTSTRAP_ADMIN_USERNAME', 'manager'),
+                         generate_password_hash(password), 'manager'))
+            con.commit()
     con.close()
 
 
@@ -65,4 +71,5 @@ def log_copy(user_name, user_ip, copy_type, sku_count):
 def initialize_database():
     DATABASE_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
+    enable_wal(DB_PATH)
     _seed_users()
