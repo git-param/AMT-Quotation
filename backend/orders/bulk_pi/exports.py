@@ -19,6 +19,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, PageBreak, NextPageTemplate
 
+from backend.orders.normal_pi.exports import section_borders, rich_required
 from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words, WIDTHS
 
 
@@ -145,6 +146,8 @@ def pdf(doc):
         if 'uom' in cell:text+=' '+cell['uom']
         if 'amount' in kind and not cell.get('free'):text=symbol+' '+text
         content=escape(text).replace('\n','<br/>')
+        if cell.get('party') and cell.get('field')=='delivery.consignee_text':
+            content=content.replace('*required','<font color="#dc2626">*required</font>')
         if kind=='bank_title':content='<u>'+content+'</u>'
         return Paragraph(content,style)
     def physical_rows(rows,section_columns):
@@ -196,7 +199,9 @@ def pdf(doc):
                     if cell.get('header_metadata'):min_height=max(min_height,h+3)
                 if section['name']=='parties' and index==1:min_height=max(min_height,30)
                 if section['name']=='parties' and index==3:min_height=max(min_height,30)
-                if section['name']=='items' and index>0:min_height=max(min_height,19)
+                if section['name']=='items' and index>0:
+                    min_height=max(min_height,85 if len(section['rows'])==2 else 19)
+                    if len(section['rows'])==2:commands.append(('VALIGN',(0,index),(-1,index),'MIDDLE'))
                 if section['name']=='annexure':
                     reference_height=22.5 if index==0 else 36 if index==1 else 40.9 if any(c.get('calculated')=='annexure_amount_in_words' for c in source) else 21.95 if any((c.get('field') or '').startswith('lines.') for c in source) else 14.1
                     min_height=max(min_height,reference_height*annexure_scale)
@@ -207,8 +212,7 @@ def pdf(doc):
             table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),
                 ('LEFTPADDING',(0,0),(-1,-1),3),('RIGHTPADDING',(0,0),(-1,-1),3),
                 ('TOPPADDING',(0,0),(-1,-1),1.5),('BOTTOMPADDING',(0,0),(-1,-1),1.5),
-                *([('LINEBEFORE',(0,0),(0,-1),.9,colors.black),('LINEAFTER',(-1,0),(-1,-1),.9,colors.black),
-                   ('LINEBELOW',(0,-1),(-1,-1),.9,colors.black)] if section['name']=='header' else [('BOX',(0,0),(-1,-1),.9,colors.black)]),*commands,*total_commands,
+                *section_borders(section['name']),*commands,*total_commands,
                 *([('LINEBELOW',(0,0),(-1,0),.8,colors.black)] if section['name']=='items' else []),
                 *([('LINEABOVE',(0,-1),(-1,-1),.8,colors.black)] if section['name']=='bank' else [])]))
             story.append(table)
@@ -256,6 +260,7 @@ def xlsx(doc):
         if 'amount' in kind:values.update(align='right',num_format='"'+symbol+'" #,##0.00')
         format_values[kind]=values
         formats[kind]=book.add_format(values)
+    required_format=book.add_format({'font_color':'#dc2626'})
     def image(name,row,col,w,h):
         data=asset(doc,name)
         with PILImage.open(data) as im:
@@ -292,27 +297,30 @@ def xlsx(doc):
                 for cell,parts in zip(row,chunks):
                     lines=parts[chunk_index] if chunk_index<len(parts) else ['']
                     value='\n'.join(lines);col=cell['col'];end=col+cell['span']-1
-                    top=((index==0 and chunk_index==0 and section['name']!='header') or (section['name']=='bank' and index==len(section['rows'])-1 and chunk_index==0)
+                    top=((index==0 and chunk_index==0 and section['name']!='header' and not (section['name']=='bank' and col>=8)) or (section['name']=='bank' and index==len(section['rows'])-1 and chunk_index==0)
                          or (cell.get('line_top') and chunk_index==0))
-                    bottom=((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1) or cell['style']=='head'
+                    bottom=((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1 and not (section['name']=='items' and col>=8)) or cell['style']=='head'
                             or (cell.get('line_bottom') and chunk_index==len(parts)-1))
-                    key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False))
+                    single_item_cell=section['name']=='items' and index>0 and len(section['rows'])==2
+                    key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False),single_item_cell)
                     if key not in formats:
                         formats[key]=book.add_format({**format_values[cell['style']],'top':2 if top else 0,'bottom':2 if bottom else 0,
                             'left':0 if cell.get('open_left') else 2,'right':0 if cell.get('open_right') else 2,
-                            'valign':'bottom' if cell.get('bottom_aligned') else 'top'})
+                            'valign':'bottom' if cell.get('bottom_aligned') else 'vcenter' if single_item_cell else 'top'})
                     fmt=formats[key]
                     path=cell.get('calculated') or cell.get('field')
                     if chunk_index==0 and path:coordinates[path]=xl_rowcol_to_cell(row_index,col)
                     quantity=(cell.get('field') or '').endswith('.quantity')
                     if quantity:
-                        fmt=book.add_format({**format_values[cell['style']],'num_format':'0 "'+cell.get('uom','PCs')+'"','top':2 if top else 0,'bottom':2 if bottom else 0})
+                        fmt=book.add_format({**format_values[cell['style']],'num_format':'0 "'+cell.get('uom','PCs')+'"','top':2 if top else 0,'bottom':2 if bottom else 0,'valign':'vcenter' if single_item_cell else 'top'})
                     number=(cell.get('numeric') or cell['field']=='shipping_charges' or quantity or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
                     if cell['span']>1:sheet.merge_range(row_index,col,row_index,end,'',fmt)
                     if number:
                         decimal=Decimal(cell['text'])
                         if len(decimal.as_tuple().digits)<=15:sheet.write_number(row_index,col,float(decimal),fmt)
                         else:sheet.write_string(row_index,col,symbol+' '+cell['text'],fmt)
+                    elif cell.get('party') and cell.get('field')=='delivery.consignee_text':
+                        rich_required(sheet,row_index,col,value,fmt,required_format)
                     else:sheet.write_string(row_index,col,value,fmt)
                     if chunk_index==0 and (cell.get('calculated') in ('subtotal','goods_total','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
                         formula_cells.append((row_index,col,fmt,cell['calculated'],cell['text']))
@@ -320,6 +328,7 @@ def xlsx(doc):
                     if cell.get('header_metadata'):height=max(height,len(lines)*16+2)
                 if section['name']=='parties' and index==1:height=max(height,45)
                 if section['name']=='parties' and index==3:height=max(height,40)
+                if section['name']=='items' and index>0 and len(section['rows'])==2:height=max(height,85)
                 if section['name']=='header' and index==0:height=max(height,30)
                 sheet.set_row(row_index,min(409,height));row_index+=1
     image('payment_options.png',row_index,0,440,90);image('signature.png',row_index,5,440,90)

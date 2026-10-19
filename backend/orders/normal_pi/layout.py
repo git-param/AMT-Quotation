@@ -45,7 +45,8 @@ def layout(doc):
             if (consignee and normalize(value)==consignee) or value.strip()=='(Same as consignee)':
                 value='(Same as consignee)'
         primary,secondary=party_parts(value)
-        return c(col,span,'\n\n'.join(part for part in (primary,secondary) if part),field=path,value=value,
+        display='\n\n'.join(part for part in (primary,secondary) if part)
+        return c(col,span,display,field=path,value=value,
                  multiline=True,party=True,**extra)
     order,total=doc['order'],doc['totals']
     seller=list(doc['company']['seller'])
@@ -81,7 +82,8 @@ def layout(doc):
     primary,secondary=party_parts(doc['delivery']['consignee_text'])
     parties[1][0]['text']=primary
     parties[1][0]['bottom_contacts']=True
-    parties[-1][0].update(text=secondary,bottom_aligned=True)
+    parties[-1][0].update(text=secondary,bottom_aligned=True,
+                          party=True,field='delivery.consignee_text')
     item_header=[c(start,span,label,'head') for start,span,label in
         [(0,1,'Sno'),(1,3,'Description'),(4,1,'HSN Code'),(5,1,'Condition'),
          (6,2,'QTY'),(8,1,rate_heading(total['lines'])),(9,2,'Total Amount')]]
@@ -105,21 +107,25 @@ def layout(doc):
             items[-1][-2]['display_text'] = line['net_unit_price']
         if Decimal(line.get('discount_amount', '0')):
             items[-1][-1]['readonly'] = True
-    # The original reserves four ruled item rows, even for a one-line invoice.
-    while len(items)<5:items.append([c(cell['col'],cell['span']) for cell in item_header])
+    # A normal single-SKU PI has a short blank lead-in above its product.
+    # The annexure cover keeps its one centered summary row.
+    if len(total['lines']) == 1 and doc.get('pi_format','normal') == 'normal':
+        items.insert(1,[c(cell['col'],cell['span']) for cell in item_header])
+    elif len(total['lines']) != 1:
+        while len(items)<5:items.append([c(cell['col'],cell['span']) for cell in item_header])
     bank=[c(0,8,'BANK DETAIL','bank_title')]+[c(0,8,value,'bold') for value in doc['company']['bank']]
     bank.append(c(0,8,doc['company'].get('bank_charges',''),'warning'))
     tax_label=f'GST {(Decimal(total["tax_rate"])*100).normalize():f}%'
     free=Decimal(total['shipping'])==0
-    summaries=[(editable(9,2,'',total['shipping'],'shipping_charges','amount',type='number',free=free,display_text='Free' if free else total['shipping']),'Shipping'),
-               (c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Sub Total')]
+    shipping=(editable(9,2,'',total['shipping'],'shipping_charges','amount',type='number',free=free,display_text='Free' if free else total['shipping']),'Shipping')
+    summaries=[(c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Sub Total'),shipping]
     if Decimal(total.get('summary_discount', '0')):
         discount=(c(9,2,'-'+total['summary_discount'],'amount',numeric=True), 'Discount')
         if doc['currency']=='INR':
             summaries=[(c(9,2,total['goods_total'],'amount',numeric=True,calculated='goods_total'),'Goods Subtotal'),
                        discount,
                        (c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Net Subtotal'),
-                       summaries[0]]
+                       shipping]
         else:
             summaries.insert(0, discount)
     if Decimal(total['tax_rate']):summaries.append((c(9,2,total['tax'],'amount',numeric=True,calculated='tax'),tax_label))
@@ -129,7 +135,7 @@ def layout(doc):
         left=bank[index] if index<len(bank) else c(0,8)
         start=count-len(summaries)
         if index>=start:
-            amount,label=summaries[index-start];right=[c(8,1,label,'center',line_top=True),{**amount,'line_top':True}]
+            amount,label=summaries[index-start];right=[c(8,1,label,'center'),amount]
         else:right=[c(8,1),c(9,2)]
         bank_rows.append([left,*right])
     bank_rows.append([c(0,2,'Amount In Word','bold'),c(2,6,total['amount_in_words'],'bold',calculated='amount_in_words'),

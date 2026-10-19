@@ -68,6 +68,33 @@ def fonts():
     return 'Times-Roman','Times-Bold'
 
 
+def section_borders(name):
+    """Keep the summary open above its first amount and between labels and amounts."""
+    if name not in ('header', 'items', 'bank'):
+        return [('BOX',(0,0),(-1,-1),.9,colors.black)]
+    edges = [('LINEBEFORE',(0,0),(0,-1),.9,colors.black),
+             ('LINEAFTER',(-1,0),(-1,-1),.9,colors.black)]
+    edges.append(('LINEBELOW',(0,-1),(7 if name == 'items' else -1,-1),.9,colors.black))
+    if name == 'items':
+        edges.append(('LINEABOVE',(0,0),(-1,0),.9,colors.black))
+    elif name == 'bank':
+        edges.append(('LINEABOVE',(0,0),(7,0),.9,colors.black))
+    return edges
+
+
+def rich_required(sheet,row,col,value,cell_format,required_format):
+    """Write required-field prompts with their marker in red in Excel."""
+    parts=value.split('*required')
+    if len(parts)==1:
+        sheet.write_string(row,col,value,cell_format)
+        return
+    rich=[]
+    for index,part in enumerate(parts):
+        if part:rich.append(part)
+        if index<len(parts)-1:rich.extend((required_format,'*required'))
+    sheet.write_rich_string(row,col,*rich,cell_format)
+
+
 def pdf(doc):
     regular,bold=fonts()
     output=BytesIO();width,height=A4;margin=12*mm;usable=width-2*margin
@@ -99,17 +126,35 @@ def pdf(doc):
         PageTemplate(id='First',frames=frame(height-margin-header_height-2,'first'),onPage=first_page,autoNextPageTemplate='Later'),
         PageTemplate(id='Later',frames=frame(height-margin,'later'))])
     story=[]
+    item_table=None
     symbol=currency_symbol(doc['currency'])
-    def paragraph(cell):
+    def paragraph(cell,available_width):
         kind=cell['style'];text=cell.get('display_text',cell['text'])
         is_bold=kind in ('bold','head','bank_title','warning','final_term','title','bold_amount')
         size=14 if kind=='title' else 7 if kind in ('terms','final_term') else 8
         alignment=2 if 'amount' in kind else 1 if kind in ('title','head','center') else 0
         style=ParagraphStyle('cell',fontName=bold if is_bold else regular,fontSize=size,
             leading=size+2,alignment=alignment,textColor=colors.red if kind=='warning' else colors.black)
+        if 'amount' in kind and not cell.get('free'):
+            amount=format(Decimal(cell['text']),',.2f')
+            face=bold if is_bold else regular
+            gap=4
+            text_width=pdfmetrics.stringWidth(symbol,face,size)+pdfmetrics.stringWidth(amount,face,size)
+            money_size=size*min(1,max(available_width-gap-1,1)/max(text_width,1))
+            symbol_width=pdfmetrics.stringWidth(symbol,face,money_size)+gap
+            left=Paragraph(escape(symbol),ParagraphStyle('currency',parent=style,
+                alignment=0,fontSize=money_size,leading=money_size+2,splitLongWords=0))
+            right=Paragraph(escape(amount),ParagraphStyle('money',parent=style,
+                alignment=2,fontSize=money_size,leading=money_size+2,splitLongWords=0))
+            money=Table([[left,right]],colWidths=[symbol_width,available_width-symbol_width])
+            money.setStyle(TableStyle([('LEFTPADDING',(0,0),(-1,-1),0),
+                ('RIGHTPADDING',(0,0),(-1,-1),0),('TOPPADDING',(0,0),(-1,-1),0),
+                ('BOTTOMPADDING',(0,0),(-1,-1),0)]))
+            return money
         if 'uom' in cell:text+=' '+cell['uom']
-        if 'amount' in kind and not cell.get('free'):text=symbol+' '+text
         content=escape(text).replace('\n','<br/>')
+        if cell.get('party') and cell.get('field')=='delivery.consignee_text':
+            content=content.replace('*required','<font color="#dc2626">*required</font>')
         if kind=='bank_title':content='<u>'+content+'</u>'
         return Paragraph(content,style)
     def physical_rows(rows):
@@ -120,7 +165,7 @@ def pdf(doc):
             chunks=[]
             for cell in row:
                 w=sum(columns[cell['col']:cell['col']+cell['span']])-6
-                pending=[paragraph(cell)];parts=[]
+                pending=[paragraph(cell,w)];parts=[]
                 while pending:
                     part=pending.pop(0)
                     if part.wrap(w,10000)[1]>160:
@@ -152,17 +197,21 @@ def pdf(doc):
                 if cell.get('header_metadata'):min_height=max(min_height,h+3)
             if section['name']=='parties' and index==1:min_height=max(min_height,30)
             if section['name']=='parties' and index==3:min_height=max(min_height,30)
-            if section['name']=='items' and index>0:min_height=max(min_height,19)
+            if section['name']=='items' and index>0:
+                single_sku=len(doc['totals']['lines'])==1
+                min_height=max(min_height,(22 if index==1 else 63 if index==2 else 19) if single_sku else 19)
             rows.append(row);heights.append(min_height)
         table=LongTable(rows,colWidths=columns,rowHeights=heights,
             repeatRows=1 if section['name']=='items' else 0,splitInRow=1,hAlign='LEFT')
-        table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),
+        table_style=TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),
             ('LEFTPADDING',(0,0),(-1,-1),3),('RIGHTPADDING',(0,0),(-1,-1),3),
             ('TOPPADDING',(0,0),(-1,-1),1.5),('BOTTOMPADDING',(0,0),(-1,-1),1.5),
-            *([('LINEBEFORE',(0,0),(0,-1),.9,colors.black),('LINEAFTER',(-1,0),(-1,-1),.9,colors.black),
-               ('LINEBELOW',(0,-1),(-1,-1),.9,colors.black)] if section['name']=='header' else [('BOX',(0,0),(-1,-1),.9,colors.black)]),*commands,
+            *section_borders(section['name']),*commands,
             *([('LINEBELOW',(0,0),(-1,0),.8,colors.black)] if section['name']=='items' else []),
-            *([('LINEABOVE',(0,-1),(-1,-1),.8,colors.black)] if section['name']=='bank' else [])]))
+            *([('LINEABOVE',(0,-1),(-1,-1),.8,colors.black)] if section['name']=='bank' else [])])
+        table.setStyle(table_style)
+        if section['name']=='items' and doc.get('pi_format','normal')=='normal' and len(doc['totals']['lines'])<=4:
+            item_table=(len(story),rows,heights,table_style)
         story.append(table)
     footer_block=Table([
         [image('payment_options.png',usable*.46),image('signature.png',usable*.44)],
@@ -174,6 +223,25 @@ def pdf(doc):
         ('BOX',(0,0),(-1,-1),.9,colors.black),
         ('LINEABOVE',(0,1),(-1,1),.9,colors.black)]))
     story.append(footer_block)
+    if item_table:
+        table_index,rows,heights,table_style=item_table
+        first_frame_height=height-2*margin-header_height-2
+        used_height=sum(flowable.wrap(usable,first_frame_height)[1] for flowable in story)
+        # Let the products use spare page space while retaining a little room
+        # above the bottom margin for ReportLab's frame rounding.
+        spare_height=max(0,min(120,first_frame_height-used_height-12))
+        product_rows=len(heights)-1
+        if spare_height and product_rows:
+            roomier=heights.copy()
+            if len(doc['totals']['lines'])==1:
+                roomier[2]+=min(spare_height,30)
+            else:
+                extra=min(spare_height/product_rows,30)
+                roomier[1:]=[row_height+extra for row_height in heights[1:]]
+            table=LongTable(rows,colWidths=columns,rowHeights=roomier,
+                repeatRows=1,splitInRow=1,hAlign='LEFT')
+            table.setStyle(table_style)
+            story[table_index]=table
     document.build(story)
     return output.getvalue()
 
@@ -181,7 +249,7 @@ def pdf(doc):
 def xlsx(doc):
     output=BytesIO();book=xlsxwriter.Workbook(output,{'in_memory':True,'strings_to_formulas':False,'strings_to_urls':False})
     sheet=book.add_worksheet('Proforma Invoice');sheet.hide_gridlines(2)
-    sheet.set_paper(9);sheet.set_portrait();sheet.fit_to_pages(1,0);sheet.set_margins(.47,.47,.47,.47)
+    sheet.set_paper(9);sheet.set_portrait();sheet.fit_to_pages(1,1 if len(doc['totals']['lines'])<=4 else 0);sheet.set_margins(.47,.47,.47,.47)
     model=layout(doc)
     for index,width in enumerate(model['widths']):sheet.set_column(index,index,width)
     formats={};format_values={}
@@ -195,9 +263,10 @@ def xlsx(doc):
         if kind=='warning':values['bg_color']='#FFFF00'
         if kind=='final_term':values['bg_color']='#FFF2CC'
         if kind in ('title','head','center'):values['align']='center'
-        if 'amount' in kind:values.update(align='right',num_format='"'+symbol+'" #,##0.00')
+        if 'amount' in kind:values.update(align='right',num_format='"'+symbol+'"* #,##0.00')
         format_values[kind]=values
         formats[kind]=book.add_format(values)
+    required_format=book.add_format({'font_color':'#dc2626'})
     def image(name,row,col,w,h):
         data=asset(doc,name)
         with PILImage.open(data) as im:
@@ -234,9 +303,9 @@ def xlsx(doc):
                 for cell,parts in zip(row,chunks):
                     lines=parts[chunk_index] if chunk_index<len(parts) else ['']
                     value='\n'.join(lines);col=cell['col'];end=col+cell['span']-1
-                    top=((index==0 and chunk_index==0 and section['name']!='header') or (section['name']=='bank' and index==len(section['rows'])-1 and chunk_index==0)
+                    top=((index==0 and chunk_index==0 and section['name']!='header' and not (section['name']=='bank' and col>=8)) or (section['name']=='bank' and index==len(section['rows'])-1 and chunk_index==0)
                          or (cell.get('line_top') and chunk_index==0))
-                    bottom=((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1) or cell['style']=='head'
+                    bottom=((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1 and not (section['name']=='items' and col>=8)) or cell['style']=='head'
                             or (cell.get('line_bottom') and chunk_index==len(parts)-1))
                     key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False))
                     if key not in formats:
@@ -255,6 +324,8 @@ def xlsx(doc):
                         decimal=Decimal(cell['text'])
                         if len(decimal.as_tuple().digits)<=15:sheet.write_number(row_index,col,float(decimal),fmt)
                         else:sheet.write_string(row_index,col,symbol+' '+cell['text'],fmt)
+                    elif cell.get('party') and cell.get('field')=='delivery.consignee_text':
+                        rich_required(sheet,row_index,col,value,fmt,required_format)
                     else:sheet.write_string(row_index,col,value,fmt)
                     if chunk_index==0 and (cell.get('calculated') in ('goods_total','subtotal','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
                         formula_cells.append((row_index,col,fmt,cell['calculated'],cell['text']))
@@ -262,6 +333,8 @@ def xlsx(doc):
                     if cell.get('header_metadata'):height=max(height,len(lines)*16+2)
                 if section['name']=='parties' and index==1:height=max(height,45)
                 if section['name']=='parties' and index==3:height=max(height,40)
+                if section['name']=='items' and index>0:
+                    height=max(height,(22 if index==1 else 63 if index==2 else 18) if len(doc['totals']['lines'])==1 else 36 if len(doc['totals']['lines'])<=4 else 18)
                 if section['name']=='header' and index==0:height=max(height,30)
                 sheet.set_row(row_index,min(409,height));row_index+=1
     image('payment_options.png',row_index,0,440,90);image('signature.png',row_index,5,440,90)

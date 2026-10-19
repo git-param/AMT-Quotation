@@ -11,8 +11,14 @@ SHOP = os.getenv("SHOPIFY_SHOP", "")
 CLIENT_ID = os.getenv("SHOPIFY_CLIENT_ID", "")
 CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
 
-if not all((SHOP, CLIENT_ID, CLIENT_SECRET)):
-    raise RuntimeError("Shopify credentials are missing from environment variables")
+def _require_credentials():
+    """Fail only when a Shopify API call is made, not while importing the app."""
+    if not all((SHOP, CLIENT_ID, CLIENT_SECRET)):
+        raise RuntimeError(
+            "Shopify credentials are missing. Set SHOPIFY_SHOP, "
+            "SHOPIFY_CLIENT_ID, and SHOPIFY_CLIENT_SECRET in the environment "
+            "or the project .env file."
+        )
 
 CONDITION_KEYS = ['condition','product_condition','item_condition','google_product_condition']
 CONDITION_NS   = ['next_cart','custom','global','mm-google-shopping','google','google_shopping']
@@ -21,8 +27,6 @@ _token_cache = {'token': None, 'expires': 0}
 _token_lock  = threading.Lock()
 _sku_cache   = {}
 _sku_lock    = threading.Lock()
-_rate_cache  = {'rate': None, 'ts': 0}
-_rate_lock   = threading.Lock()
 
 def _mf_alias(ns, key):
     return 'mf_' + re.sub(r'[^A-Za-z0-9_]', '_', ns + '_' + key)
@@ -34,6 +38,7 @@ def _cond_suffix(c):
     return ''
 
 def _get_token():
+    _require_credentials()
     now = time.time()
     with _token_lock:
         if _token_cache['token'] and now < _token_cache['expires']:
@@ -133,20 +138,21 @@ def fetch_sku(sku_raw, *, refresh=False):
     return result
 
 def get_inr_rate():
-    with _rate_lock:
-        if _rate_cache['rate'] and time.time() - _rate_cache['ts'] < 3600:
-            return _rate_cache['rate']
-    try:
-        r = requests.get('https://api.frankfurter.app/latest?from=USD&to=INR', timeout=8)
-        if r.status_code == 200:
-            rate = float(r.json()['rates']['INR'])
-            with _rate_lock:
-                _rate_cache.update(rate=rate, ts=time.time())
-            return rate
-    except Exception:
-        pass
-    with _rate_lock:
-        return _rate_cache.get('rate')
+    # Use the same dated reference rate as PI conversions.
+    from backend.common.currencies import configured_rates
+    from backend.common.live_rates import refresh_if_due
+    from backend.database import get_db
+    def cached():
+        connection = get_db()
+        try:
+            return configured_rates(connection).get('INR')
+        finally:
+            connection.close()
+    value = cached()
+    if value is None:
+        refresh_if_due()
+        value = cached()
+    return float(value) if value is not None else None
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 

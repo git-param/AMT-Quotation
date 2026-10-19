@@ -24,6 +24,7 @@ def parse_block(value, country=''):
     value = phone_block(value, country_match[1].strip() if country_match else country)
     lines = [line.strip() for line in value.splitlines() if line.strip()]
     party = {key: '' for key in ('name', 'phone', 'email', 'pic', 'gst_number')}
+    unfinished_phone = False
     location = []
     explicit_country = ''
     if lines:
@@ -40,13 +41,16 @@ def parse_block(value, country=''):
         elif key:
             # Do not silently discard duplicate labels or conflicting contacts.
             content = match[2].strip()
+            if key == 'phone' and '*required' in content:
+                unfinished_phone = True
             if party[key] and content != party[key]:
                 raise ValueError('Use one ' + key.replace('_', ' ') + ' label per party block.')
-            party[key] = content
+            party[key] = content.replace('*required', '').strip() if key == 'phone' else ('' if '*required' in content else content)
         else:
             location.append(line)
     party['email'] = email(party['email'])
-    party['phone'] = '' if party['phone'] in CALLING_CODES.values() else phone(party['phone'])
+    party['phone'] = '' if party['phone'] in CALLING_CODES.values() or (
+        unfinished_phone and len(re.sub(r'\D', '', party['phone'])) < 7) else phone(party['phone'])
     for key in ('pic', 'gst_number'):
         party[key] = text(party[key], 200, key)
     country = explicit_country or text(country, 200, 'destination')
@@ -71,8 +75,8 @@ def text_delivery(data, old, country, draft):
         if not parties['consignee_text']['name']:
             raise ValueError('Consignee requires a legal name on the first line.')
         shipping = addresses['consignee_text']
-        if not shipping.get('line1') or not shipping.get('country'):
-            raise ValueError('Add a consignee address/location and country or order destination.')
+        if not shipping.get('country'):
+            raise ValueError('Add a consignee country or order destination.')
     return {
         **blocks,
         'consignee': parties['consignee_text'],

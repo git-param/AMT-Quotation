@@ -5,24 +5,70 @@
   const message = document.getElementById('message');
   const ratesMessage = document.getElementById('currencyRatesMessage');
   const ratesButton = document.getElementById('saveCurrencyRates');
+  const refreshButton = document.getElementById('refreshCurrencyRates');
+  let providerErrorShown = false;
+  function showRates(data) {
+    const hasRates = ['INR','AED','GBP','EUR'].every(code => data.rates?.[code]);
+    for (const code of ['INR','AED','GBP','EUR']) {
+      const value = data.rates?.[code];
+      document.getElementById('rate'+code).textContent = value ? String(value) : 'Unavailable';
+      document.getElementById('rateDate'+code).textContent = data.dates?.[code]
+        ? 'Published '+data.dates[code]
+        : 'No published rate yet';
+    }
+    const health = document.getElementById('currencyRateHealth');
+    health.textContent = !hasRates ? 'Awaiting rates' : data.stale ? 'Rates outdated' : 'Rates current';
+    health.className = 'currency-rate-health'+(!hasRates || data.stale ? ' is-stale' : '');
+    const interval = document.getElementById('rateRefreshHours');
+    if (document.activeElement !== interval) interval.value = data.refresh_hours ?? '';
+    const sourceLink = document.getElementById('currencyRateSource');
+    if (data.source_url) sourceLink.href = data.source_url;
+    sourceLink.textContent = data.source || 'Frankfurter (central banks and official sources)';
+    const fetched = data.fetched_at ? new Date(data.fetched_at) : null;
+    document.getElementById('currencyRateUpdated').textContent = fetched && !Number.isNaN(fetched.getTime())
+      ? 'Last fetched '+fetched.toLocaleString()
+      : 'Waiting for the first live refresh.';
+    if (data.last_error) {
+      ratesMessage.className = 'error';
+      ratesMessage.textContent = 'Last refresh failed: '+data.last_error;
+      providerErrorShown = true;
+    } else if (providerErrorShown) {
+      ratesMessage.className = '';
+      ratesMessage.textContent = '';
+      providerErrorShown = false;
+    }
+  }
   async function ratesRequest(options) {
     const response = await fetch('/api/currency-rates', options); const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Unable to load currency rates.');
-    for (const code of ['INR','AED','GBP','EUR']) document.getElementById('rate'+code).value = data.rates[code] || '';
+    showRates(data);
+    return data;
   }
   document.getElementById('currencyRatesForm').onsubmit = async event => {
     event.preventDefault(); ratesButton.disabled = true;
-    const rates = {};
-    for (const code of ['INR','AED','GBP','EUR']) {
-      const value = document.getElementById('rate'+code).value.trim(); if (value) rates[code] = value;
-    }
     try {
-      await ratesRequest({method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({rates})});
-      ratesMessage.className = ''; ratesMessage.textContent = 'Currency rates saved.';
+      const response = await fetch('/api/currency-rates/schedule', {method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({refresh_hours:Number(document.getElementById('rateRefreshHours').value)})});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to save refresh interval.');
+      showRates(data);ratesMessage.className = '';ratesMessage.textContent = 'Refresh interval saved.';
     } catch (error) { ratesMessage.className = 'error'; ratesMessage.textContent = error.message; }
     finally { ratesButton.disabled = false; }
   };
+  refreshButton.onclick = async () => {
+    refreshButton.disabled = true; ratesMessage.textContent = 'Fetching current published rates…';
+    try {
+      const response = await fetch('/api/currency-rates/refresh',{method:'POST'});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to refresh rates.');
+      showRates(data);ratesMessage.className = '';ratesMessage.textContent = 'Rates refreshed.';
+    } catch (error) { ratesMessage.className = 'error'; ratesMessage.textContent = error.message; }
+    finally { refreshButton.disabled = false; }
+  };
   ratesRequest().catch(error => { ratesMessage.className = 'error'; ratesMessage.textContent = error.message; });
+  setInterval(() => ratesRequest().catch(error => {
+    ratesMessage.className = 'error'; ratesMessage.textContent = error.message;
+  }), 60000);
   async function request(options) {
     const response = await fetch('/api/settings', options);
     const data = await response.json();

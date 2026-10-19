@@ -7,8 +7,10 @@ const test=require('node:test');
 
 class Element {
   constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.style={};this.attributes={};this.classList={add(){}};}
-  append(...items){this.children.push(...items);}
+  append(...items){for(const item of items)item.parentElement=this;this.children.push(...items);}
   replaceChildren(...items){this.children=items;}
+  addEventListener(event,handler){this["on"+event]=handler;}
+  get firstChild(){return this.children[0];}
   get lastChild(){return this.children.at(-1);}
   setAttribute(key,value){this.attributes[key]=value;}
   querySelectorAll(tag){return this.children.flatMap(child=>[...(child.tag===tag?[child]:[]),...child.querySelectorAll(tag)]);}
@@ -37,7 +39,7 @@ test('PI party textareas keep multiline address and contact sections in one cont
   const inputs=host.querySelectorAll('input');
   const [primary,details]=host.querySelectorAll('textarea');
   assert.equal(primary.value,'Original company\nStreet');
-  assert.equal(details.value,'USA\nTel: 1234567');
+  assert.equal(details.value,'USA');
   const group=host.querySelectorAll('div').find(item=>item.className==='pi-party-editor');
   assert.ok(group.querySelectorAll('textarea').includes(primary));
   assert.ok(group.querySelectorAll('textarea').includes(details));
@@ -48,9 +50,9 @@ test('PI party textareas keep multiline address and contact sections in one cont
   primary.value='Updated company\nUpdated street\nCity, state 12345';details.value='USA\nTel: 1234567';primary.oninput();
   const country=inputs.find(input=>input.dataset.piField==='order.destination');
   country.value='INDIA';country.onchange();
-  assert.equal(primary.value,'Updated company\nUpdated street\nCity, state 12345');assert.match(details.value,/^INDIA\n/);
+  assert.equal(primary.value,'Updated company\nUpdated street\nCity, state 12345');assert.equal(details.value,'INDIA');
   await host.querySelectorAll('button').find(button=>button.textContent==='Update preview').onclick();
-  assert.equal(requests[0].body.delivery.consignee_text,'Updated company\nUpdated street\nCity, state 12345\n\nINDIA\nTel: 1234567');
+  assert.equal(requests[0].body.delivery.consignee_text,'Updated company\nUpdated street\nCity, state 12345\n\nINDIA\nTel/Phone: 1234567\nPIC: \nEmail: \nGST No.: ');
   const printed=[];
   context.URL={createObjectURL:()=> 'blob:print-preview',revokeObjectURL(){}};
   context.fetch=async(url,options)=>{printed.push({url,body:JSON.parse(options.body)});return {ok:true,blob:async()=>({})};};
@@ -58,14 +60,27 @@ test('PI party textareas keep multiline address and contact sections in one cont
   await host.querySelectorAll('button').find(button=>button.textContent==='PDF print preview').onclick();
   assert.equal(requests.length,1); // Printing bypasses the validated save API.
   assert.equal(printed[0].url,'/api/preview/preview/print');
-  assert.equal(printed[0].body.delivery.consignee_text,'');
+  assert.match(printed[0].body.delivery.consignee_text,/Tel\/Phone:/);
   assert.equal(host.querySelectorAll('iframe')[0].src,'blob:print-preview');
+  const marks=host.querySelectorAll('span').filter(item=>item.className==='pi-required-message');
+  assert.equal(marks.filter(item=>!item.hidden).length,2); // Missing PIC and Email; GST is optional for USD.
+  const pic=host.querySelectorAll('input').find(item=>item.dataset.piField==='delivery.consignee_text.pic');
+  pic.value='Contact person';pic.oninput();
+  assert.equal(marks.filter(item=>!item.hidden).length,1);
+  assert.equal(pic.attributes['aria-invalid'],'false');
   const warnings=[];context.window.skuFeedback={show:(text,error)=>warnings.push({text,error})};
   context.fetch=async()=>({ok:false,json:async()=>({error:'Missing: Consignee GST No., Consignee Tel/Phone, Consignee PIC, Consignee Email'})});
   await host.querySelectorAll('button').find(button=>button.textContent==='PDF print preview').onclick();
-  assert.equal(warnings.length,1);assert.equal(warnings[0].error,true);
-  assert.match(warnings[0].text,/Consignee GST No\./);
-  assert.match(warnings[0].text,/Consignee Tel\/Phone/);
+  assert.equal(warnings.length,2);assert.equal(warnings[0].error,true);
+  assert.match(warnings[0].text,/generation can continue/);
+  assert.match(warnings[1].text,/Consignee GST No\./);
+  assert.match(warnings[1].text,/Consignee Tel\/Phone/);
+  state.document.currency='INR';preview.open(state,'/api/preview');
+  context.fetch=async()=>({ok:true,blob:async()=>({})});
+  await host.querySelectorAll('button').find(button=>button.textContent==='PDF print preview').onclick();
+  const inrMarks=host.querySelectorAll('span').filter(item=>item.className==='pi-required-message');
+  assert.equal(inrMarks.filter(item=>!item.hidden).length,3); // PIC, Email and GST.
+  assert.equal(host.querySelectorAll('iframe')[0].src,'blob:print-preview');
 });
 
 test('PI numeric edits refresh displayed totals and UOM uses fixed choices',async()=>{

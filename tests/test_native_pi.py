@@ -249,63 +249,45 @@ class NativePiTests(unittest.TestCase):
         self.as_user('admin')
         self.assertEqual(self.preview()['document']['prepared_phone'], '')
 
-    def test_gst_required_only_for_inr_across_pdf_generation_and_download(self):
+    def test_gst_warning_only_for_inr_and_never_blocks_exports(self):
         import re
         from backend.orders.pi_document import missing_details
         original = self.preview()['document']
         without_gst = re.sub(r'^GST No\.:.*\n?', '', original['delivery']['consignee_text'], flags=re.M)
-        self.client.put(f'/api/orders/{self.order_id}',json={'delivery':{'consignee_text':without_gst}})
         for currency in ('USD','INR','AED','GBP','EUR'):
             document = deepcopy(original)
             document['currency'] = currency
             document['delivery']['consignee_text'] = without_gst
             self.assertEqual('Consignee GST No.' in missing_details(document), currency == 'INR')
-        usd = self.preview(currency='USD')
-        self.assertEqual(self.client.get(usd['pdf_url']).status_code,200)
-        self.assertEqual(self.client.post(self.base+'/preview/'+usd['preview_id']+'/print',json={}).status_code,200)
-        issued = self.issue(usd)
+        preview = self.preview(currency='INR', usd_inr_rate='80')
+        url = self.base+'/preview/'+preview['preview_id']
+        saved = self.client.put(url+'?for_generation=1', json={'delivery': {'consignee_text': without_gst}})
+        self.assertEqual(saved.status_code,200,saved.json)
+        self.assertIn('Consignee GST No.',saved.json['missing_fields'])
+        self.assertEqual(self.client.post(url+'/print',json={}).status_code,200)
+        self.assertEqual(self.client.get(saved.json['pdf_url']).status_code,200)
+        issued = self.issue(saved.json)
         self.assertEqual(issued.status_code,201,issued.json)
         self.assertEqual(self.client.get(issued.json['pdf_url']).status_code,200)
-        inr = self.preview(currency='INR',usd_inr_rate='80')
-        self.assertEqual(self.client.get(inr['pdf_url']).status_code,400)
-        url = self.base+'/preview/'+inr['preview_id']
-        self.assertEqual(self.client.post(url+'/print',json={}).status_code,400)
-        self.assertEqual(self.client.put(url+'?for_generation=1',json={}).status_code,400)
-        self.assertIn('Consignee GST No.',self.issue(inr).json['missing_fields'])
-        legacy = self.client.post(self.base,json={'currency':'INR','usd_inr_rate':'80'})
-        self.assertIn('Consignee GST No.',legacy.json['missing_fields'])
-        fixed = self.client.put(url,json={'consignee_gst_number':'24TEST123'})
-        self.assertEqual(fixed.status_code,200,fixed.json)
-        self.assertEqual(self.issue(fixed.json).status_code,201)
+        self.assertEqual(self.client.get(issued.json['xlsx_url']).status_code,200)
 
-    def test_missing_contacts_block_print_pdf_download_and_generation_until_fixed(self):
+    def test_missing_contacts_warn_but_allow_print_generation_and_download(self):
         import re
         preview = self.preview(currency='INR',usd_inr_rate='80')
         url = self.base+'/preview/'+preview['preview_id']
         complete = preview['document']['delivery']['consignee_text']
-        for label, display in [('GST No.', 'GST No.'), ('Tel/Phone', 'Tel/Phone'), ('PIC', 'PIC'), ('Email', 'Email')]:
-            incomplete = re.sub(r'^'+re.escape(label)+r':.*\n?', '', complete, flags=re.M)
-            changes = {'delivery': {'consignee_text': incomplete}}
-            printed = self.client.post(url+'/print', json=changes)
-            self.assertEqual(printed.status_code, 400, printed.json)
-            self.assertIn('Consignee '+display, printed.json['missing_fields'])
-            self.assertEqual(self.client.put(url+'?for_generation=1', json=changes).status_code, 400)
-            saved = self.client.put(url, json=changes)
-            self.assertEqual(saved.status_code, 200, saved.json)
-            self.assertEqual(self.client.get(saved.json['pdf_url']).status_code, 400)
-            self.assertEqual(self.issue(saved.json).status_code, 400)
-            self.assertEqual(self.client.put(url, json={'delivery': {'consignee_text': complete}}).status_code, 200)
-        self.assertEqual(self.client.get(preview['pdf_url']).status_code, 200)
-        issued = self.issue(preview)
-        self.assertEqual(issued.status_code, 201, issued.json)
-        self.assertEqual(self.client.get(issued.json['pdf_url']).status_code, 200)
-        connection = database.get_db()
-        with connection:
-            invoice = connection.execute('SELECT snapshot_json FROM order_invoices WHERE id=?', (issued.json['id'],)).fetchone()
-            snapshot = json.loads(invoice[0]);snapshot['delivery']['consignee_text'] = 'Consignee\nAddress'
-            connection.execute('UPDATE order_invoices SET snapshot_json=? WHERE id=?', (json.dumps(snapshot), issued.json['id']))
-        connection.close()
-        self.assertEqual(self.client.get(issued.json['pdf_url']).status_code, 400)
+        incomplete = re.sub(r'^(?:GST No\.|Tel/Phone|PIC|Email):.*\n?', '', complete, flags=re.M)
+        changes = {'delivery': {'consignee_text': incomplete}}
+        self.assertEqual(self.client.post(url+'/print', json=changes).status_code,200)
+        saved = self.client.put(url+'?for_generation=1', json=changes)
+        self.assertEqual(saved.status_code,200,saved.json)
+        self.assertEqual(set(saved.json['missing_fields']), {
+            'Consignee GST No.', 'Consignee Tel/Phone', 'Consignee PIC', 'Consignee Email'})
+        self.assertEqual(self.client.get(saved.json['pdf_url']).status_code,200)
+        issued = self.issue(saved.json)
+        self.assertEqual(issued.status_code,201,issued.json)
+        self.assertEqual(self.client.get(issued.json['pdf_url']).status_code,200)
+        self.assertEqual(self.client.get(issued.json['xlsx_url']).status_code,200)
 
     def test_country_is_required_and_legacy_generation_cannot_bypass_details(self):
         from backend.orders.pi_document import validate_pdf_details, PiDetailsRequired
@@ -322,7 +304,7 @@ class NativePiTests(unittest.TestCase):
         })
         response = self.client.post(self.base, json={'currency': 'USD'})
         self.assertEqual(response.status_code, 400)
-        for field in ('Proforma Invoice No.', 'Purchase Order No.', 'Consignee Tel/Phone', 'Consignee PIC', 'Consignee Email'):
+        for field in ('Proforma Invoice No.', 'Purchase Order No.'):
             self.assertIn(field, response.json['error'])
 
     def test_print_preview_blocks_unfinished_fields_without_saving(self):
@@ -333,7 +315,7 @@ class NativePiTests(unittest.TestCase):
         changes['lines'][0]['quantity']=''
         result=self.client.post(self.base+'/preview/'+preview['preview_id']+'/print',json=changes)
         self.assertEqual(result.status_code,400)
-        for label in ('Proforma Invoice No.', 'Consignee Tel/Phone', 'Consignee PIC', 'Consignee Email'):
+        for label in ('Proforma Invoice No.',):
             self.assertIn(label, result.json['error'])
         connection=database.get_db()
         try:
@@ -504,7 +486,7 @@ class NativePiTests(unittest.TestCase):
         self.assertEqual(self.issue(preview).status_code,201)
         self.assertEqual(len(self.client.get(f'/api/orders/{self.order_id}').json['invoices']),1)
 
-    def test_generation_requires_consignee_contacts_gst_and_invoice_numbers(self):
+    def test_generation_requires_invoice_numbers_but_contact_omissions_only_warn(self):
         preview=self.preview();url=self.base+'/preview/'+preview['preview_id']+'?for_generation=1'
         for field,label in [('pi_reference','Proforma Invoice No.'),('po_reference','Purchase Order No.')]:
             result=self.client.put(url,json={'order':{field:''}})
@@ -516,7 +498,7 @@ class NativePiTests(unittest.TestCase):
             'delivery_time':'','dispatch_method':''},delivery={'consignee_text':'','buyer_text':'Buyer\nEmail: unfinished',
             'notify_text':''})
         saved=self.client.put(url,json=changes)
-        self.assertEqual(saved.status_code,400,saved.json)
+        self.assertEqual(saved.status_code,200)
         self.assertNotIn('Consignee GST No.', saved.json['missing_fields'])
         self.assertIn('Consignee Tel/Phone', saved.json['missing_fields'])
         self.assertIn('Consignee PIC', saved.json['missing_fields'])

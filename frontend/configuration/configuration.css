@@ -20,8 +20,32 @@
 .department-prefix-form h3{font-size:14px;margin-bottom:6px}
 .department-prefix-form>p:first-of-type{font-size:12px;line-height:1.7;color:var(--muted);margin-bottom:18px;max-width:640px}
 .settings-input-row select{height:44px}
-.currency-rates-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px}
-.currency-rates-grid .form-field{min-width:0}
+.currency-source-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:14px 16px;margin-bottom:18px;border:1px solid #DBE5F3;border-radius:12px;background:#F8FAFD}
+.currency-source-bar>div{display:grid;gap:3px;min-width:0}
+.currency-eyebrow{color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.currency-source-bar a{color:#1D4ED8;font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.currency-rate-health{display:inline-flex;align-items:center;gap:7px;flex:0 0 auto;padding:6px 10px;border-radius:999px;background:#ECFDF5;color:#047857;font-size:11px;font-weight:700}
+.currency-rate-health:before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+.currency-rate-health.is-stale{background:#FFFBEB;color:#B45309}
+.currency-rates-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.currency-rate-card{display:flex;flex-direction:column;min-width:0;min-height:132px;padding:16px;border:1px solid #E2E8F0;border-radius:12px;background:#fff;box-shadow:0 1px 3px #172b4209}
+.currency-rate-title{display:flex;align-items:baseline;justify-content:space-between;gap:6px}
+.currency-rate-title strong{font-size:13px;color:var(--ink-2)}
+.currency-rate-title span{font-size:11px;color:var(--muted);text-align:right}
+.currency-rate-base{margin-top:17px;font-size:11px;color:var(--muted)}
+.currency-rate-value{margin-top:3px;font-size:23px;line-height:1.2;font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.currency-rate-card small{margin-top:auto;padding-top:13px;color:var(--muted);font-size:11px}
+.currency-rate-meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:12px 0 0;color:var(--muted);font-size:11px}
+.currency-rate-meta p{margin:0}
+.currency-refresh-form{margin-top:20px;padding:18px;border:1px solid #E2E8F0;border-radius:12px;background:#F8FAFC}
+.currency-refresh-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:18px}
+.currency-refresh-controls .form-field{width:min(100%,360px);min-width:0;gap:8px}
+.currency-refresh-controls input,.currency-refresh-actions .btn-sm{height:44px}
+.currency-refresh-actions{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.currency-refresh-form #rateRefreshHint{margin-top:10px}
+@media(max-width:900px){.currency-rates-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.currency-rates-grid{grid-template-columns:1fr}.currency-refresh-controls{align-items:stretch;flex-direction:column}.currency-refresh-controls .form-field{width:100%}.currency-refresh-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.currency-refresh-actions .btn-sm{width:100%}}
+@media(max-width:380px){.currency-refresh-actions{grid-template-columns:1fr}}
 #currencyRatesMessage:not(:empty){margin-top:12px;font-size:13px;color:#166534}
 #currencyRatesMessage.error{color:#9F1239}
 #prefixMessage:empty{display:none}

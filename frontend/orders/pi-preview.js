@@ -46,12 +46,35 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     return n;
   };
   function valueOf(item) {
-    return item.primaryInput ? window.orderLocations.joinParty(item.primaryInput.value,item.input.value) : item.input.value;
+    if(!item.primaryInput)return item.input.value;
+    return window.orderLocations.joinParty(item.primaryInput.value,item.input.value);
+  }
+  function contactWarnings(notify=false){
+    const party=inputs.find(item=>item.path==='delivery.consignee_text');
+    const missing=[];
+    const details=party?.input.value||'';
+    const destination=inputs.find(item=>item.path==='order.destination')?.input.value||state.document.order.destination||'';
+    for(const [label,pattern] of [
+      ['GST No.',/^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$/im],
+      ['Tel/Phone',/^\s*(?:Tel(?:\/Phone)?|Telephone|Phone)\s*:\s*(.*)$/im],
+      ['PIC',/^\s*PIC\s*:\s*(.*)$/im],
+      ['Email',/^\s*E-?mail\s*:\s*(.*)$/im]
+    ]){
+      if(label==='GST No.'&&destination.trim().toUpperCase()!=='INDIA')continue;
+      const value=details.match(pattern)?.[1].trim()||'';
+      if(!value||value.includes('*required')||(label==='Tel/Phone'&&value.replace(/\D/g,'').length<7))missing.push(label);
+    }
+    if(notify&&missing.length){
+      const message='Missing consignee details: '+missing.join(', ')+'. PDF/Excel generation can continue.';
+      status.textContent=message;status.classList.add('error');
+      window.skuFeedback?.show(message,true);
+    }
   }
   function fitText(input) {
     input.rows=Math.max(1,input.value.split('\n').length);
     input.style.height='auto';
     if(input.scrollHeight)input.style.height=input.scrollHeight+'px';
+    input.syncRequiredHighlight?.();
   }
   function field(parent, label, value, path, multiline = false, type = "text") {
     const wrap = node("label", undefined, "pi-field");
@@ -70,9 +93,12 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         input.value = input.value.trim().toUpperCase();
         const consignee = inputs.find(item => item.path === 'delivery.consignee_text');
         if (consignee) {
-          const value=window.orderLocations.countryBlock(valueOf(consignee), input.value, [state.document.order.destination]);
+          let value=window.orderLocations.countryBlock(valueOf(consignee), input.value, [state.document.order.destination]);
+          if(input.value!=='INDIA')value=window.orderLocations.withGst(value,'');
           if(consignee.primaryInput){const [primary,secondary]=window.orderLocations.partyParts(value,input.value);consignee.primaryInput.value=primary;consignee.input.value=secondary;}
           else consignee.input.value=value;
+          fitText(consignee.input);
+          contactWarnings();
         }
       };
     }
@@ -96,6 +122,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       }
       if(path.endsWith('.uom'))updateRateHeading();
       if(path==='shipping_charges'||/^lines\.\d+\.(quantity|unit_price|line_total|uom)$/.test(path))scheduleCalculation();
+      contactWarnings();
     };
     wrap.append(input);
     parent.append(wrap);
@@ -111,6 +138,22 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     const [primary,secondary]=window.orderLocations.partyParts(value,state.document.order.destination);
     const primaryInput=field(group,'Company / address details',primary,path+'.primary',true);inputs.pop();
     const input=field(group,'Country / GST / contact details',secondary,path,true);
+    input.parentElement.classList.add('pi-contact-details');
+    const surface=node('div',undefined,'pi-contact-surface');
+    const mirror=node('div',undefined,'pi-contact-mirror');
+    mirror.setAttribute('aria-hidden','true');
+    input.replaceWith(surface);surface.append(mirror,input);
+    input.syncRequiredHighlight=()=>{
+      surface.classList.toggle('pi-contact-highlighted',input.value.includes('*required'));
+      const parts=input.value.split('*required');
+      mirror.replaceChildren();
+      parts.forEach((part,index)=>{
+        mirror.append(document.createTextNode(part));
+        if(index<parts.length-1)mirror.append(node('span','*required'));
+      });
+      mirror.scrollTop=input.scrollTop;
+    };
+    input.addEventListener('scroll',()=>{mirror.scrollTop=input.scrollTop;});
     inputs.at(-1).primaryInput=primaryInput;
     fitText(primaryInput);fitText(input);
     return input;
@@ -154,6 +197,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       button('Update preview',save);
       button('Edit invoice',async()=>{printFrame.hidden=true;paper.hidden=false;});
       button('PDF print preview',async()=>{
+        contactWarnings(true);
         const response=await fetch(state.base+'/'+state.preview_id+'/print',json('POST',collect()));
         if(!response.ok){const error=await response.json();throw new Error(error.error||'Unable to open print preview.');}
         const blob=await response.blob();clearPrintUrl();printUrl=URL.createObjectURL(blob);
@@ -162,6 +206,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       });
     }
     for(const format of ['xlsx','pdf'])button('Generate '+format.toUpperCase(),async()=>{
+      contactWarnings(true);
       if(!issued){await save(true);issued=await api(state.base.replace('/preview','/issue'),json('POST',{preview_id:state.preview_id}));await onIssued(issued);render();}
       await window.downloadPiFile(issued[format+'_url'],issued[format+'_filename']||issued.reference.replace(/[<>:"/\\|?*\u0000-\u001f]/g,'-')+'.'+format);
     },true);
@@ -170,6 +215,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     const scroll=node('div',undefined,'pi-paper-scroll');paper=node('article',undefined,'pi-paper');scroll.append(paper);host.append(scroll);
     printFrame=node('iframe');printFrame.title='Exact PI PDF print preview';printFrame.className='pi-print-frame';printFrame.hidden=true;host.append(printFrame);
     renderGrid();
+    contactWarnings();
   }
   function renderGrid() {
     const doc = state.document;
@@ -192,7 +238,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         const annexureBranding=node('div',undefined,'pi-branding');image(annexureBranding,'header.png');
         annexurePaper.append(annexureBranding);paper.append(annexurePaper);
       }
-      const table = node("table", undefined, "pi-company-grid pi-grid-" + section.name + (section.name === "bank" ? " pi-preview-totals" : ""));
+      const table = node("table", undefined, "pi-company-grid pi-grid-" + section.name + (section.name === "bank" ? " pi-preview-totals" : "") + (section.name === "items" && doc.pi_format !== 'bulk' && doc.totals.lines.length <= 4 ? " pi-roomy-items" : "") + (section.name === "items" && section.rows.length === 2 ? " pi-single-item" : "") + (section.name === "items" && doc.pi_format !== 'bulk' && doc.totals.lines.length === 1 ? " pi-single-sku" : ""));
       const columns = node("colgroup");
       const widths=section.widths||state.layout.widths;
       const width = widths.reduce((a, b) => a + b, 0);
