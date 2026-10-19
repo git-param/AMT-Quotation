@@ -7,6 +7,10 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#F3F4F6;min-height:100vh
 .field{margin-bottom:18px}
 label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}
 input[type=text],input[type=password]{width:100%;padding:10px 13px;border:1px solid #D1D5DB;border-radius:6px;font-size:14px;color:#111827;transition:border-color .15s}
+.password-wrap{position:relative}
+.password-wrap input{padding-right:64px}
+.password-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#1E3A5F;font-size:12px;font-weight:600;cursor:pointer;padding:4px}
+.password-toggle:focus{outline:2px solid #1A56DB;outline-offset:1px;border-radius:3px}
 input:focus{outline:none;border-color:#1A56DB;box-shadow:0 0 0 3px rgba(26,86,219,.1)}
 .btn-login{width:100%;padding:11px;background:#1E3A5F;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s;margin-top:6px}
 .btn-login:hover{background:#1A3352}

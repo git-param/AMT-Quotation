@@ -23,3 +23,13 @@ async function doLogin(e) {
     document.getElementById('password').focus();
   }
 }
+
+const password = document.getElementById('password');
+const passwordToggle = document.getElementById('passwordToggle');
+passwordToggle.addEventListener('click', () => {
+  const visible = password.type === 'text';
+  password.type = visible ? 'password' : 'text';
+  passwordToggle.textContent = visible ? 'Show' : 'Hide';
+  passwordToggle.setAttribute('aria-label', visible ? 'Show password' : 'Hide password');
+  passwordToggle.setAttribute('aria-pressed', String(!visible));
+});
