@@ -199,7 +199,9 @@ def pdf(doc):
                     if cell.get('header_metadata'):min_height=max(min_height,h+3)
                 if section['name']=='parties' and index==1:min_height=max(min_height,30)
                 if section['name']=='parties' and index==3:min_height=max(min_height,30)
-                if section['name']=='items' and index>0:min_height=max(min_height,19)
+                if section['name']=='items' and index>0:
+                    min_height=max(min_height,85 if len(section['rows'])==2 else 19)
+                    if len(section['rows'])==2:commands.append(('VALIGN',(0,index),(-1,index),'MIDDLE'))
                 if section['name']=='annexure':
                     reference_height=22.5 if index==0 else 36 if index==1 else 40.9 if any(c.get('calculated')=='annexure_amount_in_words' for c in source) else 21.95 if any((c.get('field') or '').startswith('lines.') for c in source) else 14.1
                     min_height=max(min_height,reference_height*annexure_scale)
@@ -299,17 +301,18 @@ def xlsx(doc):
                          or (cell.get('line_top') and chunk_index==0))
                     bottom=((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1 and not (section['name']=='items' and col>=8)) or cell['style']=='head'
                             or (cell.get('line_bottom') and chunk_index==len(parts)-1))
-                    key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False))
+                    single_item_cell=section['name']=='items' and index>0 and len(section['rows'])==2
+                    key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False),single_item_cell)
                     if key not in formats:
                         formats[key]=book.add_format({**format_values[cell['style']],'top':2 if top else 0,'bottom':2 if bottom else 0,
                             'left':0 if cell.get('open_left') else 2,'right':0 if cell.get('open_right') else 2,
-                            'valign':'bottom' if cell.get('bottom_aligned') else 'top'})
+                            'valign':'bottom' if cell.get('bottom_aligned') else 'vcenter' if single_item_cell else 'top'})
                     fmt=formats[key]
                     path=cell.get('calculated') or cell.get('field')
                     if chunk_index==0 and path:coordinates[path]=xl_rowcol_to_cell(row_index,col)
                     quantity=(cell.get('field') or '').endswith('.quantity')
                     if quantity:
-                        fmt=book.add_format({**format_values[cell['style']],'num_format':'0 "'+cell.get('uom','PCs')+'"','top':2 if top else 0,'bottom':2 if bottom else 0})
+                        fmt=book.add_format({**format_values[cell['style']],'num_format':'0 "'+cell.get('uom','PCs')+'"','top':2 if top else 0,'bottom':2 if bottom else 0,'valign':'vcenter' if single_item_cell else 'top'})
                     number=(cell.get('numeric') or cell['field']=='shipping_charges' or quantity or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
                     if cell['span']>1:sheet.merge_range(row_index,col,row_index,end,'',fmt)
                     if number:
@@ -325,6 +328,7 @@ def xlsx(doc):
                     if cell.get('header_metadata'):height=max(height,len(lines)*16+2)
                 if section['name']=='parties' and index==1:height=max(height,45)
                 if section['name']=='parties' and index==3:height=max(height,40)
+                if section['name']=='items' and index>0 and len(section['rows'])==2:height=max(height,85)
                 if section['name']=='header' and index==0:height=max(height,30)
                 sheet.set_row(row_index,min(409,height));row_index+=1
     image('payment_options.png',row_index,0,440,90);image('signature.png',row_index,5,440,90)

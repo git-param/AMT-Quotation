@@ -107,8 +107,12 @@ def layout(doc):
             items[-1][-2]['display_text'] = line['net_unit_price']
         if Decimal(line.get('discount_amount', '0')):
             items[-1][-1]['readonly'] = True
-    # The original reserves four ruled item rows, even for a one-line invoice.
-    while len(items)<5:items.append([c(cell['col'],cell['span']) for cell in item_header])
+    # A normal single-SKU PI has a short blank lead-in above its product.
+    # The annexure cover keeps its one centered summary row.
+    if len(total['lines']) == 1 and doc.get('pi_format','normal') == 'normal':
+        items.insert(1,[c(cell['col'],cell['span']) for cell in item_header])
+    elif len(total['lines']) != 1:
+        while len(items)<5:items.append([c(cell['col'],cell['span']) for cell in item_header])
     bank=[c(0,8,'BANK DETAIL','bank_title')]+[c(0,8,value,'bold') for value in doc['company']['bank']]
     bank.append(c(0,8,doc['company'].get('bank_charges',''),'warning'))
     tax_label=f'GST {(Decimal(total["tax_rate"])*100).normalize():f}%'

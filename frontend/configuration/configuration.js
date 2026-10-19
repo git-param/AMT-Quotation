@@ -6,21 +6,37 @@
   const ratesMessage = document.getElementById('currencyRatesMessage');
   const ratesButton = document.getElementById('saveCurrencyRates');
   const refreshButton = document.getElementById('refreshCurrencyRates');
+  let providerErrorShown = false;
   function showRates(data) {
+    const hasRates = ['INR','AED','GBP','EUR'].every(code => data.rates?.[code]);
     for (const code of ['INR','AED','GBP','EUR']) {
-      document.getElementById('rate'+code).textContent = data.rates?.[code] || 'Unavailable';
-      const providers = data.providers?.[code] || [];
+      const value = data.rates?.[code];
+      document.getElementById('rate'+code).textContent = value ? String(value) : 'Unavailable';
       document.getElementById('rateDate'+code).textContent = data.dates?.[code]
-        ? 'Rate date: '+data.dates[code]+(providers.length?' · Providers: '+providers.join(', '):'')
-        : 'No live rate yet';
+        ? 'Published '+data.dates[code]
+        : 'No published rate yet';
     }
-    document.getElementById('rateRefreshHours').value = data.refresh_hours;
-    const source = document.getElementById('currencyRateSource');
-    source.href = data.source_url; source.textContent = data.source;
-    document.getElementById('currencyRateUpdated').textContent = data.fetched_at
-      ? 'Last fetched: '+new Date(data.fetched_at).toLocaleString()+(data.stale?' — Rates are too old for new conversions.':'')
+    const health = document.getElementById('currencyRateHealth');
+    health.textContent = !hasRates ? 'Awaiting rates' : data.stale ? 'Rates outdated' : 'Rates current';
+    health.className = 'currency-rate-health'+(!hasRates || data.stale ? ' is-stale' : '');
+    const interval = document.getElementById('rateRefreshHours');
+    if (document.activeElement !== interval) interval.value = data.refresh_hours ?? '';
+    const sourceLink = document.getElementById('currencyRateSource');
+    if (data.source_url) sourceLink.href = data.source_url;
+    sourceLink.textContent = data.source || 'Frankfurter (central banks and official sources)';
+    const fetched = data.fetched_at ? new Date(data.fetched_at) : null;
+    document.getElementById('currencyRateUpdated').textContent = fetched && !Number.isNaN(fetched.getTime())
+      ? 'Last fetched '+fetched.toLocaleString()
       : 'Waiting for the first live refresh.';
-    if (data.last_error) { ratesMessage.className = 'error'; ratesMessage.textContent = 'Last refresh failed: '+data.last_error; }
+    if (data.last_error) {
+      ratesMessage.className = 'error';
+      ratesMessage.textContent = 'Last refresh failed: '+data.last_error;
+      providerErrorShown = true;
+    } else if (providerErrorShown) {
+      ratesMessage.className = '';
+      ratesMessage.textContent = '';
+      providerErrorShown = false;
+    }
   }
   async function ratesRequest(options) {
     const response = await fetch('/api/currency-rates', options); const data = await response.json();

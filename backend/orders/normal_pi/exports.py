@@ -197,7 +197,9 @@ def pdf(doc):
                 if cell.get('header_metadata'):min_height=max(min_height,h+3)
             if section['name']=='parties' and index==1:min_height=max(min_height,30)
             if section['name']=='parties' and index==3:min_height=max(min_height,30)
-            if section['name']=='items' and index>0:min_height=max(min_height,19)
+            if section['name']=='items' and index>0:
+                single_sku=len(doc['totals']['lines'])==1
+                min_height=max(min_height,(22 if index==1 else 63 if index==2 else 19) if single_sku else 19)
             rows.append(row);heights.append(min_height)
         table=LongTable(rows,colWidths=columns,rowHeights=heights,
             repeatRows=1 if section['name']=='items' else 0,splitInRow=1,hAlign='LEFT')
@@ -230,8 +232,12 @@ def pdf(doc):
         spare_height=max(0,min(120,first_frame_height-used_height-12))
         product_rows=len(heights)-1
         if spare_height and product_rows:
-            extra=min(spare_height/product_rows,30)
-            roomier=[heights[0]]+[row_height+extra for row_height in heights[1:]]
+            roomier=heights.copy()
+            if len(doc['totals']['lines'])==1:
+                roomier[2]+=min(spare_height,30)
+            else:
+                extra=min(spare_height/product_rows,30)
+                roomier[1:]=[row_height+extra for row_height in heights[1:]]
             table=LongTable(rows,colWidths=columns,rowHeights=roomier,
                 repeatRows=1,splitInRow=1,hAlign='LEFT')
             table.setStyle(table_style)
@@ -327,7 +333,8 @@ def xlsx(doc):
                     if cell.get('header_metadata'):height=max(height,len(lines)*16+2)
                 if section['name']=='parties' and index==1:height=max(height,45)
                 if section['name']=='parties' and index==3:height=max(height,40)
-                if section['name']=='items' and index>0 and len(doc['totals']['lines'])<=4:height=max(height,36)
+                if section['name']=='items' and index>0:
+                    height=max(height,(22 if index==1 else 63 if index==2 else 18) if len(doc['totals']['lines'])==1 else 36 if len(doc['totals']['lines'])<=4 else 18)
                 if section['name']=='header' and index==0:height=max(height,30)
                 sheet.set_row(row_index,min(409,height));row_index+=1
     image('payment_options.png',row_index,0,440,90);image('signature.png',row_index,5,440,90)
