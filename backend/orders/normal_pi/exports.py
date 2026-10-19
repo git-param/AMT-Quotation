@@ -126,6 +126,7 @@ def pdf(doc):
         PageTemplate(id='First',frames=frame(height-margin-header_height-2,'first'),onPage=first_page,autoNextPageTemplate='Later'),
         PageTemplate(id='Later',frames=frame(height-margin,'later'))])
     story=[]
+    item_table=None
     symbol=currency_symbol(doc['currency'])
     def paragraph(cell):
         kind=cell['style'];text=cell.get('display_text',cell['text'])
@@ -185,12 +186,15 @@ def pdf(doc):
             rows.append(row);heights.append(min_height)
         table=LongTable(rows,colWidths=columns,rowHeights=heights,
             repeatRows=1 if section['name']=='items' else 0,splitInRow=1,hAlign='LEFT')
-        table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),
+        table_style=TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),
             ('LEFTPADDING',(0,0),(-1,-1),3),('RIGHTPADDING',(0,0),(-1,-1),3),
             ('TOPPADDING',(0,0),(-1,-1),1.5),('BOTTOMPADDING',(0,0),(-1,-1),1.5),
             *section_borders(section['name']),*commands,
             *([('LINEBELOW',(0,0),(-1,0),.8,colors.black)] if section['name']=='items' else []),
-            *([('LINEABOVE',(0,-1),(-1,-1),.8,colors.black)] if section['name']=='bank' else [])]))
+            *([('LINEABOVE',(0,-1),(-1,-1),.8,colors.black)] if section['name']=='bank' else [])])
+        table.setStyle(table_style)
+        if section['name']=='items' and doc.get('pi_format','normal')=='normal' and len(doc['totals']['lines'])<=4:
+            item_table=(len(story),rows,heights,table_style)
         story.append(table)
     footer_block=Table([
         [image('payment_options.png',usable*.46),image('signature.png',usable*.44)],
@@ -202,6 +206,21 @@ def pdf(doc):
         ('BOX',(0,0),(-1,-1),.9,colors.black),
         ('LINEABOVE',(0,1),(-1,1),.9,colors.black)]))
     story.append(footer_block)
+    if item_table:
+        table_index,rows,heights,table_style=item_table
+        first_frame_height=height-2*margin-header_height-2
+        used_height=sum(flowable.wrap(usable,first_frame_height)[1] for flowable in story)
+        # Let the products use spare page space while retaining a little room
+        # above the bottom margin for ReportLab's frame rounding.
+        spare_height=max(0,min(120,first_frame_height-used_height-12))
+        product_rows=len(heights)-1
+        if spare_height and product_rows:
+            extra=min(spare_height/product_rows,30)
+            roomier=[heights[0]]+[row_height+extra for row_height in heights[1:]]
+            table=LongTable(rows,colWidths=columns,rowHeights=roomier,
+                repeatRows=1,splitInRow=1,hAlign='LEFT')
+            table.setStyle(table_style)
+            story[table_index]=table
     document.build(story)
     return output.getvalue()
 
@@ -209,7 +228,7 @@ def pdf(doc):
 def xlsx(doc):
     output=BytesIO();book=xlsxwriter.Workbook(output,{'in_memory':True,'strings_to_formulas':False,'strings_to_urls':False})
     sheet=book.add_worksheet('Proforma Invoice');sheet.hide_gridlines(2)
-    sheet.set_paper(9);sheet.set_portrait();sheet.fit_to_pages(1,0);sheet.set_margins(.47,.47,.47,.47)
+    sheet.set_paper(9);sheet.set_portrait();sheet.fit_to_pages(1,1 if len(doc['totals']['lines'])<=4 else 0);sheet.set_margins(.47,.47,.47,.47)
     model=layout(doc)
     for index,width in enumerate(model['widths']):sheet.set_column(index,index,width)
     formats={};format_values={}
@@ -293,6 +312,7 @@ def xlsx(doc):
                     if cell.get('header_metadata'):height=max(height,len(lines)*16+2)
                 if section['name']=='parties' and index==1:height=max(height,45)
                 if section['name']=='parties' and index==3:height=max(height,40)
+                if section['name']=='items' and index>0 and len(doc['totals']['lines'])<=4:height=max(height,36)
                 if section['name']=='header' and index==0:height=max(height,30)
                 sheet.set_row(row_index,min(409,height));row_index+=1
     image('payment_options.png',row_index,0,440,90);image('signature.png',row_index,5,440,90)

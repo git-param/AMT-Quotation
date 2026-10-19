@@ -238,7 +238,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         const annexureBranding=node('div',undefined,'pi-branding');image(annexureBranding,'header.png');
         annexurePaper.append(annexureBranding);paper.append(annexurePaper);
       }
-      const table = node("table", undefined, "pi-company-grid pi-grid-" + section.name + (section.name === "bank" ? " pi-preview-totals" : ""));
+      const table = node("table", undefined, "pi-company-grid pi-grid-" + section.name + (section.name === "bank" ? " pi-preview-totals" : "") + (section.name === "items" && doc.pi_format !== 'bulk' && doc.totals.lines.length <= 4 ? " pi-roomy-items" : ""));
       const columns = node("colgroup");
       const widths=section.widths||state.layout.widths;
       const width = widths.reduce((a, b) => a + b, 0);

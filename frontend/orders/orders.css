@@ -121,6 +121,7 @@ body.embedded{margin:0;background:#f5f7fb}body.embedded .wrap{padding:18px 24px 
 .pi-paper .pi-company-grid .pi-cell-amount input{text-align:right}
 .pi-paper .pi-company-grid .pi-cell-center input{text-align:center}
 .pi-grid-items tr:not(:first-child){min-height:26px}.pi-grid-items tr:first-child{border-bottom:1.5px solid black}
+.pi-paper .pi-roomy-items tr:not(:first-child){height:44px}
 .pi-grid-bank tr:last-child{border-top:1.5px solid black}
 .pi-grid-bank.pi-preview-totals{display:table;margin:0}
 .pi-quantity-cell .pi-field{max-width:100%}
