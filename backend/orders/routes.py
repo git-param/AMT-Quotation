@@ -35,7 +35,11 @@ def pi_defaults():
 @authenticated_required
 def order_page():
     """Serve searchable orders and separate create/edit/detail panels."""
-    return send_file(str(FRONTEND_DIR / 'orders' / 'orders.html'))
+    response = send_file(str(FRONTEND_DIR / 'orders' / 'orders.html'))
+    # The client workspace embeds this page from the same origin.
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['Content-Security-Policy'] = "frame-ancestors 'self'"
+    return response
 
 
 @bp.route('/api/orders')

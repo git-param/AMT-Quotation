@@ -11,6 +11,7 @@ from backend import database
 from backend.common.auth import authenticated_required
 from backend.login.routes import bp as login_bp
 from backend.migrations import migrate_database
+from backend.orders.routes import bp as orders_bp
 from backend.security.middleware import init_security
 
 
@@ -32,6 +33,7 @@ class SecurityTests(unittest.TestCase):
         self.app = Flask(__name__)
         self.app.config.update(SECRET_KEY='security-test-key', TESTING=False)
         self.app.register_blueprint(login_bp)
+        self.app.register_blueprint(orders_bp)
 
         @self.app.post('/api/security-write')
         @authenticated_required
@@ -69,6 +71,10 @@ class SecurityTests(unittest.TestCase):
         response = client.get('/api/me')
         self.assertEqual(response.headers['X-Content-Type-Options'], 'nosniff')
         self.assertEqual(response.headers['X-Frame-Options'], 'DENY')
+        order_page = client.get('/orders?embedded=1', buffered=True)
+        self.assertEqual(order_page.status_code, 200)
+        self.assertEqual(order_page.headers['X-Frame-Options'], 'SAMEORIGIN')
+        self.assertEqual(order_page.headers['Content-Security-Policy'], "frame-ancestors 'self'")
         connection = database.get_db()
         try:
             events = {row[0] for row in connection.execute(
