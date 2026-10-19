@@ -27,8 +27,6 @@ _token_cache = {'token': None, 'expires': 0}
 _token_lock  = threading.Lock()
 _sku_cache   = {}
 _sku_lock    = threading.Lock()
-_rate_cache  = {'rate': None, 'ts': 0}
-_rate_lock   = threading.Lock()
 
 def _mf_alias(ns, key):
     return 'mf_' + re.sub(r'[^A-Za-z0-9_]', '_', ns + '_' + key)
@@ -140,20 +138,21 @@ def fetch_sku(sku_raw, *, refresh=False):
     return result
 
 def get_inr_rate():
-    with _rate_lock:
-        if _rate_cache['rate'] and time.time() - _rate_cache['ts'] < 3600:
-            return _rate_cache['rate']
-    try:
-        r = requests.get('https://api.frankfurter.app/latest?from=USD&to=INR', timeout=8)
-        if r.status_code == 200:
-            rate = float(r.json()['rates']['INR'])
-            with _rate_lock:
-                _rate_cache.update(rate=rate, ts=time.time())
-            return rate
-    except Exception:
-        pass
-    with _rate_lock:
-        return _rate_cache.get('rate')
+    # Use the same dated reference rate as PI conversions.
+    from backend.common.currencies import configured_rates
+    from backend.common.live_rates import refresh_if_due
+    from backend.database import get_db
+    def cached():
+        connection = get_db()
+        try:
+            return configured_rates(connection).get('INR')
+        finally:
+            connection.close()
+    value = cached()
+    if value is None:
+        refresh_if_due()
+        value = cached()
+    return float(value) if value is not None else None
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 

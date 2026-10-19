@@ -465,8 +465,7 @@ el('next').onclick=()=>{if(page<pages){page++;load().catch(error=>message(error.
 el('piCurrency').onchange=()=>{
   const currency=el('piCurrency').value;
   const convert=Boolean(currency)&&[current.order.currency,...current.lines.map(line=>line.currency)].some(code=>code!==currency);
-  const legacyPair=[currency,current.order.currency,...current.lines.map(line=>line.currency)].every(code=>['USD','INR'].includes(code));
-  el('conversionHint').textContent=convert?(legacyPair?'The configured INR rate or quotation tool exchange rate will be applied automatically.':'Admin-configured exchange rates will be applied. Missing rates can be added in Configuration.'):'Amounts already in the selected currency use their saved prices.';
+  el('conversionHint').textContent=convert?'The latest available reference rates in Configuration will be applied automatically.':'Amounts already in the selected currency use their saved prices.';
 };
 function appendInvoice(invoice,id){
   const row=document.createElement('div');row.className='pi-download-row';

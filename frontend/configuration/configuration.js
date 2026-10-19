@@ -5,24 +5,54 @@
   const message = document.getElementById('message');
   const ratesMessage = document.getElementById('currencyRatesMessage');
   const ratesButton = document.getElementById('saveCurrencyRates');
+  const refreshButton = document.getElementById('refreshCurrencyRates');
+  function showRates(data) {
+    for (const code of ['INR','AED','GBP','EUR']) {
+      document.getElementById('rate'+code).textContent = data.rates?.[code] || 'Unavailable';
+      const providers = data.providers?.[code] || [];
+      document.getElementById('rateDate'+code).textContent = data.dates?.[code]
+        ? 'Rate date: '+data.dates[code]+(providers.length?' · Providers: '+providers.join(', '):'')
+        : 'No live rate yet';
+    }
+    document.getElementById('rateRefreshHours').value = data.refresh_hours;
+    const source = document.getElementById('currencyRateSource');
+    source.href = data.source_url; source.textContent = data.source;
+    document.getElementById('currencyRateUpdated').textContent = data.fetched_at
+      ? 'Last fetched: '+new Date(data.fetched_at).toLocaleString()+(data.stale?' — Rates are too old for new conversions.':'')
+      : 'Waiting for the first live refresh.';
+    if (data.last_error) { ratesMessage.className = 'error'; ratesMessage.textContent = 'Last refresh failed: '+data.last_error; }
+  }
   async function ratesRequest(options) {
     const response = await fetch('/api/currency-rates', options); const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Unable to load currency rates.');
-    for (const code of ['INR','AED','GBP','EUR']) document.getElementById('rate'+code).value = data.rates[code] || '';
+    showRates(data);
+    return data;
   }
   document.getElementById('currencyRatesForm').onsubmit = async event => {
     event.preventDefault(); ratesButton.disabled = true;
-    const rates = {};
-    for (const code of ['INR','AED','GBP','EUR']) {
-      const value = document.getElementById('rate'+code).value.trim(); if (value) rates[code] = value;
-    }
     try {
-      await ratesRequest({method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({rates})});
-      ratesMessage.className = ''; ratesMessage.textContent = 'Currency rates saved.';
+      const response = await fetch('/api/currency-rates/schedule', {method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({refresh_hours:Number(document.getElementById('rateRefreshHours').value)})});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to save refresh interval.');
+      showRates(data);ratesMessage.className = '';ratesMessage.textContent = 'Refresh interval saved.';
     } catch (error) { ratesMessage.className = 'error'; ratesMessage.textContent = error.message; }
     finally { ratesButton.disabled = false; }
   };
+  refreshButton.onclick = async () => {
+    refreshButton.disabled = true; ratesMessage.textContent = 'Fetching current published rates…';
+    try {
+      const response = await fetch('/api/currency-rates/refresh',{method:'POST'});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to refresh rates.');
+      showRates(data);ratesMessage.className = '';ratesMessage.textContent = 'Rates refreshed.';
+    } catch (error) { ratesMessage.className = 'error'; ratesMessage.textContent = error.message; }
+    finally { refreshButton.disabled = false; }
+  };
   ratesRequest().catch(error => { ratesMessage.className = 'error'; ratesMessage.textContent = error.message; });
+  setInterval(() => ratesRequest().catch(error => {
+    ratesMessage.className = 'error'; ratesMessage.textContent = error.message;
+  }), 60000);
   async function request(options) {
     const response = await fetch('/api/settings', options);
     const data = await response.json();

@@ -22,6 +22,11 @@
 .settings-input-row select{height:44px}
 .currency-rates-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px}
 .currency-rates-grid .form-field{min-width:0}
+.currency-rates-grid strong{font-size:17px;font-variant-numeric:tabular-nums}
+.currency-rates-grid small{color:var(--muted)}
+.currency-refresh-form{margin-top:18px}
+.currency-refresh-form .settings-input-row{grid-template-columns:minmax(0,260px) auto auto}
+@media(max-width:650px){.currency-refresh-form .settings-input-row{grid-template-columns:1fr}}
 #currencyRatesMessage:not(:empty){margin-top:12px;font-size:13px;color:#166534}
 #currencyRatesMessage.error{color:#9F1239}
 #prefixMessage:empty{display:none}

@@ -3,7 +3,8 @@ import json
 import re
 import sqlite3
 from decimal import Decimal
-from backend.common.currencies import configured_rates
+from backend.common.currencies import configured_rates, rate_is_stale
+from backend.common.live_rates import status as rate_status, refresh_if_due, wake_scheduler
 
 from flask import Blueprint, jsonify, request, send_file
 
@@ -14,12 +15,17 @@ from backend.database import get_db
 bp = Blueprint('settings', __name__)
 
 
+def currency_rate_payload(connection):
+    return {'rates': configured_rates(connection, allow_stale=True),
+            'stale': rate_is_stale(connection), **rate_status(connection)}
+
+
 @bp.route('/api/currency-rates', methods=['GET'])
 @permission_required('settings.manage')
 def read_currency_rates():
     connection = get_db()
     try:
-        return jsonify(rates=configured_rates(connection))
+        return jsonify(currency_rate_payload(connection))
     finally:
         connection.close()
 
@@ -43,7 +49,44 @@ def save_currency_rates():
             connection.execute("INSERT INTO app_settings(key,value) VALUES('currency_rates',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (json.dumps(rates),))
             connection.execute("INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) VALUES(?,?,'currency_rates_update','app_settings','currency_rates',?)",
                 (user['id'],user['username'],json.dumps({'before':before,'after':rates})))
-        return jsonify(rates=rates)
+        return jsonify(currency_rate_payload(connection))
+    finally:
+        connection.close()
+
+
+@bp.route('/api/currency-rates/schedule', methods=['PUT'])
+@permission_required('users.manage')
+def save_currency_rate_schedule():
+    data = request.get_json(silent=True)
+    hours = data.get('refresh_hours') if isinstance(data, dict) and set(data) == {'refresh_hours'} else None
+    if type(hours) is not int or not 1 <= hours <= 168:
+        return jsonify(error='Choose a refresh interval from 1 to 168 hours.'), 400
+    user = get_current_user()
+    connection = get_db()
+    try:
+        before = rate_status(connection)['refresh_hours']
+        with connection:
+            connection.execute("INSERT INTO app_settings(key,value) VALUES('currency_rate_refresh_hours',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(hours),))
+            connection.execute("INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) VALUES(?,?,'currency_rate_schedule_update','app_settings','currency_rate_refresh_hours',?)",
+                               (user['id'],user['username'],json.dumps({'before':before,'after':hours})))
+        wake_scheduler()
+        return jsonify(currency_rate_payload(connection))
+    finally:
+        connection.close()
+
+
+@bp.route('/api/currency-rates/refresh', methods=['POST'])
+@permission_required('users.manage')
+def refresh_currency_rates():
+    try:
+        refreshed = refresh_if_due(force=True)
+    except ValueError as error:
+        return jsonify(error=str(error)), 502
+    if not refreshed:
+        return jsonify(error='A currency rate refresh is already in progress.'), 409
+    connection = get_db()
+    try:
+        return jsonify(currency_rate_payload(connection))
     finally:
         connection.close()
 
