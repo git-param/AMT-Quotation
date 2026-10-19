@@ -2,6 +2,7 @@ const el = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const clientScope = params.get('client_id');
 const enquiryScope = params.get('enquiry_id');
+const DEFAULT_BULK_DESCRIPTION = 'Electrical and Electronic Spare Parts\n\nA lot of Annexure-1';
 if(params.get('embedded')==='1')document.body.classList.add('embedded');
 const headerFields = ['order_date','po_reference','pi_reference','delivery_terms','delivery_time','dispatch_method','currency','destination','shipping_charges'];
 const addressFields = ['line1','line2','city','state','postal_code','country'];
@@ -361,7 +362,7 @@ async function showDetails(id) {
   el('conversionHint').textContent='Choose the currency for this proforma invoice.';
   el('piForm').hidden=!order.can_edit||order.status==='cancelled';el('piCurrency').value='';
   el('bulkDescriptionField').hidden=data.lines.length<=4;
-  el('bulkDescription').required=data.lines.length>4;el('bulkDescription').value='';
+  el('bulkDescription').required=data.lines.length>4;el('bulkDescription').value=DEFAULT_BULK_DESCRIPTION;
   el('invoiceList').replaceChildren();
   invoicePreview.reset();
   for(const invoice of data.invoices||[])appendInvoice(invoice,id);
