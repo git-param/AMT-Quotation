@@ -1,6 +1,7 @@
-from flask import request
+from backend.security.request import client_ip
+
 
 def _get_ip():
-    return (request.headers.get('X-Forwarded-For') or request.remote_addr or '').split(',')[0].strip()
+    return client_ip()
 
 

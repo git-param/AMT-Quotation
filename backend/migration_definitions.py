@@ -751,4 +751,24 @@ MIGRATIONS = (
         "CHECK (length(pi_prefix) <= 20)",
     )),
     (28, 'multi_currency_orders_and_invoices', MULTI_CURRENCY_SCHEMA),
+    (29, 'security_sessions_and_events', (
+        "CREATE TABLE app_sessions ("
+        "id_hash TEXT PRIMARY KEY CHECK(length(id_hash)=64), "
+        "user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE, "
+        "created_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, expires_at TEXT NOT NULL, "
+        "ip_address TEXT NOT NULL DEFAULT '', user_agent TEXT NOT NULL DEFAULT '', "
+        "revoked_at TEXT, revoke_reason TEXT NOT NULL DEFAULT '')",
+        "CREATE INDEX idx_app_sessions_expiry ON app_sessions(expires_at)",
+        "CREATE TABLE security_events ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "user_id INTEGER REFERENCES users(id) ON DELETE SET NULL, "
+        "username TEXT NOT NULL DEFAULT '', event_type TEXT NOT NULL, "
+        "severity TEXT NOT NULL CHECK(severity IN ('info','warning','critical')), "
+        "ip_address TEXT NOT NULL DEFAULT '', user_agent TEXT NOT NULL DEFAULT '', "
+        "details TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(details)), "
+        "created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))) ",
+        "CREATE INDEX idx_security_events_time ON security_events(created_at)",
+        "CREATE INDEX idx_security_events_user_time ON security_events(user_id,created_at)",
+        "CREATE INDEX idx_security_events_type_time ON security_events(event_type,created_at)",
+    )),
 )

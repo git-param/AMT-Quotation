@@ -505,6 +505,7 @@ async function addUser() {
   msg.className  = 'msg';
 
   if (!username || !password) { showMsg(msg, 'Username and password are required', false); return; }
+  if (password.length < 12) { showMsg(msg, 'Password must be at least 12 characters', false); return; }
   if (!department) { showMsg(msg, 'Department is required', false); document.getElementById('newDepartment').focus(); return; }
   if (department.length > 100) { showMsg(msg, 'Department must be 100 characters or fewer', false); return; }
   let phone;
@@ -549,7 +550,7 @@ async function resetPassword() {
   const msg      = document.getElementById('resetMsg');
   msg.className  = 'msg';
 
-  if (!password || password.length < 4) { showMsg(msg, 'Password must be at least 4 characters', false); return; }
+  if (!password || password.length < 12) { showMsg(msg, 'Password must be at least 12 characters', false); return; }
 
   const resp = await fetch(`/api/manager/users/${uid}/reset-password`, {
     method: 'POST', headers: {'Content-Type':'application/json'},

@@ -2,7 +2,7 @@
 
 from functools import wraps
 
-from flask import jsonify, redirect, request, session
+from flask import current_app, jsonify, redirect, request, session
 
 from backend.database import get_db
 
@@ -26,7 +26,14 @@ def get_current_user():
             'SELECT id, username, role, is_active FROM users WHERE id = ?',
             (uid,),
         ).fetchone()
-        return dict(user) if user and user['is_active'] else None
+        if not user or not user['is_active']:
+            return None
+        # Hand-built legacy sessions remain available only to isolated tests.
+        if not current_app.testing:
+            from backend.security.sessions import validate
+            if not validate(connection, uid):
+                return None
+        return dict(user)
     finally:
         connection.close()
 

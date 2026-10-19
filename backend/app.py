@@ -1,10 +1,14 @@
 import secrets
+from dotenv import load_dotenv
 from flask import Flask
-from backend.config import FRONTEND_DIR, SECRET_KEY_PATH
+from backend.config import FRONTEND_DIR, SECRET_KEY_PATH, ROOT_DIR
 from backend.database import initialize_database
+from backend.security.middleware import init_security
 
 
 def create_app():
+    # Security and deployment settings must be available before middleware is initialized.
+    load_dotenv(ROOT_DIR / 'backend' / '.env', override=False)
     app = Flask(
         __name__, static_folder=str(FRONTEND_DIR), static_url_path='/static'
     )
@@ -14,6 +18,7 @@ def create_app():
         app.secret_key = secrets.token_hex(32)
         SECRET_KEY_PATH.write_text(app.secret_key)
     initialize_database()
+    init_security(app)
 
     from backend.login.routes import bp as login_bp
     from backend.manager_dashboard.routes import bp as manager_bp

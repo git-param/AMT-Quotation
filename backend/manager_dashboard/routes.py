@@ -8,6 +8,8 @@ from werkzeug.security import generate_password_hash
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
 from backend.settings import department_names
+from backend.security.passwords import error as password_error
+from backend.security.sessions import revoke as revoke_sessions
 from backend.common.auth import (
     ROLE_LABELS, manager_required, permission_required,
 )
@@ -150,8 +152,11 @@ def api_manager_add_user():
     password = str(data.get('password') or '')
     role = data.get('role', 'sales_executive')
     department = data.get('department')
-    if not username or len(password) < 4:
-        return jsonify(error='Username and password (4+ chars) required'), 400
+    if not username:
+        return jsonify(error='Username is required'), 400
+    problem = password_error(password)
+    if problem:
+        return jsonify(error=problem), 400
     if not isinstance(role, str) or role not in ROLE_LABELS:
         return jsonify(error='Invalid role'), 400
     if not isinstance(department, str) or not department.strip():
@@ -216,6 +221,8 @@ def _update_account(uid, role=None, active=None):
         if active is not None:
             connection.execute('UPDATE users SET is_active = ? WHERE id = ?',
                                (active, uid))
+            if active == 0:
+                revoke_sessions(connection, uid, 'account_deactivated')
         connection.commit()
         return jsonify(ok=True)
     finally:
@@ -253,8 +260,9 @@ def api_manager_activate_user(uid):
 def api_manager_reset_password(uid):
     """Reset another account's password without replacing session signing."""
     password = str((_request_data()).get('password') or '')
-    if len(password) < 4:
-        return jsonify(error='Password must be at least 4 characters'), 400
+    problem = password_error(password)
+    if problem:
+        return jsonify(error=problem), 400
     connection = get_db()
     try:
         with connection:
@@ -262,6 +270,7 @@ def api_manager_reset_password(uid):
                 'UPDATE users SET password_hash = ? WHERE id = ?',
                 (generate_password_hash(password), uid),
             )
+            revoke_sessions(connection, uid, 'admin_password_reset')
         if not result.rowcount:
             return jsonify(error='User not found'), 404
         return jsonify(ok=True)
@@ -379,6 +388,8 @@ def edit_user(uid):
             (username.strip(), department.strip(), role, active, supervisor,
              phone_code, phone_number, uid),
         )
+        if not active:
+            revoke_sessions(connection, uid, 'account_deactivated')
         connection.commit()
         if uid == session['user_id']:
             session['username'] = username.strip()
