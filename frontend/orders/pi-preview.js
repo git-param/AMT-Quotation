@@ -47,23 +47,22 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
   };
   function valueOf(item) {
     if(!item.primaryInput)return item.input.value;
-    let secondary=item.input.value;
-    if(item.contacts){
-      secondary=secondary.split('\n').filter(line=>!/^\s*(?:Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail|GST(?:IN|\s*(?:No\.?|Number))?)\s*:/i.test(line)).join('\n');
-      secondary+='\n'+item.contacts.map(contact=>contact.label+': '+contact.input.value).join('\n');
-    }
-    return window.orderLocations.joinParty(item.primaryInput.value,secondary);
+    return window.orderLocations.joinParty(item.primaryInput.value,item.input.value);
   }
   function contactWarnings(notify=false){
     const party=inputs.find(item=>item.path==='delivery.consignee_text');
-    const destination=inputs.find(item=>item.path==='order.destination')?.input.value||state.document.order.destination||'';
-    const india=String(destination).trim().toLowerCase()==='india';
     const missing=[];
-    for(const contact of party?.contacts||[]){
-      const value=contact.input.value.trim();
-      const absent=contact.key==='phone'?value.replace(/\D/g,'').length<7:!value;
-      const required=absent&&(contact.key!=='gst'||india);
-      if(required)missing.push(contact.label);
+    const details=party?.input.value||'';
+    const destination=inputs.find(item=>item.path==='order.destination')?.input.value||state.document.order.destination||'';
+    for(const [label,pattern] of [
+      ['GST No.',/^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$/im],
+      ['Tel/Phone',/^\s*(?:Tel(?:\/Phone)?|Telephone|Phone)\s*:\s*(.*)$/im],
+      ['PIC',/^\s*PIC\s*:\s*(.*)$/im],
+      ['Email',/^\s*E-?mail\s*:\s*(.*)$/im]
+    ]){
+      if(label==='GST No.'&&destination.trim().toUpperCase()!=='INDIA')continue;
+      const value=details.match(pattern)?.[1].trim()||'';
+      if(!value||value.includes('*required')||(label==='Tel/Phone'&&value.replace(/\D/g,'').length<7))missing.push(label);
     }
     if(notify&&missing.length){
       const message='Missing consignee details: '+missing.join(', ')+'. PDF/Excel generation can continue.';
@@ -75,6 +74,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     input.rows=Math.max(1,input.value.split('\n').length);
     input.style.height='auto';
     if(input.scrollHeight)input.style.height=input.scrollHeight+'px';
+    input.syncRequiredHighlight?.();
   }
   function field(parent, label, value, path, multiline = false, type = "text") {
     const wrap = node("label", undefined, "pi-field");
@@ -93,17 +93,11 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         input.value = input.value.trim().toUpperCase();
         const consignee = inputs.find(item => item.path === 'delivery.consignee_text');
         if (consignee) {
-          const value=window.orderLocations.countryBlock(valueOf(consignee), input.value, [state.document.order.destination]);
+          let value=window.orderLocations.countryBlock(valueOf(consignee), input.value, [state.document.order.destination]);
+          if(input.value!=='INDIA')value=window.orderLocations.withGst(value,'');
           if(consignee.primaryInput){const [primary,secondary]=window.orderLocations.partyParts(value,input.value);consignee.primaryInput.value=primary;consignee.input.value=secondary;}
           else consignee.input.value=value;
-          for(const contact of consignee.contacts||[]){
-            const match=value.split('\n').find(line=>contact.pattern.test(line));
-            if(match)contact.input.value=match.slice(match.indexOf(':')+1).trim();
-          }
-          if(consignee.contacts){
-            consignee.input.value=consignee.input.value.split('\n').filter(line=>!consignee.contacts.some(contact=>contact.pattern.test(line))).join('\n');
-            fitText(consignee.input);
-          }
+          fitText(consignee.input);
           contactWarnings();
         }
       };
@@ -143,22 +137,24 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     }
     const [primary,secondary]=window.orderLocations.partyParts(value,state.document.order.destination);
     const primaryInput=field(group,'Company / address details',primary,path+'.primary',true);inputs.pop();
-    const definitions=[
-      ['phone','Tel/Phone',/^\s*(?:Tel(?:\/Phone)?|Telephone|Phone)\s*:/i],
-      ['pic','PIC',/^\s*PIC\s*:/i],['email','Email',/^\s*E-?mail\s*:/i],
-      ['gst','GST No.',/^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:/i]
-    ];
-    const lines=secondary.split('\n');
-    const input=field(group,'Country / additional details',lines.filter(line=>!definitions.some(([, ,pattern])=>pattern.test(line))).join('\n'),path,true);
+    const input=field(group,'Country / GST / contact details',secondary,path,true);
     input.parentElement.classList.add('pi-contact-details');
-    const entry=inputs.at(-1);entry.primaryInput=primaryInput;entry.contacts=[];
-    for(const [key,label,pattern] of definitions){
-      const line=lines.find(line=>pattern.test(line));
-      const control=field(group,label,line?line.slice(line.indexOf(':')+1).trim():'',path+'.'+key,false,key==='phone'?'tel':'text');
-      inputs.pop();
-      control.addEventListener('input',()=>{entry.modified=true;contactWarnings();});
-      entry.contacts.push({key,label,pattern,input:control});
-    }
+    const surface=node('div',undefined,'pi-contact-surface');
+    const mirror=node('div',undefined,'pi-contact-mirror');
+    mirror.setAttribute('aria-hidden','true');
+    input.replaceWith(surface);surface.append(mirror,input);
+    input.syncRequiredHighlight=()=>{
+      surface.classList.toggle('pi-contact-highlighted',input.value.includes('*required'));
+      const parts=input.value.split('*required');
+      mirror.replaceChildren();
+      parts.forEach((part,index)=>{
+        mirror.append(document.createTextNode(part));
+        if(index<parts.length-1)mirror.append(node('span','*required'));
+      });
+      mirror.scrollTop=input.scrollTop;
+    };
+    input.addEventListener('scroll',()=>{mirror.scrollTop=input.scrollTop;});
+    inputs.at(-1).primaryInput=primaryInput;
     fitText(primaryInput);fitText(input);
     return input;
   }
@@ -299,7 +295,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     }
     footer(annexurePaper||paper,!annexurePaper);
     for(const textarea of host.querySelectorAll('textarea'))fitText(textarea);
-    if (issued) for (const { input, primaryInput, contacts } of inputs) {input.disabled = true;if(primaryInput)primaryInput.disabled=true;for(const contact of contacts||[])contact.input.disabled=true;}
+    if (issued) for (const { input, primaryInput } of inputs) {input.disabled = true;if(primaryInput)primaryInput.disabled=true;}
   }
   return {
     open(data, base) {

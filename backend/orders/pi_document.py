@@ -10,7 +10,7 @@ from backend.client_leads.details import text,phone
 from backend.enquiries.lines import number, serialize
 from backend.orders.company import get_profile
 from backend.orders.parties import text_delivery, parse_block, LABELS
-from backend.orders.locations import country_block, gst_number, with_gst, without_gst, address_only, COPIED_CONTACT
+from backend.orders.locations import country_block, gst_number, with_gst, without_gst, address_only, COPIED_CONTACT, CALLING_CODES
 from backend.orders.service import header, order_line
 from backend.common.currencies import CURRENCIES, conversion_rates, configured_rates
 
@@ -41,6 +41,41 @@ def party_block(party, address):
           ('email','Email: '),('gst_number','GST: ')) if party.get(key)]]))
 
 
+def required_consignee_contacts(value, country=''):
+    """Keep missing contact prompts in the editable PI text itself."""
+    india = country.strip().casefold() == 'india'
+    lines = (value if india else without_gst(value)).splitlines()
+    fields = [
+        ('Tel/Phone', re.compile(r'^\s*(?:Tel(?:/Phone)?|Telephone|Phone)\s*:\s*(.*)$', re.I)),
+        ('PIC', re.compile(r'^\s*PIC\s*:\s*(.*)$', re.I)),
+        ('Email', re.compile(r'^\s*E-?mail\s*:\s*(.*)$', re.I)),
+    ]
+    if india:
+        fields.insert(0, ('GST No.', re.compile(r'^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$', re.I)))
+    for label, pattern in fields:
+        index = next((i for i, line in enumerate(lines) if pattern.match(line)), None)
+        original = pattern.match(lines[index])[1].strip() if index is not None else ''
+        raw = original.replace('*required', '').strip()
+        if label == 'Tel/Phone' and not raw:
+            raw = CALLING_CODES.get(country.strip().upper(), '')
+        missing = not raw or (label == 'Tel/Phone' and len(re.sub(r'\D', '', raw)) < 7)
+        display = label + ': ' + (raw + ' ' if label == 'Tel/Phone' and raw else '') + '*required' if missing else label + ': ' + raw
+        if index is not None:
+            if missing or '*required' in original: lines[index] = display
+            continue
+        if label == 'GST No.':
+            position = next((i for i, line in enumerate(lines) if re.match(
+                r'^\s*(?:Tel(?:/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:', line, re.I)), len(lines))
+        elif label == 'Tel/Phone':
+            position = next((i for i, line in enumerate(lines) if re.match(r'^\s*(?:PIC|E-?mail)\s*:', line, re.I)), len(lines))
+        elif label == 'PIC':
+            position = next((i for i, line in enumerate(lines) if re.match(r'^\s*E-?mail\s*:', line, re.I)), len(lines))
+        else:
+            position = len(lines)
+        lines.insert(position, display)
+    return '\n'.join(lines)
+
+
 def sync_locations(doc):
     """The selected order country owns both highlighted PI locations."""
     source_delivery = doc['source_state'].get('delivery') or {}
@@ -55,10 +90,12 @@ def sync_locations(doc):
                 doc['source_state']['order'].get('destination')]
     doc['delivery']['consignee_text'] = re.sub(r'^(\s*)(?:Tel|Telephone|Phone)\s*:', r'\1Tel/Phone:',
         country_block(doc['delivery']['consignee_text'], country, previous), flags=re.I|re.M)
-    number_value=gst_number(doc['delivery']['consignee_text'])
-    doc['delivery']['consignee_text']=with_gst(doc['delivery']['consignee_text'],number_value)
+    number_value=gst_number(doc['delivery']['consignee_text']) if country == 'INDIA' else ''
+    doc['delivery']['consignee_text']=required_consignee_contacts(
+        with_gst(doc['delivery']['consignee_text'],number_value), country)
     doc['order']['destination'] = country
-    doc['consignee_gst_number'] = gst_number(doc['delivery']['consignee_text'])
+    gst = gst_number(doc['delivery']['consignee_text'])
+    doc['consignee_gst_number'] = '' if country != 'INDIA' or gst == '*required' else gst
     for key in ('buyer_text','notify_text'):doc['delivery'][key]=without_gst(doc['delivery'][key])
     return doc
 
@@ -296,14 +333,11 @@ def missing_details(doc):
             if key: values[key] = match[2].strip()
     if not (country or values.get('country')):
         missing.append('Consignee country')
-    consignee_country = country or values.get('country', '')
-    india = consignee_country.strip().casefold() == 'india'
-    if not india:
-        india = any(line.strip().casefold() == 'india' for line in doc.get('delivery', {}).get('consignee_text', '').splitlines())
-    for key, label in [('gst_number', 'GST No.'), ('phone', 'Tel/Phone'), ('pic', 'PIC'), ('email', 'Email')]:
-        if key == 'gst_number' and not india:
-            continue
-        if not values.get(key) or (key == 'phone' and len(re.sub(r'[^0-9]', '', values[key])) < 7):
+    required = [('phone', 'Tel/Phone'), ('pic', 'PIC'), ('email', 'Email')]
+    if (country or values.get('country', '')).casefold() == 'india':
+        required.insert(0, ('gst_number', 'GST No.'))
+    for key, label in required:
+        if not values.get(key) or '*required' in values[key] or (key == 'phone' and len(re.sub(r'[^0-9]', '', values[key])) < 7):
             missing.append('Consignee ' + label)
     return missing
 
@@ -315,8 +349,13 @@ def validate_pdf_details(doc):
                if field not in ('Consignee GST No.', 'Consignee Tel/Phone', 'Consignee PIC', 'Consignee Email')]
     if missing:
         raise PiDetailsRequired(missing)
+    # A calling code alone is an unfinished phone value. Treat it as missing
+    # while still validating other supplied contact details.
+    consignee = re.sub(
+        r'^\s*(?:Tel(?:/Phone)?|Telephone|Phone)\s*:\s*(\+?\d{1,6})\s*$',
+        '', doc['delivery']['consignee_text'], flags=re.I|re.M)
     try:
-        parse_block(doc['delivery']['consignee_text'], doc['order'].get('destination', ''))
+        parse_block(consignee, doc['order'].get('destination', ''))
     except ValueError as error:
         raise ValueError('Consignee details: ' + str(error)) from error
 

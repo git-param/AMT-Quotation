@@ -450,6 +450,11 @@ body.embedded #orderForm .consignee-editor textarea {flex:1}
 .pi-consignee-cell .pi-party-editor>.pi-field:last-child{margin-top:0}
 .pi-consignee-cell .pi-party-editor>.pi-contact-details{margin-top:auto}
 .pi-paper .pi-company-grid .pi-field [aria-invalid="true"]{border-color:#dc2626;background:#fff5f5}
+.pi-contact-surface{position:relative}
+.pi-contact-mirror{display:none;position:absolute;inset:0;box-sizing:border-box;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;pointer-events:none;padding:1px 0;font:inherit;line-height:1.3}
+.pi-contact-highlighted .pi-contact-mirror{display:block}
+.pi-contact-mirror span{color:#dc2626}
+.pi-paper .pi-company-grid .pi-contact-highlighted textarea{position:relative;color:transparent!important;caret-color:#000;background:transparent!important}
 .pi-company-grid td.pi-open-left{border-left:0}
 .pi-company-grid td.pi-open-right{border-right:0}
 .pi-grid-items{border-bottom:0}

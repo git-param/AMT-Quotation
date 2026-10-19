@@ -69,7 +69,7 @@ def fonts():
 
 
 def section_borders(name):
-    """Keep the summary open above Shipping and between labels and amounts."""
+    """Keep the summary open above its first amount and between labels and amounts."""
     if name not in ('header', 'items', 'bank'):
         return [('BOX',(0,0),(-1,-1),.9,colors.black)]
     edges = [('LINEBEFORE',(0,0),(0,-1),.9,colors.black),

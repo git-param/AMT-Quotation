@@ -11,17 +11,6 @@ WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
           15.7109375,8.7109375,8,16,8.7109375,8.140625]
 
 
-def india_destination(doc):
-    country=(doc.get('order',{}).get('destination') or '').strip()
-    if not country:
-        match=re.search(r'^\s*Country\s*:\s*(.+)$',doc.get('delivery',{}).get('consignee_text',''),re.I|re.M)
-        country=match[1].strip() if match else ''
-    if not country:
-        country=next((line.strip() for line in doc.get('delivery',{}).get('consignee_text','').splitlines()
-                      if line.strip().casefold()=='india'),'')
-    return country.casefold()=='india'
-
-
 def display_uom(unit):
     return 'Set' if unit.lower() == 'set' else unit
 
@@ -57,27 +46,6 @@ def layout(doc):
                 value='(Same as consignee)'
         primary,secondary=party_parts(value)
         display='\n\n'.join(part for part in (primary,secondary) if part)
-        if path=='delivery.consignee_text':
-            required=[('phone','Tel/Phone',re.compile(r'^\s*(?:Tel(?:/Phone)?|Telephone|Phone)\s*:\s*(.*)$',re.I)),
-                      ('pic','PIC',re.compile(r'^\s*PIC\s*:\s*(.*)$',re.I)),
-                      ('email','Email',re.compile(r'^\s*E-?mail\s*:\s*(.*)$',re.I))]
-            if india_destination(doc):required.append(('gst','GST No.',re.compile(r'^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$',re.I)))
-            display_lines=display.splitlines()
-            seen=set()
-            for key,label,pattern in required:
-                replacement=[]
-                for line in display_lines:
-                    match=pattern.match(line)
-                    if match:
-                        seen.add(key)
-                        missing_value=not match[1].strip()
-                        if key=='phone':missing_value=len(re.sub(r'[^0-9]','',match[1]))<7
-                        line=(line[:line.index(':')+1]+' *required') if missing_value else line
-                    replacement.append(line)
-                display_lines=replacement
-            for key,label,_ in required:
-                if key not in seen:display_lines.append(label+': *required')
-            display='\n'.join(display_lines)
         return c(col,span,display,field=path,value=value,
                  multiline=True,party=True,**extra)
     order,total=doc['order'],doc['totals']
@@ -114,7 +82,8 @@ def layout(doc):
     primary,secondary=party_parts(doc['delivery']['consignee_text'])
     parties[1][0]['text']=primary
     parties[1][0]['bottom_contacts']=True
-    parties[-1][0].update(text=secondary,bottom_aligned=True)
+    parties[-1][0].update(text=secondary,bottom_aligned=True,
+                          party=True,field='delivery.consignee_text')
     item_header=[c(start,span,label,'head') for start,span,label in
         [(0,1,'Sno'),(1,3,'Description'),(4,1,'HSN Code'),(5,1,'Condition'),
          (6,2,'QTY'),(8,1,rate_heading(total['lines'])),(9,2,'Total Amount')]]
@@ -144,15 +113,15 @@ def layout(doc):
     bank.append(c(0,8,doc['company'].get('bank_charges',''),'warning'))
     tax_label=f'GST {(Decimal(total["tax_rate"])*100).normalize():f}%'
     free=Decimal(total['shipping'])==0
-    summaries=[(editable(9,2,'',total['shipping'],'shipping_charges','amount',type='number',free=free,display_text='Free' if free else total['shipping']),'Shipping'),
-               (c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Sub Total')]
+    shipping=(editable(9,2,'',total['shipping'],'shipping_charges','amount',type='number',free=free,display_text='Free' if free else total['shipping']),'Shipping')
+    summaries=[(c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Sub Total'),shipping]
     if Decimal(total.get('summary_discount', '0')):
         discount=(c(9,2,'-'+total['summary_discount'],'amount',numeric=True), 'Discount')
         if doc['currency']=='INR':
             summaries=[(c(9,2,total['goods_total'],'amount',numeric=True,calculated='goods_total'),'Goods Subtotal'),
                        discount,
                        (c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Net Subtotal'),
-                       summaries[0]]
+                       shipping]
         else:
             summaries.insert(0, discount)
     if Decimal(total['tax_rate']):summaries.append((c(9,2,total['tax'],'amount',numeric=True,calculated='tax'),tax_label))
