@@ -4,6 +4,7 @@ import base64
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
+from threading import Lock
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile
 from xml.sax.saxutils import escape
@@ -20,6 +21,8 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable
 
 from backend.orders.normal_pi.layout import layout,terms,SHIPPING_NOTICE
+
+_font_lock = Lock()
 
 
 def asset(doc,name):
@@ -61,9 +64,10 @@ def fonts():
     for regular,bold in ((Path('C:/Windows/Fonts/cambria.ttc'),Path('C:/Windows/Fonts/cambriab.ttf')),
             (Path('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf'),Path('/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf'))):
         if regular.is_file() and bold.is_file():
-            if 'PICompany' not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(TTFont('PICompany',str(regular)))
-                pdfmetrics.registerFont(TTFont('PICompanyBold',str(bold)))
+            with _font_lock:
+                if 'PICompany' not in pdfmetrics.getRegisteredFontNames():
+                    pdfmetrics.registerFont(TTFont('PICompany',str(regular)))
+                    pdfmetrics.registerFont(TTFont('PICompanyBold',str(bold)))
             return 'PICompany','PICompanyBold'
     return 'Times-Roman','Times-Bold'
 

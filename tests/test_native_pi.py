@@ -1,5 +1,6 @@
 """Native PI snapshots, commercial edits, exports and live authorization."""
 from copy import deepcopy
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 import json
 import unittest
@@ -108,7 +109,7 @@ class NativePiTests(unittest.TestCase):
             issued=self.issue(preview)
         self.assertEqual(issued.status_code,201,issued.json)
 
-    def test_preview_rendering_does_not_hold_sqlite_writer_lock(self):
+    def test_preview_pdf_rendering_does_not_hold_sqlite_writer_lock(self):
         original=pi_exports.pdf
         def render(document):
             other=database.get_db()
@@ -117,7 +118,31 @@ class NativePiTests(unittest.TestCase):
             return original(document)
         with patch('backend.orders.pi_exports.pdf',side_effect=render):
             preview=self.preview()
-        self.assertTrue(preview['preview_id'])
+            self.assertTrue(preview['preview_id'])
+            self.assertEqual(self.client.get(preview['pdf_url']).status_code,200)
+            self.assertEqual(self.client.post(
+                self.base+'/preview/'+preview['preview_id']+'/print',json={}).status_code,200)
+
+    def test_creating_and_updating_preview_do_not_render_pdf(self):
+        with patch('backend.orders.pi_exports.pdf',side_effect=AssertionError('Unexpected PDF render')):
+            preview=self.preview()
+            response=self.client.put(self.base+'/preview/'+preview['preview_id'],json={})
+        self.assertEqual(response.status_code,200,response.json)
+
+    def test_simultaneous_pdf_previews_use_separate_sessions(self):
+        preview=self.preview()
+        app=self.client.application
+        user_id=self.ids['exec1']
+        def render():
+            with app.test_client() as client:
+                with client.session_transaction() as session:
+                    session['user_id']=user_id
+                    session['role']='admin'
+                response=client.get(preview['pdf_url'])
+                return response.status_code,response.data[:5]
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results=list(pool.map(lambda _:render(),range(4)))
+        self.assertEqual(results,[(200,b'%PDF-')]*4)
 
     def test_pi_issue_rejects_preview_changed_during_render(self):
         preview=self.preview()

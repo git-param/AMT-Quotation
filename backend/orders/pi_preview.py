@@ -85,12 +85,10 @@ def save_preview(order_id,preview_id=None):
                     order['pi_reference']=assigned_ref
             doc=prepare(details(connection,order),user,data.get('currency'),data.get('usd_inr_rate'),data.get('bulk_description'))
             preview_id=uuid4().hex
-        # Keep the editor available for incomplete drafts without producing a PDF.
+        # Validate the draft here; render only when the PDF is actually requested.
         missing = missing_details(doc)
         if not missing:
             validate_pdf_details(doc)
-            from backend.scalability.pi_render import preview_pdf
-            preview_pdf(doc)
     except ValueError as error:
         return validation_error(error)
     finally:
@@ -147,11 +145,13 @@ def preview_pdf(order_id,preview_id):
         row=preview_row(connection,order_id,preview_id,user)
         if not row:return jsonify(error='PI preview not found.'),404
         doc=json.loads(row['document_json'])
+    except ValueError as error:return validation_error(error)
+    finally:connection.close()
+    try:
         validate_pdf_details(doc)
         return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',
                          download_name=invoice_filename(doc['reference'],'pdf'),max_age=0)
     except ValueError as error:return validation_error(error)
-    finally:connection.close()
 
 
 @bp.route('/api/orders/<int:order_id>/invoices/preview/<preview_id>/print',methods=['POST'])
@@ -166,10 +166,12 @@ def print_preview(order_id,preview_id):
         data=request.get_json(silent=True)
         if not isinstance(data,dict):return jsonify(error='Provide PI preview fields.'),400
         doc=print_document(json.loads(row['document_json']),data)
+    except ValueError as error:return validation_error(error)
+    finally:connection.close()
+    try:
         validate_pdf_details(doc)
         return send_file(BytesIO(pi_exports.pdf(doc)),mimetype='application/pdf',download_name=invoice_filename(doc['reference'],'pdf'),max_age=0)
     except ValueError as error:return validation_error(error)
-    finally:connection.close()
 
 
 @bp.route('/api/orders/<int:order_id>/invoices/preview/<preview_id>/calculate',methods=['POST'])

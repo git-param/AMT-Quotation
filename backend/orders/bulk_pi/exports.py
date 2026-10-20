@@ -19,7 +19,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, PageBreak, NextPageTemplate
 
-from backend.orders.normal_pi.exports import section_borders, rich_required
+from backend.orders.normal_pi.exports import section_borders, rich_required, fonts, _font_lock
 from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words, WIDTHS
 
 
@@ -59,17 +59,6 @@ def clip_workbook_header(raw):
     return output.getvalue()
 
 
-def fonts():
-    for regular,bold in ((Path('C:/Windows/Fonts/cambria.ttc'),Path('C:/Windows/Fonts/cambriab.ttf')),
-            (Path('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf'),Path('/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf'))):
-        if regular.is_file() and bold.is_file():
-            if 'PICompany' not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(TTFont('PICompany',str(regular)))
-                pdfmetrics.registerFont(TTFont('PICompanyBold',str(bold)))
-            return 'PICompany','PICompanyBold'
-    return 'Times-Roman','Times-Bold'
-
-
 def pdf(doc):
     regular,bold=fonts()
     output=BytesIO();width,height=A4;margin=12*mm;usable=width-2*margin
@@ -107,9 +96,10 @@ def pdf(doc):
     annex_regular,annex_bold=regular,bold
     for font_path,bold_path in [(Path('C:/Windows/Fonts/times.ttf'),Path('C:/Windows/Fonts/timesbd.ttf'))]:
         if font_path.is_file() and bold_path.is_file():
-            if 'PIAnnexure' not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(TTFont('PIAnnexure',str(font_path)))
-                pdfmetrics.registerFont(TTFont('PIAnnexureBold',str(bold_path)))
+            with _font_lock:
+                if 'PIAnnexure' not in pdfmetrics.getRegisteredFontNames():
+                    pdfmetrics.registerFont(TTFont('PIAnnexure',str(font_path)))
+                    pdfmetrics.registerFont(TTFont('PIAnnexureBold',str(bold_path)))
             annex_regular,annex_bold='PIAnnexure','PIAnnexureBold'
     def paragraph(cell,available_width):
         kind=cell['style'];text=cell.get('display_text',cell['text'])

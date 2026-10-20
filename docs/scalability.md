@@ -2,6 +2,13 @@
 
 Record each scalability release here with its deployment steps, evidence, and remaining limits.
 
+## Version 2 — 2026-10-20
+
+- Creating or updating a PI preview validates the draft and returns the editable layout without rendering a PDF. PDF rendering runs when the user opens a PDF preview or issues the invoice, avoiding a duplicate render on every editor action.
+- The saved and unsaved PDF preview endpoints close their SQLite read connections before rendering. Normal and bulk PDF fonts now register under one lock so simultaneous first requests cannot race.
+- Verification: 14 focused native PI preview tests passed, including four simultaneous PDF requests in separate sessions. The full native PI suite ran 45 tests; three existing party/GST expectation failures and one bulk XLSX `date_label` error remain. These were outside the preview timing changes.
+- This reduces preview latency and database contention. PDF and workbook rendering remain CPU intensive in a single Waitress process; measure representative concurrent export traffic before sizing production capacity.
+
 ## Version 1 — 2026-10-19
 
 ### Implemented
