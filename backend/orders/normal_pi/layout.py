@@ -32,7 +32,9 @@ def terms(doc):
     values = list(doc['company']['terms'][doc['currency']])
     for index,value in enumerate(values):
         match=re.match(r'^(\s*\d+[.)]\s*)?PAYMENT\b',value,re.I)
-        if match:values[index]=(match[1] or '')+'PAYMENT '+doc['order']['payment_terms']
+        if match:
+            payment_terms=re.sub(r'\badvance\b','ADVANCE',doc['order']['payment_terms'],flags=re.I)
+            values[index]=(match[1] or '')+'PAYMENT '+payment_terms
     return '\n'.join(values)
 
 
@@ -142,7 +144,10 @@ def layout(doc):
             amount,label=summaries[index-start];right=[c(8,1,label,'center'),amount]
         else:right=[c(8,1),c(9,2)]
         bank_rows.append([left,*right])
-    bank_rows.append([c(0,2,'Amount In Word','bold'),c(2,6,total['amount_in_words'],'bold',calculated='amount_in_words'),
+    amount_in_words=doc.get('amount_in_words') or total['amount_in_words']
+    bank_rows.append([c(0,2,'Amount In Word','bold'),
+                      editable(2,6,'',amount_in_words,'amount_in_words','bold',
+                               aria='Amount in words',multiline=True,calculated='amount_in_words'),
                       c(8,1,'Grand Total','bold'),c(9,2,total['grand_total'],'bold_amount',numeric=True,calculated='grand_total')])
     clauses=[[c(0,11,'Terms & Conditions:-','bold')]]
     term_text = terms(doc)

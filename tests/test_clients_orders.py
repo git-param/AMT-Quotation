@@ -159,7 +159,7 @@ class WorkspaceTests(unittest.TestCase):
         with ZipFile(BytesIO(workbook)) as generated:
             sheet = ET.fromstring(generated.read('xl/worksheets/sheet1.xml'))
             self.assertEqual(sheet.find('.//' + Q + 'c[@r="A37"]/' + Q + 'is/' + Q + 't').text,
-                             '2. PAYMENT 100% advance')
+                             '2. PAYMENT 100% ADVANCE')
             self.assertIn('Billing A', sheet.find('.//' + Q + 'c[@r="F12"]/' + Q + 'is/' + Q + 't').text)
         self.assertEqual(self.client.put(path, json={'pi_reference': 'SPOOF'}).status_code, 400)
         self.assertEqual(self.client.get(path).json['invoices'][0]['reference'], issued.json['reference'])

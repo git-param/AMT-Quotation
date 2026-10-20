@@ -317,7 +317,7 @@ def render(raw, sheet, first, state, totals, reference, issued, prepared_by):
     put('C' + str(words_row + extra), totals['amount_in_words'])
     # Keep the template's payment clause consistent with the issued order header.
     put('A' + str((36 if totals['currency'] == 'USD' else 37) + extra),
-        '2. PAYMENT ' + order['payment_terms'])
+        '2. PAYMENT ' + re.sub(r'\badvance\b','ADVANCE',order['payment_terms'],flags=re.I))
     # Add wrapped notes below the complete original terms, expanding the print
     # area rather than truncating long notes in one merged cell.
     note_row = (52 if totals['currency'] == 'USD' else 51) + extra

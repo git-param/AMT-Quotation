@@ -656,7 +656,7 @@ class NativePiTests(unittest.TestCase):
         doc['company']['terms']['USD']=['2. PAYMENT Advance','4. SHIPMENT: DISPATCH WITHIN 24 HOURS OF PAYMENT CONFIRMATION']
         doc['order']['payment_terms']='Agreed advance'
         output=pi_exports.terms(doc)
-        self.assertIn('2. PAYMENT Agreed advance',output)
+        self.assertIn('2. PAYMENT Agreed ADVANCE',output)
         self.assertIn('4. SHIPMENT: DISPATCH WITHIN 24 HOURS OF PAYMENT CONFIRMATION',output)
 
     def test_editable_terms_persist_in_both_exports(self):
@@ -674,6 +674,31 @@ class NativePiTests(unittest.TestCase):
         with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
             self.assertIn('Delivery after inspection',book.read('xl/sharedStrings.xml').decode())
         self.assertNotIn('terms',self.client.get(f'/api/orders/{self.order_id}').json['order'])
+
+    def test_amount_in_words_can_be_edited_and_reset_to_calculated_value(self):
+        preview=self.preview()
+        url=self.base+'/preview/'+preview['preview_id']
+        automatic=preview['document']['totals']['amount_in_words']
+        bank=next(section for section in preview['layout']['sections'] if section['name']=='bank')
+        words=next(cell for row in bank['rows'] for cell in row if cell.get('field')=='amount_in_words')
+        self.assertEqual(words['value'],automatic)
+        self.assertTrue(words['multiline'])
+
+        custom='Agreed amount in words Only'
+        saved=self.client.put(url,json={'amount_in_words':custom})
+        self.assertEqual(saved.status_code,200,saved.json)
+        self.assertEqual(saved.json['document']['amount_in_words'],custom)
+        self.assertEqual(saved.json['document']['totals']['amount_in_words'],automatic)
+        with ZipFile(BytesIO(pi_exports.xlsx(saved.json['document']))) as book:
+            self.assertIn(custom,book.read('xl/sharedStrings.xml').decode())
+        self.assertEqual(self.client.put(url,json={'amount_in_words':42}).status_code,400)
+
+        reset=self.client.put(url,json={'amount_in_words':''})
+        self.assertEqual(reset.status_code,200,reset.json)
+        self.assertNotIn('amount_in_words',reset.json['document'])
+        bank=next(section for section in reset.json['layout']['sections'] if section['name']=='bank')
+        words=next(cell for row in bank['rows'] for cell in row if cell.get('field')=='amount_in_words')
+        self.assertEqual(words['value'],automatic)
 
     def test_selected_country_owns_both_locations_regardless_of_currency(self):
         usd=self.preview()['document']

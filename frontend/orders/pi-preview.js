@@ -30,8 +30,9 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         state.document.totals=result.totals;
         for(const item of calculated){
           if(item.autoQuantity&&(state.document.annexure_quantity||inputs.find(entry=>entry.input===item.input)?.modified))continue;
+          if(item.path==='amount_in_words'&&(state.document.amount_in_words||inputs.find(entry=>entry.input===item.input)?.modified))continue;
           const value=item.path.split('.').reduce((target,key)=>target[key],result.totals);
-          if(item.input)item.input.value=value;
+          if(item.input){item.input.value=value;if(item.input.tagName==='TEXTAREA')fitText(item.input);}
           else item.node.textContent=item.accounting?Number(value).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):(item.amount?({USD:'$ ',INR:'\u20b9 ',AED:'AED ',GBP:'\u00a3 ',EUR:'\u20ac '})[state.document.currency]:'')+value;
         }
         status.textContent='Totals updated in '+state.document.currency+'. Use Update preview to save your changes.';
@@ -168,7 +169,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     const doc = state.document;
     const data = {date:doc.date,prepared_phone:doc.prepared_phone||'',order:{},delivery:{},shipping_charges:doc.totals.shipping,
       lines:doc.totals.lines.map(line=>Object.fromEntries(["id","sku","description","hsn_code","item_condition","uom","quantity","unit_price"].map(key=>[key,line[key]])))};
-    for(const item of inputs){if(item.path.endsWith('.line_total')||(item.path==='annexure_quantity'&&!item.modified&&!doc.annexure_quantity))continue;const keys=item.path.split('.');let target=data;for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)]=valueOf(item);}
+    for(const item of inputs){if(item.path.endsWith('.line_total')||(item.path==='annexure_quantity'&&!item.modified&&!doc.annexure_quantity)||(item.path==='amount_in_words'&&!item.modified&&!doc.amount_in_words))continue;const keys=item.path.split('.');let target=data;for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)]=valueOf(item);}
     if(String(data.shipping_charges).trim().toLowerCase()==='free')data.shipping_charges='0.00';
     return data;
   }

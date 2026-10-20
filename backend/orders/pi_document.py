@@ -166,7 +166,7 @@ def prepare(state, user, currency, rate, bulk_description=None):
 
 def edit(document, edits):
     from backend.orders.invoices import calculate
-    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','terms','consignee_gst_number','bulk_description','annexure_quantity'}:
+    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','terms','amount_in_words','consignee_gst_number','bulk_description','annexure_quantity'}:
         raise ValueError('Invalid PI preview fields. Company details and invoice identity cannot be edited.')
     doc = deepcopy(document)
     if 'annexure_quantity' in edits:
@@ -179,6 +179,10 @@ def edit(document, edits):
         doc['bulk_description'] = text(edits['bulk_description'],2000,'first-page description')
     if 'terms' in edits:
         doc['terms'] = text(edits['terms'],20000,'terms and conditions')
+    if 'amount_in_words' in edits:
+        words = text(edits['amount_in_words'],2000,'amount in words')
+        if words:doc['amount_in_words'] = words
+        else:doc.pop('amount_in_words',None)
     if 'prepared_phone' in edits:
         doc['prepared_phone']=phone(edits['prepared_phone'])
     if 'date' in edits:
@@ -291,7 +295,7 @@ def print_document(document, edits):
     except ValueError:
         # Unfinished numeric inputs can still be printed using the last totals.
         pass
-    for key in ('date','prepared_phone','terms','bulk_description'):
+    for key in ('date','prepared_phone','terms','bulk_description','amount_in_words'):
         if isinstance(edits.get(key),str):doc[key]=edits[key][:20000]
     if isinstance(edits.get('order'),dict):
         for key in ORDER_FIELDS:
