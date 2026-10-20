@@ -208,7 +208,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     for(const format of ['xlsx','pdf'])button('Generate '+format.toUpperCase(),async()=>{
       contactWarnings(true);
       if(!issued){await save(true);issued=await api(state.base.replace('/preview','/issue'),json('POST',{preview_id:state.preview_id}));await onIssued(issued);render();}
-      await window.downloadPiFile(issued[format+'_url'],issued[format+'_filename']||issued.reference.replace(/[<>:"/\\|?*\u0000-\u001f]/g,'-')+'.'+format);
+      await window.downloadPiFile(issued[format+'_url'],issued[format+'_filename']);
     },true);
     status=node('p',issued?'PI '+issued.reference+' issued. Both downloads use this saved invoice.':'Edit fields directly below, then review the PDF print preview. Changes apply to this PI only.','pi-preview-status');
     status.role='status';status.tabIndex=-1;host.append(status);
@@ -228,6 +228,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       const signatures=node('div',undefined,'pi-signatures');
       image(signatures,'payment_options.png');image(signatures,'signature.png');
       const box=node('div',undefined,'pi-footer-box');box.append(signatures);
+      if(state.layout.shipping_notice)box.append(node('div',state.layout.shipping_notice,'pi-shipping-notice'));
       if(includeAddress)image(box,'address.png');parent.append(box);
     }
     for (const section of state.layout.sections) {

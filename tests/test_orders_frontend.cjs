@@ -322,6 +322,19 @@ test('invoice minus button confirms removal and calls only the selected record e
   assert.equal(row.removed,true);
 });
 
+test('saved invoice downloads use the server PI filename for Excel and PDF',async()=>{
+  const f=setup();await settle();
+  const downloads=[];f.context.window.downloadPiFile=async (...args)=>downloads.push(args);
+  f.context.appendInvoice({id:12,reference:'AMT/9233',currency:'USD',workbook_format:'xlsx',has_pdf:true},7);
+  const row=f.element('invoiceList').children[0];
+  await row.children[1].onclick({preventDefault(){}});
+  await row.children[2].onclick({preventDefault(){}});
+  assert.equal(downloads.length,2);
+  assert.equal(downloads[0][0],'/api/orders/7/invoices/12/download?format=xlsx');
+  assert.equal(downloads[1][0],'/api/orders/7/invoices/12/download?format=pdf');
+  assert.ok(downloads.every(args=>args.length===1));
+});
+
 test('workspace header toggles status through its own iframe and refreshes lists',async()=>{
   const f=setup();await settle();f.context.location.origin='http://localhost';
   let handler;

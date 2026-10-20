@@ -142,6 +142,8 @@ body.embedded{margin:0;background:#f5f7fb}body.embedded .wrap{padding:18px 24px 
 .pi-company-grid td.pi-border-bottom{border-bottom:1.5px solid #000}
 .pi-paper .pi-signatures{margin:8px 0 4px;gap:12px}
 .pi-paper .pi-signatures img:first-child{width:42%}
+.pi-paper .pi-grid-header .pi-cell-date_label{white-space:nowrap}
+.pi-paper .pi-shipping-notice{padding:3px;background:#ff0;color:#f00;font-weight:700;border:2px solid #000;line-height:1.2}
 .pi-paper .pi-signatures img:last-child{width:36%}
 .pi-footer-box{border:1.5px solid #000;border-top:0}
 .pi-paper .pi-footer-box .pi-signatures{margin:0;padding:7px 8px;gap:10px}

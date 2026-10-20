@@ -267,15 +267,15 @@ class BulkPiTests(unittest.TestCase):
         preview=self.preview()
         for response in (self.client.get(preview['pdf_url']),
                          self.client.post(self.base+'/preview/'+preview['preview_id']+'/print',json={})):
-            self.assertIn('filename="AMT 12938721.pdf"',response.headers['Content-Disposition'])
+            self.assertIn('filename="PI-AMT 12938721.pdf"',response.headers['Content-Disposition'])
         issued=self.client.post(self.base+'/issue',json={'preview_id':preview['preview_id']})
         self.assertEqual(issued.status_code,201,issued.json)
         for extension in ('xlsx','pdf'):
-            self.assertEqual(issued.json[extension+'_filename'],'AMT 12938721.'+extension)
+            self.assertEqual(issued.json[extension+'_filename'],'PI-AMT 12938721.'+extension)
             response=self.client.get(issued.json[extension+'_url'])
-            self.assertIn('filename="AMT 12938721.'+extension+'"',response.headers['Content-Disposition'])
+            self.assertIn('filename="PI-AMT 12938721.'+extension+'"',response.headers['Content-Disposition'])
         from backend.orders.filenames import invoice_filename
-        self.assertEqual(invoice_filename('AMT/12938721','pdf'),'AMT-12938721.pdf')
+        self.assertEqual(invoice_filename('AMT/12938721','pdf'),'PI-12938721.pdf')
 
 
 

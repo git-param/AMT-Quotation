@@ -471,7 +471,7 @@ el('piCurrency').onchange=()=>{
 function appendInvoice(invoice,id){
   const row=document.createElement('div');row.className='pi-download-row';
   const title=document.createElement('span');title.textContent=`${invoice.reference} / ${invoice.currency} / ${(invoice.created_at||'').slice(0,10)}`;row.append(title);
-  for(const format of [invoice.workbook_format||'xlsm',...(invoice.has_pdf?['pdf']:[])]){const link=document.createElement('a');link.textContent='Download '+format.toUpperCase();link.href=`/api/orders/${id}/invoices/${invoice.id}/download?format=${format}`;link.onclick=async event=>{event.preventDefault();try{await window.downloadPiFile(link.href,invoice.reference.replace(/[<>:"/\\|?*]/g,'-')+'.'+format);}catch(error){message(error.message,true);}};row.append(link);}
+  for(const format of [invoice.workbook_format||'xlsm',...(invoice.has_pdf?['pdf']:[])]){const link=document.createElement('a');link.textContent='Download '+format.toUpperCase();link.href=`/api/orders/${id}/invoices/${invoice.id}/download?format=${format}`;link.onclick=async event=>{event.preventDefault();try{await window.downloadPiFile(link.href);}catch(error){message(error.message,true);}};row.append(link);}
   if(current?.order.can_edit&&current.order.can_delete_order){
     const remove=document.createElement('button');remove.type='button';remove.className='pi-remove-button';remove.textContent='\u2212';remove.title='Remove PI';remove.setAttribute('aria-label','Remove PI '+invoice.reference);
     remove.onclick=async()=>{

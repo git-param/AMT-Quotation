@@ -51,6 +51,49 @@ class NativePiTests(unittest.TestCase):
     def issue(self,preview):
         return self.client.post(self.base+'/issue',json={'preview_id':preview['preview_id']})
 
+    def test_normal_pi_default_heading_notice_date_and_download_names(self):
+        from backend.orders.normal_pi.layout import ITEM_HEADING, SHIPPING_NOTICE
+
+        preview=self.preview()
+        doc=preview['document']
+        sections={section['name']:section for section in preview['layout']['sections']}
+        self.assertEqual(preview['layout']['shipping_notice'],SHIPPING_NOTICE)
+        rows=sections['items']['rows']
+        self.assertEqual(rows[1][1]['text'],ITEM_HEADING)
+        self.assertEqual(rows[2][1]['text'],doc['totals']['lines'][0]['description'])
+        self.assertIn('filename=PI-1234.pdf',self.client.get(preview['pdf_url']).headers['Content-Disposition'])
+        with ZipFile(BytesIO(pi_exports.xlsx(doc))) as book:
+            strings_xml=book.read('xl/sharedStrings.xml')
+            strings=strings_xml.decode()
+            sheet=ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
+            self.assertIn(ITEM_HEADING,strings)
+            self.assertIn(SHIPPING_NOTICE,strings)
+            values=[''.join(node.itertext()) for node in ET.fromstring(strings_xml)]
+            self.assertIn('Proforma Invoice Date:',values)
+            label_index=values.index('Proforma Invoice Date:')
+            label=next(cell for cell in sheet.findall('.//{*}c')
+                       if cell.find('{*}v') is not None and cell.find('{*}v').text==str(label_index))
+            self.assertTrue(label.attrib['r'].startswith('F'))
+            self.assertTrue(any(merge.attrib['ref'].startswith(label.attrib['r']+':G')
+                                for merge in sheet.findall('.//{*}mergeCell')))
+            date_row=label.attrib['r'][1:]
+            self.assertTrue(any(merge.attrib['ref']==f'H{date_row}:K{date_row}'
+                                for merge in sheet.findall('.//{*}mergeCell')))
+            styles=ET.fromstring(book.read('xl/styles.xml'))
+            style=styles.find('{*}cellXfs')[int(label.attrib['s'])]
+            font=styles.find('{*}fonts')[int(style.attrib['fontId'])]
+            self.assertEqual(font.find('{*}sz').attrib['val'],'12')
+            alignment=style.find('{*}alignment')
+            if alignment is not None:
+                self.assertNotEqual(alignment.get('wrapText'),'1')
+                self.assertNotEqual(alignment.get('shrinkToFit'),'1')
+        issued=self.issue(preview)
+        self.assertEqual(issued.status_code,201,issued.json)
+        for extension in ('xlsx','pdf'):
+            self.assertEqual(issued.json[extension+'_filename'],'PI-1234.'+extension)
+            self.assertIn('filename=PI-1234.'+extension,
+                          self.client.get(issued.json[extension+'_url']).headers['Content-Disposition'])
+
     def test_pi_rendering_does_not_hold_sqlite_writer_lock(self):
         preview=self.preview()
         original=pi_exports.xlsx

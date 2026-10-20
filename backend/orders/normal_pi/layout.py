@@ -9,6 +9,10 @@ from backend.orders.locations import party_parts, address_only
 
 WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
           15.7109375,8.7109375,8,16,8.7109375,8.140625]
+ITEM_HEADING = 'Electronics and Electrical Spare Parts'
+SHIPPING_NOTICE = ('Please note that the shipment will be dispatched and the final shipping documents '
+                   'will be prepared as per the Proforma Invoice. Kindly confirm on the same email '
+                   'to avoid any changes after order processing.')
 
 
 def display_uom(unit):
@@ -54,7 +58,7 @@ def layout(doc):
     date_display='/'.join((date_parts[3],date_parts[2],date_parts[1])) if date_parts else doc['date']
     metadata=[
         [c(5,2,'Proforma Invoice No:'),editable(7,4,'',doc['reference'],'order.pi_reference','bold',aria='Proforma Invoice No.')],
-        [c(5,2,'Proforma Invoice Date:'),editable(7,4,'',doc['date'],'date',type='date',aria='Proforma Invoice Date',display_text=date_display)],
+        [c(5,2,'Proforma Invoice Date:','date_label'),editable(7,4,'',doc['date'],'date',type='date',aria='Proforma Invoice Date',display_text=date_display)],
         [c(5,2,'Purchase Order:'),editable(7,4,'',order['po_reference'],'order.po_reference',aria='Purchase Order')],
         [c(5,2,'Prepared By: '+doc['prepared_by']),editable(7,4,'Tel: ',doc.get('prepared_phone',''),'prepared_phone',type='tel',aria='Tel')],
         [editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_top=True)],
@@ -107,11 +111,11 @@ def layout(doc):
             items[-1][-2]['display_text'] = line['net_unit_price']
         if Decimal(line.get('discount_amount', '0')):
             items[-1][-1]['readonly'] = True
-    # A normal single-SKU PI has a short blank lead-in above its product.
-    # The annexure cover keeps its one centered summary row.
-    if len(total['lines']) == 1 and doc.get('pi_format','normal') == 'normal':
-        items.insert(1,[c(cell['col'],cell['span']) for cell in item_header])
-    elif len(total['lines']) != 1:
+    # Every normal PI starts its item list with the default description heading.
+    if doc.get('pi_format','normal') == 'normal':
+        items.insert(1,[c(cell['col'],cell['span'],ITEM_HEADING if cell['col']==1 else '')
+                        for cell in item_header])
+    if len(total['lines']) != 1:
         while len(items)<5:items.append([c(cell['col'],cell['span']) for cell in item_header])
     bank=[c(0,8,'BANK DETAIL','bank_title')]+[c(0,8,value,'bold') for value in doc['company']['bank']]
     bank.append(c(0,8,doc['company'].get('bank_charges',''),'warning'))
@@ -147,7 +151,7 @@ def layout(doc):
         clauses.append([c(0,11,value,'final_term' if final else 'terms',
             field='terms' if index==0 else None, value=term_text if index==0 else None,
             multiline=True, aria='Terms and conditions', preview_hidden=index>0)])
-    return {'widths':WIDTHS,'currency':doc['currency'],'sections':[
+    return {'widths':WIDTHS,'currency':doc['currency'],'shipping_notice':SHIPPING_NOTICE,'sections':[
         {'name':'header','rows':header},{'name':'parties','rows':parties},
         {'name':'items','rows':items},{'name':'bank','rows':bank_rows},
         {'name':'terms','rows':clauses}]}
