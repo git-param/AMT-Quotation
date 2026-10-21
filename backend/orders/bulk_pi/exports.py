@@ -20,6 +20,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, PageBreak, NextPageTemplate
 
 from backend.orders.normal_pi.exports import section_borders, rich_required, fonts, _font_lock
+from backend.orders.normal_pi.layout import SHIPPING_NOTICE
 from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words, WIDTHS
 
 
@@ -209,13 +210,17 @@ def pdf(doc):
     append_sections([section for section in model['sections'] if not section.get('annexure')])
     footer_block=Table([
         [image('payment_options.png',usable*.46),image('signature.png',usable*.44)],
+        [Paragraph(escape(SHIPPING_NOTICE),ParagraphStyle('shipping_notice',fontName=bold,
+            fontSize=8,leading=10,textColor=colors.red)),''],
         [image('address.png',usable-12),'']],colWidths=[usable*.5]*2,splitByRow=0)
     footer_block.setStyle(TableStyle([
-        ('SPAN',(0,1),(1,1)),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('SPAN',(0,1),(1,1)),('SPAN',(0,2),(1,2)),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
         ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),
         ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),
         ('BOX',(0,0),(-1,-1),.9,colors.black),
-        ('LINEABOVE',(0,1),(-1,1),.9,colors.black)]))
+        ('BACKGROUND',(0,1),(-1,1),colors.yellow),
+        ('LINEABOVE',(0,1),(-1,1),.9,colors.black),
+        ('LINEABOVE',(0,2),(-1,2),.9,colors.black)]))
     story.append(footer_block)
     story.extend([NextPageTemplate('Annexure'), PageBreak()])
     append_sections([section for section in model['sections'] if section.get('annexure')])
@@ -238,7 +243,7 @@ def xlsx(doc):
     for index,width in enumerate(model['widths']):sheet.set_column(index,index,width)
     formats={};format_values={}
     symbol=currency_symbol(doc['currency'])
-    for kind in ('','bold','head','bank_title','warning','final_term','title','center','amount','bold_amount','terms'):
+    for kind in ('','bold','head','bank_title','warning','final_term','title','center','amount','bold_amount','terms','date_label'):
         values={'font_name':'Cambria','font_size':20 if kind=='title' else 10 if kind in ('terms','final_term') else 12,
             'font_color':'#FF0000' if kind=='warning' else '#000000','text_wrap':True,'valign':'top',
             'left':2,'right':2,'top':0,'bottom':0,'border_color':'#000000',
@@ -246,6 +251,7 @@ def xlsx(doc):
         if kind=='bank_title':values['underline']=1
         if kind=='warning':values['bg_color']='#FFFF00'
         if kind=='final_term':values['bg_color']='#FFF2CC'
+        if kind=='date_label':values['text_wrap']=False
         if kind in ('title','head','center'):values['align']='center'
         if 'amount' in kind:values.update(align='right',num_format='"'+symbol+'" #,##0.00')
         format_values[kind]=values
@@ -331,7 +337,14 @@ def xlsx(doc):
             sheet.set_row(row_index,20 if part==0 else 18)
             for col in range(11):sheet.write_blank(row_index,col,None,left if col==0 else right if col==10 else edge)
             row_index+=1
-        if part==0:image('address.png',row_index,0,950,92)
+        if part==0:
+            notice_format=book.add_format({'font_name':'Cambria','font_size':10,'bold':True,
+                'font_color':'#FF0000','bg_color':'#FFFF00','text_wrap':True,
+                'valign':'vcenter','border':2,'border_color':'#000000'})
+            sheet.merge_range(row_index,0,row_index,10,SHIPPING_NOTICE,notice_format)
+            sheet.set_row(row_index,32)
+            row_index+=1
+            image('address.png',row_index,0,950,92)
     sheet.print_area(0,0,row_index-1,10);sheet.set_footer('&CPage &P of &N')
     annexure_start = row_index + 3
     for gap_row in range(row_index, annexure_start):

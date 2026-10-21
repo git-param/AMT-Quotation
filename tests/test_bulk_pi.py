@@ -11,6 +11,7 @@ from backend.orders import pi_exports
 from backend.orders.pi_layout import layout
 from backend.orders.normal_pi import exports as normal_exports
 from backend.orders.normal_pi.layout import layout as normal_layout
+from backend.orders.normal_pi.layout import SHIPPING_NOTICE
 import test_native_pi
 
 
@@ -89,6 +90,13 @@ class BulkPiTests(unittest.TestCase):
                     self.assertTrue(any('ROUND(G' in f.text and '*I' in f.text for f in annexure.findall('.//{*}f')))
                     strings_xml = ET.fromstring(book.read('xl/sharedStrings.xml'))
                     labels = [''.join(si.itertext()) for si in strings_xml]
+                    self.assertEqual(labels.count(SHIPPING_NOTICE),1)
+                    notice_index=labels.index(SHIPPING_NOTICE)
+                    notice_cells=[cell for cell in annexure.findall('.//{*}c')
+                                  if cell.get('t')=='s' and cell.find('{*}v') is not None
+                                  and cell.find('{*}v').text==str(notice_index)]
+                    self.assertEqual(len(notice_cells),1)
+                    self.assertLess(int(re.search(r'\d+',notice_cells[0].get('r')).group()),start)
                     title = next(c for c in annexure.findall('.//{*}c')
                                  if c.get('t')=='s' and labels[int(c.find('{*}v').text)]=='Annexure-1')
                     self.assertEqual(title.get('r'), f'A{start+5}')

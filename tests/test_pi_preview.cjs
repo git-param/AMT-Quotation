@@ -117,7 +117,7 @@ test('PI numeric edits refresh displayed totals and UOM uses fixed choices',asyn
 test('bulk PI summary and annexure remain independently editable in save and print',async()=>{
   const host=new Element('section'),requests=[],printed=[];
   const lines=Array.from({length:5},(_,index)=>({id:index+1,sku:'PART-'+index,description:'Product '+index,hsn_code:'85371090',item_condition:'New',uom:'PCs',quantity:'1',unit_price:'10.00',line_total:'10.00'}));
-  const state={preview_id:'bulk',document:{pi_format:'bulk',bulk_description:'Original cover description',date:'2026-10-16',currency:'USD',order:{},delivery:{},assets:{},totals:{shipping:'0',lines}},layout:{widths:[1],sections:[
+  const state={preview_id:'bulk',document:{pi_format:'bulk',bulk_description:'Original cover description',date:'2026-10-16',currency:'USD',order:{},delivery:{},assets:{},totals:{shipping:'0',lines}},layout:{widths:[1],shipping_notice:'Confirm shipment details',sections:[
     {name:'items',rows:[[{span:1,style:'',field:'bulk_description',value:'Original cover description',multiline:true,aria:'First-page description'}]]},
     {name:'annexure',annexure:true,rows:[[{span:1,style:'',field:'lines.4.description',value:'Product 4',multiline:true},
       {span:1,style:'center',field:'lines.4.quantity',value:'1',type:'number',uom:'PCs'},
@@ -127,6 +127,9 @@ test('bulk PI summary and annexure remain independently editable in save and pri
   vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/orders/pi-preview.js'),'utf8'),context);
   const preview=context.window.createPiPreview(host,async(url,options)=>{requests.push(JSON.parse(options.body));state.document.bulk_description=requests.at(-1).bulk_description;return state;},(method,data)=>({method,body:JSON.stringify(data)}),async()=>{});
   preview.open(state,'/bulk-preview');
+  const notices=host.querySelectorAll('div').filter(item=>item.className==='pi-shipping-notice');
+  assert.equal(notices.length,1);
+  assert.equal(notices[0].parentElement.parentElement.className,'pi-paper');
   let cover=host.querySelectorAll('textarea').find(input=>input.dataset.piField==='bulk_description');
   let product=host.querySelectorAll('textarea').find(input=>input.dataset.piField==='lines.4.description');
   const totalQuantity=host.querySelectorAll('input').find(input=>input.dataset.piField==='annexure_quantity');

@@ -80,11 +80,14 @@ function message(text,error=false){
 async function api(url,options={}) {
   const finish=window.skuFeedback?.startRequest(url,options);
   try{
-  const response=await fetch(url,options);const data=await response.json();
+  const response=await fetch(url,options);
+  let data=null;
+  try{data=await response.json();}catch{ /* An upstream error page may be HTML. */ }
   if(!response.ok){
     if([401,403,404].includes(response.status)){el('editor').hidden=true;el('detail').hidden=true;}
-    const error=new Error(data.error||'Unable to complete request.');error.details=data;throw error;
+    const error=new Error(data?.error||`Request failed (HTTP ${response.status}). Please try again or contact support.`);error.details=data;throw error;
   }
+  if(!data)throw new Error('The server returned an unexpected response. Please try again.');
   return data;
   }finally{finish?.();}
 }

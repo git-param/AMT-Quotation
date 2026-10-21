@@ -200,7 +200,11 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       button('PDF print preview',async()=>{
         contactWarnings(true);
         const response=await fetch(state.base+'/'+state.preview_id+'/print',json('POST',collect()));
-        if(!response.ok){const error=await response.json();throw new Error(error.error||'Unable to open print preview.');}
+        if(!response.ok){
+          let error=null;
+          try{error=await response.json();}catch{ /* An upstream error page may be HTML. */ }
+          throw new Error(error?.error||`Unable to open print preview (HTTP ${response.status}).`);
+        }
         const blob=await response.blob();clearPrintUrl();printUrl=URL.createObjectURL(blob);
         paper.hidden=true;printFrame.hidden=false;printFrame.src=printUrl;
         status.textContent='Print preview of current edits. Use Update preview to save changes.';
@@ -229,7 +233,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       const signatures=node('div',undefined,'pi-signatures');
       image(signatures,'payment_options.png');image(signatures,'signature.png');
       const box=node('div',undefined,'pi-footer-box');box.append(signatures);
-      if(state.layout.shipping_notice)box.append(node('div',state.layout.shipping_notice,'pi-shipping-notice'));
+      if(includeAddress&&state.layout.shipping_notice)box.append(node('div',state.layout.shipping_notice,'pi-shipping-notice'));
       if(includeAddress)image(box,'address.png');parent.append(box);
     }
     for (const section of state.layout.sections) {
