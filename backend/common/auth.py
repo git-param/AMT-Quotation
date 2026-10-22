@@ -2,7 +2,7 @@
 
 from functools import wraps
 
-from flask import current_app, jsonify, redirect, request, session
+from flask import current_app, g, jsonify, redirect, request, session
 
 from backend.database import get_db
 
@@ -50,13 +50,52 @@ def get_permissions(user):
         connection.close()
 
 
-def permission_required(permission):
+def get_api_key():
+    """Validate a legacy quotation API key once per request."""
+    if hasattr(g, 'quotation_api_key'):
+        return g.quotation_api_key
+    key = request.headers.get('X-API-Key') or request.args.get('api_key')
+    g.quotation_api_key = None
+    if not key:
+        return None
+    connection = get_db()
+    try:
+        row = connection.execute(
+            'SELECT id, label FROM api_keys WHERE key = ?', (key,)
+        ).fetchone()
+        if row:
+            connection.execute(
+                "UPDATE api_keys SET last_used = datetime('now','localtime') WHERE id = ?",
+                (row['id'],),
+            )
+            connection.commit()
+            g.quotation_api_key = dict(row)
+        return g.quotation_api_key
+    finally:
+        connection.close()
+
+
+def request_actor_name():
+    """Name the session user or quotation key for activity logs."""
+    user = get_current_user()
+    if user:
+        return user['username']
+    key = getattr(g, 'quotation_api_key', None)
+    if key:
+        return 'API: ' + key['label'] if key['label'] else 'API'
+    return 'Unknown'
+
+
+def permission_required(permission, *, allow_api_key=False):
     """Reject anonymous APIs with 401 and authenticated denials with 403."""
     def decorate(function):
         @wraps(function)
         def decorated(*args, **kwargs):
             user = get_current_user()
             if not user:
+                if (allow_api_key and request.path.startswith('/api/')
+                        and get_api_key()):
+                    return function(*args, **kwargs)
                 session.clear()
                 if request.path.startswith('/api/'):
                     return jsonify(error='Not logged in'), 401
@@ -78,7 +117,7 @@ def permission_required(permission):
 
 
 # Compatibility names retained for existing imports and quotation endpoints.
-login_required = permission_required('quotation.use')
+login_required = permission_required('quotation.use', allow_api_key=True)
 manager_required = permission_required('management.view')
 
 # Account validation without a role restriction for lead creation.

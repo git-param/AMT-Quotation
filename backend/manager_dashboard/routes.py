@@ -2,6 +2,7 @@
 
 import sqlite3
 import re
+import secrets
 
 from flask import Blueprint, jsonify, request, send_file, session
 from werkzeug.security import generate_password_hash
@@ -15,6 +16,54 @@ from backend.common.auth import (
 )
 
 bp = Blueprint('manager_dashboard', __name__)
+
+
+@bp.route('/api/manager/api-keys')
+@permission_required('users.manage')
+def api_manager_list_keys():
+    """List key metadata without returning reusable credentials."""
+    connection = get_db()
+    try:
+        rows = connection.execute(
+            'SELECT id, label, created_at, last_used FROM api_keys ORDER BY id'
+        ).fetchall()
+        return jsonify(api_keys=[dict(row) for row in rows])
+    finally:
+        connection.close()
+
+
+@bp.route('/api/manager/api-keys/create', methods=['POST'])
+@permission_required('users.manage')
+def api_manager_create_key():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('label', ''), str):
+        return jsonify(error='Invalid label'), 400
+    label = data.get('label', '').strip()[:80]
+    key = 'amtq-' + secrets.token_urlsafe(32)
+    connection = get_db()
+    try:
+        with connection:
+            cursor = connection.execute(
+                'INSERT INTO api_keys (key, label) VALUES (?, ?)', (key, label)
+            )
+        return jsonify(id=cursor.lastrowid, key=key, label=label)
+    finally:
+        connection.close()
+
+
+@bp.route('/api/manager/api-keys/<int:kid>/revoke', methods=['POST'])
+@permission_required('users.manage')
+def api_manager_revoke_key(kid):
+    connection = get_db()
+    try:
+        with connection:
+            cursor = connection.execute('DELETE FROM api_keys WHERE id = ?', (kid,))
+        if not cursor.rowcount:
+            return jsonify(error='API key not found'), 404
+        return jsonify(ok=True)
+    finally:
+        connection.close()
+
 
 @bp.route('/manager')
 @manager_required

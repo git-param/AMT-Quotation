@@ -111,6 +111,25 @@ class MigrationTests(unittest.TestCase):
                 connection.execute('PRAGMA foreign_key_check').fetchall(), []
             )
 
+    def test_existing_legacy_api_key_survives_migration(self):
+        self.create_legacy_database()
+        with test_connection(self.path) as connection:
+            connection.execute(
+                "CREATE TABLE api_keys (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "key TEXT UNIQUE NOT NULL, label TEXT DEFAULT '', "
+                "created_at TEXT DEFAULT (datetime('now','localtime')), last_used TEXT)"
+            )
+            connection.execute(
+                'INSERT INTO api_keys(key, label) VALUES (?, ?)',
+                ('amtq-existing-key', 'Inbox'),
+            )
+        migrate_database(self.path)
+        with test_connection(self.path) as connection:
+            row = connection.execute(
+                'SELECT id, key, label FROM api_keys'
+            ).fetchone()
+            self.assertEqual(tuple(row), (1, 'amtq-existing-key', 'Inbox'))
+
     def test_existing_schema_and_records_are_unchanged(self):
         self.create_legacy_database()
         with test_connection(self.path) as connection:
@@ -185,7 +204,7 @@ class MigrationTests(unittest.TestCase):
             connection.execute("UPDATE sqlite_sequence SET seq=100 WHERE name='client_orders'")
             before = {table: connection.execute('SELECT * FROM '+table).fetchall() for table in tables}
             indexes = connection.execute("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").fetchall()
-        self.assertEqual(migrate_database(self.path),[28,29])
+        self.assertEqual(migrate_database(self.path), [28, 29, 30])
         with test_connection(self.path) as connection:
             for table in tables:
                 self.assertEqual(connection.execute('SELECT * FROM '+table).fetchall(),before[table])

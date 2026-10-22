@@ -1,8 +1,9 @@
 import threading
 import os
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash
-from backend.config import DB_PATH, DATABASE_DIR
+from backend.config import DB_PATH
 from backend.scalability.sqlite import connect, enable_wal
 
 _db_lock = threading.Lock()
@@ -69,7 +70,7 @@ def log_copy(user_name, user_ip, copy_type, sku_count):
 
 
 def initialize_database():
-    DATABASE_DIR.mkdir(parents=True, exist_ok=True)
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     init_db()
     enable_wal(DB_PATH)
     _seed_users()

@@ -771,4 +771,11 @@ MIGRATIONS = (
         "CREATE INDEX idx_security_events_user_time ON security_events(user_id,created_at)",
         "CREATE INDEX idx_security_events_type_time ON security_events(event_type,created_at)",
     )),
+    (30, 'quotation_api_keys', (
+        "CREATE TABLE IF NOT EXISTS api_keys ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "key TEXT UNIQUE NOT NULL, label TEXT DEFAULT '', "
+        "created_at TEXT DEFAULT (datetime('now','localtime')), "
+        "last_used TEXT)",
+    )),
 )

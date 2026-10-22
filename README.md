@@ -3,6 +3,25 @@
 For production serving, concurrent-user testing and the versioned scalability change log, see [Scalability](docs/scalability.md).
 For session controls, CSRF, rate limiting, security events, and production settings, see [Security](docs/security.md).
 
+## Quotation API keys
+
+Existing keys in the legacy `api_keys` SQLite table are preserved by migration 30
+when the new app uses the same database. The live monolith used
+`/app/quotation.db`; this source defaults to `database/quotation.db`. Set
+`AMT_QUOTATION_DB_PATH` to the persistent live database path during deployment,
+or migrate the complete database before starting the new build. Back it up first.
+Send a key in the `X-API-Key` header to call quotation API endpoints such as
+`GET /api/me` and `POST /api/lookup` without a browser session. A valid key gets
+`{"auth":"api_key","role":"api","username":"api-key"}` from `/api/me`;
+missing or invalid credentials get HTTP 401. Keys do not grant access to account
+or management APIs.
+
+An account with `users.manage` permission can create a key with
+`POST /api/manager/api-keys/create` and JSON `{"label":"Inbox"}`. The plaintext
+key is returned only on creation. `GET /api/manager/api-keys` lists metadata,
+and `POST /api/manager/api-keys/<id>/revoke` disables a key. These management
+requests require a browser session and its CSRF token.
+
 The active CRM workflow is now **Clients & Orders** at `/clients-orders`: search
 clients, manage their profiles, save independent pending orders, and generate
 USD/INR proforma invoices. Company seller/bank details remain in server-configured

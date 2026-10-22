@@ -78,6 +78,7 @@ class RBACTests(unittest.TestCase):
             if not rule.rule.startswith('/api/'):
                 continue
             path = rule.rule.replace('<int:uid>', str(self.ids['user']))
+            path = path.replace('<int:kid>', '1')
             path = path.replace('<item_id>', 'test-item')
             path = path.replace('<int:source_id>', '1')
             path = path.replace('<int:lead_id>', '1')
@@ -89,6 +90,70 @@ class RBACTests(unittest.TestCase):
                 response = self.client.open(path, method=method, json={})
                 self.assertEqual(response.status_code, 401)
                 self.assertEqual(response.json['error'], 'Not logged in')
+
+    def test_quotation_api_key_identity_lookup_and_access_boundary(self):
+        connection = database.get_db()
+        try:
+            with connection:
+                connection.execute(
+                    'INSERT INTO api_keys(key, label) VALUES (?, ?)',
+                    ('amtq-test-key', 'Inbox'),
+                )
+        finally:
+            connection.close()
+        headers = {'X-API-Key': 'amtq-test-key'}
+        self.assertEqual(self.client.get('/api/me').status_code, 401)
+        self.assertEqual(self.client.get('/api/me', headers={'X-API-Key': 'wrong'}).status_code, 401)
+        response = self.client.get('/api/me', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {
+            'auth': 'api_key', 'role': 'api', 'username': 'api-key',
+        })
+        with patch('backend.quotation_tool.routes.fetch_sku',
+                   return_value={'found': True, 'price': 25}) as lookup, \
+                patch('backend.quotation_tool.routes.threading.Thread') as thread:
+            response = self.client.post('/api/lookup', headers=headers,
+                                        json={'skus': ['SKU-1']})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json['found'], 1)
+            lookup.assert_called_once_with('SKU-1')
+            self.assertEqual(thread.call_args.kwargs['args'][0], 'API: Inbox')
+        self.assertEqual(self.client.get('/api/manager/users', headers=headers).status_code, 401)
+        self.assertEqual(self.client.post('/api/change-password', headers=headers,
+                                          json={}).status_code, 401)
+        connection = database.get_db()
+        try:
+            self.assertIsNotNone(connection.execute(
+                'SELECT last_used FROM api_keys WHERE key = ?', ('amtq-test-key',)
+            ).fetchone()['last_used'])
+        finally:
+            connection.close()
+
+    def test_api_key_does_not_change_session_profile(self):
+        self.session_as('admin')
+        response = self.client.get('/api/me')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['username'], 'admin')
+        self.assertIn('account.self', response.json['permissions'])
+
+    def test_admin_can_issue_and_revoke_quotation_api_key(self):
+        self.session_as('admin')
+        created = self.client.post('/api/manager/api-keys/create',
+                                   json={'label': 'Inbox'})
+        self.assertEqual(created.status_code, 200)
+        key = created.json['key']
+        self.assertTrue(key.startswith('amtq-'))
+        listed = self.client.get('/api/manager/api-keys').json['api_keys']
+        self.assertEqual(listed[0]['label'], 'Inbox')
+        self.assertNotIn('key', listed[0])
+        separate_client = self.app.test_client()
+        self.assertEqual(separate_client.get('/api/me',
+                         headers={'X-API-Key': key}).status_code, 200)
+        self.assertEqual(self.client.post(
+            f"/api/manager/api-keys/{created.json['id']}/revoke"
+        ).status_code, 200)
+        self.assertEqual(separate_client.get('/api/me',
+                         headers={'X-API-Key': key}).status_code, 401)
 
     def test_role_permission_matrix_and_legacy_session(self):
         for role in ROLE_LABELS:
