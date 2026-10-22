@@ -22,6 +22,13 @@ key is returned only on creation. `GET /api/manager/api-keys` lists metadata,
 and `POST /api/manager/api-keys/<id>/revoke` disables a key. These management
 requests require a browser session and its CSRF token.
 
+Admins can set the maximum number of SKUs per lookup on the Configuration page
+or with `PUT /api/sku-lookup-limit` and JSON `{"max_sku_lookup":25}`. The default
+is 50, and the allowed range is 1 to 500. Quotation and enquiry lookup requests,
+including API-key requests, reject larger batches before calling providers.
+Fresh stock checks during order and enquiry saves use the same limit; a save
+with more distinct SKUs than the configured limit returns an error.
+
 The active CRM workflow is now **Clients & Orders** at `/clients-orders`: search
 clients, manage their profiles, save independent pending orders, and generate
 USD/INR proforma invoices. Company seller/bank details remain in server-configured

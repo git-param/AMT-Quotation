@@ -22,6 +22,14 @@
   </form>
   <div class="settings-note"><span aria-hidden="true">i</span><p>Applies to order items and new PI previews. Existing previews and issued invoices keep their saved code.</p></div>
 </section>
+<section class="panel settings-card" id="skuLookupLimitSection" aria-labelledby="skuLookupLimitTitle" hidden>
+  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true">#</span><div><h2 id="skuLookupLimitTitle">SKU lookup limit</h2><p>Maximum SKUs in one quotation, enquiry, or stock check request.</p></div></div>
+  <form id="skuLookupLimitForm">
+    <div class="settings-input-row"><div class="form-field"><label for="skuLookupLimit">Maximum SKUs per request</label><input id="skuLookupLimit" type="number" min="1" max="500" step="1" required></div><button id="saveSkuLookupLimit" class="btn-sm btn-add" type="submit">Save limit</button></div>
+    <p class="field-hint">Choose 1 to 500. Requests above the limit are rejected before any SKU lookup.</p>
+  </form>
+  <p id="skuLookupLimitMessage" role="status" aria-live="polite"></p>
+</section>
 <section class="panel settings-card" aria-labelledby="departmentsTitle">
   <div class="settings-card-heading"><span class="settings-icon settings-icon-team" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.87M15 3.13a4 4 0 0 1 0 7.75"/><circle cx="9" cy="7" r="4"/></svg></span><div><h2 id="departmentsTitle">Departments</h2><p>Organise your team with consistent department names.</p></div></div>
   <form id="departmentForm" hidden>

@@ -283,7 +283,7 @@ def insert_lines(connection, order_id, lines, actor):
                              'Increase the quantity of the existing draft item instead.')
         existing_skus.add(key)
     from backend.orders.catalog import validate_stock_batch
-    validate_stock_batch((line['sku'], Decimal(line['quantity_milli'])/1000) for line in lines)
+    validate_stock_batch(((line['sku'], Decimal(line['quantity_milli'])/1000) for line in lines), connection)
     for line in lines:
         columns = ', '.join(line)
         marks = ', '.join('?' for _ in line)

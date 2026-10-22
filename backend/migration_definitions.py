@@ -778,4 +778,7 @@ MIGRATIONS = (
         "created_at TEXT DEFAULT (datetime('now','localtime')), "
         "last_used TEXT)",
     )),
+    (31, 'sku_lookup_limit', (
+        "INSERT OR IGNORE INTO app_settings(key,value) VALUES('sku_lookup_limit','50')",
+    )),
 )

@@ -86,6 +86,23 @@
   request().then(data => { input.value = data.hsn_code; save.disabled = false; })
     .catch(error => { message.className = 'error'; message.textContent = error.message; input.disabled = true; });
 
+  const lookupForm = document.getElementById('skuLookupLimitForm');
+  const lookupInput = document.getElementById('skuLookupLimit');
+  const lookupButton = document.getElementById('saveSkuLookupLimit');
+  const lookupMessage = document.getElementById('skuLookupLimitMessage');
+  lookupForm.onsubmit = async event => {
+    event.preventDefault(); lookupButton.disabled = true;
+    try {
+      const response = await fetch('/api/sku-lookup-limit', {method:'PUT', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({max_sku_lookup:Number(lookupInput.value)})});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to save SKU lookup limit.');
+      lookupInput.value = data.max_sku_lookup;
+      lookupMessage.className = ''; lookupMessage.textContent = 'SKU lookup limit saved.';
+    } catch (error) { lookupMessage.className = 'error'; lookupMessage.textContent = error.message; }
+    finally { lookupButton.disabled = false; }
+  };
+
   const departmentForm = document.getElementById('departmentForm');
   const departmentName = document.getElementById('departmentName');
   const addDepartment = document.getElementById('addDepartment');
@@ -155,6 +172,14 @@
     departmentForm.hidden = !user.permissions.includes('users.manage');
     prefixForm.hidden = !user.permissions.includes('users.manage');
     document.getElementById('currencyRatesSection').hidden = !user.permissions.includes('users.manage');
+    document.getElementById('skuLookupLimitSection').hidden = !user.permissions.includes('users.manage');
+    if (user.permissions.includes('users.manage')) {
+      fetch('/api/sku-lookup-limit').then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Unable to load SKU lookup limit.');
+        lookupInput.value = data.max_sku_lookup;
+      }).catch(error => { lookupMessage.className = 'error'; lookupMessage.textContent = error.message; lookupButton.disabled = true; });
+    }
     renderDepartments(data.departments, data.department_settings);
   }).catch(error => { departmentMessage.className = 'error'; departmentMessage.textContent = error.message; });
 })();

@@ -36,6 +36,42 @@ class SettingsTests(unittest.TestCase):
         finally:
             connection.close()
 
+    def test_admin_configures_sku_lookup_limit(self):
+        self.as_user('exec1')
+        self.assertEqual(self.client.get('/api/sku-lookup-limit').json['max_sku_lookup'], 50)
+        self.assertEqual(self.client.put('/api/sku-lookup-limit',
+                                        json={'max_sku_lookup': 2}).status_code, 403)
+        self.as_user('tl1')
+        self.assertEqual(self.client.put('/api/sku-lookup-limit',
+                                        json={'max_sku_lookup': 2}).status_code, 403)
+        self.as_user('admin')
+        for value in (None, 0, -1, 501, True, '2', 2.5):
+            self.assertEqual(self.client.put('/api/sku-lookup-limit',
+                                            json={'max_sku_lookup': value}).status_code, 400)
+        self.assertEqual(self.client.put('/api/sku-lookup-limit',
+                                        json={'max_sku_lookup': 2}).status_code, 200)
+        self.as_user('exec1')
+        self.assertEqual(self.client.get('/api/sku-lookup-limit').json['max_sku_lookup'], 2)
+        connection = database.get_db()
+        with connection:
+            connection.execute(
+                "INSERT INTO api_keys(key,label) VALUES('amtq-limit-test','Inbox')"
+            )
+        connection.close()
+        self.as_user(None)
+        headers = {'X-API-Key': 'amtq-limit-test'}
+        self.assertEqual(self.client.get('/api/sku-lookup-limit',
+                                         headers=headers).json['max_sku_lookup'], 2)
+        self.assertEqual(self.client.put('/api/sku-lookup-limit', headers=headers,
+                                         json={'max_sku_lookup': 3}).status_code, 401)
+        connection = database.get_db()
+        try:
+            self.assertEqual(connection.execute(
+                "SELECT COUNT(*) FROM audit_logs WHERE action='sku_lookup_limit_update'"
+            ).fetchone()[0], 1)
+        finally:
+            connection.close()
+
     def test_sales_can_read_item_defaults_without_configuration_access(self):
         connection = database.get_db()
         with connection:

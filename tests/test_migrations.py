@@ -204,7 +204,7 @@ class MigrationTests(unittest.TestCase):
             connection.execute("UPDATE sqlite_sequence SET seq=100 WHERE name='client_orders'")
             before = {table: connection.execute('SELECT * FROM '+table).fetchall() for table in tables}
             indexes = connection.execute("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").fetchall()
-        self.assertEqual(migrate_database(self.path), [28, 29, 30])
+        self.assertEqual(migrate_database(self.path), [28, 29, 30, 31])
         with test_connection(self.path) as connection:
             for table in tables:
                 self.assertEqual(connection.execute('SELECT * FROM '+table).fetchall(),before[table])

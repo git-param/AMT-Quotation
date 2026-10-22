@@ -1,9 +1,13 @@
 """Fresh provider reads and aggregate stock validation without network access."""
 import os
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
 from backend.orders.catalog import lookup_stock, validate_stock_batch
+from backend import database
+from backend.migrations import migrate_database
 
 
 class StockTests(unittest.TestCase):
@@ -38,7 +42,8 @@ class StockTests(unittest.TestCase):
 
     def test_batch_checks_each_sku_once_and_reports_all_failures(self):
         products=[{'found':True,'qty':2},{'found':True,'qty':0},RuntimeError('Offline')]
-        with patch('backend.orders.catalog.lookup_stock',side_effect=products) as lookup:
+        with patch('backend.orders.catalog.enforce_sku_lookup_limit'), \
+                patch('backend.orders.catalog.lookup_stock',side_effect=products) as lookup:
             with self.assertRaises(ValueError) as error:
                 validate_stock_batch([('PART-A',2),('part-a',1),('PART-B',1),('PART-C',1)])
             message=str(error.exception)
@@ -46,6 +51,22 @@ class StockTests(unittest.TestCase):
             self.assertIn('PART-B: requested 1, but only 0 available',message)
             self.assertIn('PART-C: stock lookup failed',message)
             self.assertEqual(lookup.call_count,3)
+
+    def test_stock_batch_limit_blocks_provider_calls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'stock.db'
+            migrate_database(path)
+            with patch.object(database, 'DB_PATH', str(path)):
+                connection = database.get_db()
+                with connection:
+                    connection.execute(
+                        "UPDATE app_settings SET value='1' WHERE key='sku_lookup_limit'"
+                    )
+                connection.close()
+                with patch('backend.orders.catalog.lookup_stock') as lookup:
+                    with self.assertRaisesRegex(ValueError, 'at most 1 SKU'):
+                        validate_stock_batch([('A', 1), ('B', 1)])
+                    lookup.assert_not_called()
 
 
 if __name__ == '__main__':

@@ -4,6 +4,7 @@ from threading import Lock
 import time
 
 from backend import database
+from backend.common.skus import enforce_sku_lookup_limit
 
 _stock={}
 _lock=Lock()
@@ -30,7 +31,7 @@ def lookup_stock(sku):
     return fetch_sku(sku, refresh=True)
 
 
-def validate_stock_batch(items):
+def validate_stock_batch(items, connection=None):
     """Look up every SKU afresh and report all shortages before writing rows.
 
     Quantities are aggregated per SKU so historical duplicate lines cannot
@@ -41,6 +42,7 @@ def validate_stock_batch(items):
         key = sku.strip().casefold()
         name, previous = required.get(key, (sku.strip(), Decimal(0)))
         required[key] = (name, previous + Decimal(str(quantity)))
+    enforce_sku_lookup_limit(len(required), connection)
     issues = []
     for sku, quantity in required.values():
         try:

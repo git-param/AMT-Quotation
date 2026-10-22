@@ -300,7 +300,7 @@ def validate_enquiry_stock(connection, enquiry_id, values, exclude_id=None):
                                   'WHERE enquiry_id=? AND is_active=1', (enquiry_id,)):
         if row['id'] != exclude_id and row['sku'].strip().casefold() in keys:
             items.append((row['sku'], Decimal(row['quantity_milli'])/1000))
-    validate_stock_batch(items)
+    validate_stock_batch(items, connection)
 
 
 def create_lines(connection, enquiry_id, values, actor):
@@ -368,10 +368,13 @@ def bulk_lookup():
         return jsonify(error='Invalid scope ID.'), 400
     skus = data.get('skus')
     currency = data.get('currency')
-    if (not isinstance(skus, list) or not 1 <= len(skus) <= 50
+    from backend.common.skus import sku_lookup_limit
+    max_lookup = sku_lookup_limit()
+    if (not isinstance(skus, list) or not 1 <= len(skus) <= max_lookup
             or any(not isinstance(sku, str) or not 1 <= len(sku.strip()) <= 100
                    for sku in skus) or currency not in CURRENCIES):
-        return jsonify(error='Provide 1 to 50 SKUs and a supported currency.'), 400
+        count_hint = 'one SKU' if max_lookup == 1 else f'1 to {max_lookup} SKUs'
+        return jsonify(error=f'Provide {count_hint} and a supported currency.'), 400
     connection = get_db()
 
     def permitted():

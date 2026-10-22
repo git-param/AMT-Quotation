@@ -341,6 +341,19 @@ class LineTests(unittest.TestCase):
                 self.assertIn('Duplicate SKUs: part-a',response.json['error'])
                 lookup.assert_not_called();rate.assert_not_called()
 
+    def test_bulk_lookup_respects_configured_limit_before_provider_calls(self):
+        connection = database.get_db()
+        with connection:
+            connection.execute("UPDATE app_settings SET value='1' WHERE key='sku_lookup_limit'")
+        connection.close()
+        with patch('backend.enquiries.lines.lookup_product') as lookup:
+            response = self.client.post('/api/enquiries/sku-lookup', json={
+                'client_id': self.parent, 'skus': ['A', 'B'], 'currency': 'USD',
+            })
+            self.assertEqual(response.status_code, 400)
+            self.assertIn('one SKU', response.json['error'])
+            lookup.assert_not_called()
+
     def test_quantity_save_checks_fresh_stock_and_aggregates_existing_sku_lines(self):
         line=self.add(quantity='1').json['line']
         self.add(quantity='1')

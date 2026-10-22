@@ -8,11 +8,44 @@ from backend.common.live_rates import status as rate_status, refresh_if_due, wak
 
 from flask import Blueprint, jsonify, request, send_file
 
-from backend.common.auth import authenticated_required, get_current_user, permission_required
+from backend.common.auth import authenticated_required, get_current_user, login_required, permission_required
+from backend.common.skus import MAX_SKU_LOOKUP_LIMIT, sku_lookup_limit
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
 
 bp = Blueprint('settings', __name__)
+
+
+@bp.route('/api/sku-lookup-limit', methods=['GET'])
+@login_required
+def read_sku_lookup_limit():
+    return jsonify(max_sku_lookup=sku_lookup_limit())
+
+
+@bp.route('/api/sku-lookup-limit', methods=['PUT'])
+@permission_required('users.manage')
+def save_sku_lookup_limit():
+    data = request.get_json(silent=True)
+    value = data.get('max_sku_lookup') if isinstance(data, dict) and set(data) == {'max_sku_lookup'} else None
+    if type(value) is not int or not 1 <= value <= MAX_SKU_LOOKUP_LIMIT:
+        return jsonify(error=f'Choose a SKU lookup limit from 1 to {MAX_SKU_LOOKUP_LIMIT}.'), 400
+    user = get_current_user()
+    connection = get_db()
+    try:
+        before = sku_lookup_limit(connection)
+        with connection:
+            connection.execute(
+                "INSERT INTO app_settings(key,value) VALUES('sku_lookup_limit',?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(value),)
+            )
+            connection.execute(
+                "INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) "
+                "VALUES(?,?,'sku_lookup_limit_update','app_settings','sku_lookup_limit',?)",
+                (user['id'], user['username'], json.dumps({'before': before, 'after': value})),
+            )
+        return jsonify(max_sku_lookup=value)
+    finally:
+        connection.close()
 
 
 def currency_rate_payload(connection):

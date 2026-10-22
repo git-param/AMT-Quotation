@@ -12,14 +12,23 @@ async function setup(admin) {
   let names = ['Sales'];
   const prefixes = {};
   let rates = {};
+  let lookupLimit = 50;
   const context = {
     document: {getElementById: get, createElement: () => ({})},
+    setInterval: () => 0,
     fetch: async (url, options) => {
       if (url === '/api/me') return {ok: true, json: async () => ({permissions: admin ? ['settings.manage', 'users.manage'] : ['settings.manage']})};
       if (url === '/api/settings') return {ok: true, json: async () => ({hsn_code: '85371090'})};
+      if (url === '/api/sku-lookup-limit') {
+        if (options) lookupLimit = JSON.parse(options.body).max_sku_lookup;
+        return {ok:true,json:async()=>({max_sku_lookup:lookupLimit})};
+      }
       if (url === '/api/currency-rates') {
         if (options) rates = JSON.parse(options.body).rates;
         return {ok:true,json:async()=>({rates})};
+      }
+      if (url === '/api/currency-rates/schedule') {
+        return {ok:true,json:async()=>({rates,refresh_hours:JSON.parse(options.body).refresh_hours})};
       }
       if (url.endsWith('/pi-prefix')) {
         prefixes[names[Number(url.split('/')[3]) - 1]] = JSON.parse(options.body).pi_prefix;
@@ -72,11 +81,23 @@ test('admins can configure and reload a department PI prefix', async () => {
   assert.equal(get('prefixMessage').textContent, 'PI prefix saved.');
 });
 
-test('admin currency rate inputs save units per USD and keep blanks unconfigured', async () => {
+test('admin can configure the shared SKU lookup limit', async () => {
+  const {get} = await setup(true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(get('skuLookupLimitSection').hidden, false);
+  assert.equal(get('skuLookupLimit').value, 50);
+  get('skuLookupLimit').value = '25';
+  await get('skuLookupLimitForm').onsubmit({preventDefault() {}});
+  assert.equal(get('skuLookupLimitMessage').textContent, 'SKU lookup limit saved.');
+  const viewer = await setup(false);
+  assert.equal(viewer.get('skuLookupLimitSection').hidden, true);
+});
+
+test('admin can save the currency rate refresh interval', async () => {
   const {get} = await setup(true);
   assert.equal(get('currencyRatesSection').hidden,false);
-  get('rateAED').value='4';get('rateGBP').value='0.8';get('rateEUR').value='0.9';
+  get('rateRefreshHours').value='12';
   await get('currencyRatesForm').onsubmit({preventDefault(){}});
-  assert.equal(get('currencyRatesMessage').textContent,'Currency rates saved.');
-  assert.equal(get('rateAED').value,'4');assert.equal(get('rateINR').value,'');
+  assert.equal(get('currencyRatesMessage').textContent,'Refresh interval saved.');
+  assert.equal(get('rateRefreshHours').value,12);
 });

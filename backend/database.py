@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash
-from backend.config import DB_PATH
+from backend.config import DB_PATH, DATABASE_DIR
 from backend.scalability.sqlite import connect, enable_wal
 
 _db_lock = threading.Lock()

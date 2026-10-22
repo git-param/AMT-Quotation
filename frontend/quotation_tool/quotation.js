@@ -4,6 +4,7 @@ let _rate     = null;
 let _urlMap   = {};   // sr -> url
 let _imgSkus  = [];
 let _imgMode  = 'all';
+let _skuLookupLimit = null;
 
 // ── Init ────────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
@@ -14,6 +15,11 @@ window.addEventListener('load', () => {
     e.preventDefault(); loadRate();
   });
   loadRate();
+  fetch('/api/sku-lookup-limit').then(response => response.json()).then(data => {
+    if (!Number.isInteger(data.max_sku_lookup)) return;
+    _skuLookupLimit = data.max_sku_lookup;
+    document.getElementById('skuLookupLimitHint').textContent = `Maximum ${_skuLookupLimit} SKU${_skuLookupLimit === 1 ? '' : 's'} per lookup.`;
+  }).catch(() => { document.getElementById('skuLookupLimitHint').textContent = ''; });
   // Load current user info
   fetch('/api/me').then(r => {
     if (!r.ok) throw new Error('Access denied');
@@ -51,6 +57,10 @@ async function lookupSKUs() {
   if (!raw) return;
   const skus = raw.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
   if (!skus.length) return;
+  if (_skuLookupLimit !== null && skus.length > _skuLookupLimit) {
+    setStatus(`You can look up at most ${_skuLookupLimit} SKU${_skuLookupLimit === 1 ? '' : 's'} at a time.`, 'status-err');
+    return;
+  }
   const seen = new Set(), duplicates = [];
   for (const sku of skus) {
     const key = sku.toLowerCase();

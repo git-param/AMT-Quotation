@@ -3,7 +3,7 @@ import threading
 from backend.config import FRONTEND_DIR
 from backend.common.auth import login_required, request_actor_name
 from backend.common.request import _get_ip
-from backend.common.skus import duplicate_skus
+from backend.common.skus import duplicate_skus, enforce_sku_lookup_limit
 from backend.database import log_search, log_copy
 from backend.quotation_tool.shopify import fetch_sku, get_inr_rate, _sku_cache, _sku_lock, _token_cache, _token_lock
 
@@ -24,8 +24,16 @@ def api_rate():
 @bp.route('/api/lookup', methods=['POST'])
 @login_required
 def api_lookup():
-    data      = request.json or {}
-    skus_raw  = [s.strip() for s in data.get('skus', []) if str(s).strip()][:50]
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('skus'), list):
+        return jsonify(error='Provide a list of SKUs.'), 400
+    if any(not isinstance(s, str) for s in data['skus']):
+        return jsonify(error='Each SKU must be text.'), 400
+    skus_raw = [s.strip() for s in data['skus'] if s.strip()]
+    try:
+        enforce_sku_lookup_limit(len(skus_raw))
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
     duplicates = duplicate_skus(skus_raw)
     if duplicates:
         return jsonify(error='Duplicate SKUs: '+', '.join(duplicates)+

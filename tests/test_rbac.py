@@ -469,6 +469,39 @@ class RBACTests(unittest.TestCase):
             self.assertIn('Duplicate SKUs: part-a',response.json['error'])
             lookup.assert_not_called()
 
+    def test_quotation_lookup_rejects_excess_without_truncation(self):
+        self.session_as('sales_executive')
+        connection = database.get_db()
+        with connection:
+            connection.execute("UPDATE app_settings SET value='2' WHERE key='sku_lookup_limit'")
+        connection.close()
+        with patch('backend.quotation_tool.routes.fetch_sku') as lookup:
+            response = self.client.post('/api/lookup', json={'skus': ['A', 'B', 'C']})
+            self.assertEqual(response.status_code, 400)
+            self.assertIn('at most 2 SKUs', response.json['error'])
+            lookup.assert_not_called()
+        with patch('backend.quotation_tool.routes.fetch_sku',
+                   return_value={'found': True}) as lookup, \
+                patch('backend.quotation_tool.routes.threading.Thread'):
+            response = self.client.post('/api/lookup', json={'skus': ['A', 'B']})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(lookup.call_count, 2)
+
+    def test_api_key_lookup_obeys_admin_limit(self):
+        connection = database.get_db()
+        with connection:
+            connection.execute("UPDATE app_settings SET value='1' WHERE key='sku_lookup_limit'")
+            connection.execute(
+                "INSERT INTO api_keys(key,label) VALUES('amtq-limited','Inbox')"
+            )
+        connection.close()
+        with patch('backend.quotation_tool.routes.fetch_sku') as lookup:
+            response = self.client.post('/api/lookup',
+                headers={'X-API-Key': 'amtq-limited'}, json={'skus': ['A', 'B']})
+            self.assertEqual(response.status_code, 400)
+            self.assertIn('at most 1 SKU', response.json['error'])
+            lookup.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()
