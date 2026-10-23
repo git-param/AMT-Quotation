@@ -222,8 +222,10 @@ def pdf(doc):
         *([('SPAN',(0,1),(1,1)),('BACKGROUND',(0,1),(-1,1),colors.yellow)]
           if model['shipping_notice'] else []),
         ('SPAN',(0,address_row),(1,address_row)),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
-        ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),
-        ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),
+        ('LEFTPADDING',(0,0),(-1,-1),6),
+        ('RIGHTPADDING',(0,0),(-1,-1),6),
+        ('TOPPADDING',(0,0),(-1,-1),5),
+        ('BOTTOMPADDING',(0,0),(-1,-1),5),
         ('LINEBEFORE',(0,0),(0,-1),1.2,colors.black),
         ('LINEAFTER',(-1,0),(-1,-1),1.2,colors.black),
         ('LINEABOVE',(0,0),(-1,0),.6,colors.black),
