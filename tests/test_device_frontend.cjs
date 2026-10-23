@@ -50,3 +50,43 @@ test('device management renders safe text and actions', async () => {
   await row.children[6].children[0].onclick();
   assert.ok(calls.includes('/api/admin/devices/2/approve'));
 });
+
+test('admin approvals page lists pending requests and approves a device', async () => {
+  const nodes = new Map();
+  const element = () => ({children: [], textContent: '', hidden: false, listeners: {},
+    classList: {add() {}, remove() {}},
+    insertCell() {const cell = element(); this.children.push(cell); return cell;},
+    append(child) {this.children.push(child);},
+    replaceChildren(...children) {this.children = children;},
+    addEventListener(name, callback) {this.listeners[name] = callback;},
+  });
+  const get = id => { if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id); };
+  const calls = [];
+  let status = 'pending';
+  const context = {document: {getElementById: get, createElement: element, hidden: false},
+    window: {confirm: () => true}, setInterval: () => {},
+    fetch: async (url, options) => {
+      calls.push(url);
+      if (url === '/api/me') return {ok: true, json: async () => ({id: 1, permissions: ['devices.manage']})};
+      if (url === '/api/admin/devices') return {ok: true, json: async () => ({devices: [
+        {id: 2, user_id: 2, username: '<employee>', device_name: 'PC', mac_address: '02:aa:bb:cc:dd:02', requested_at: '2026-10-23T10:00:00Z', status},
+      ]})};
+      if (url === '/api/admin/devices/2/approve' && options?.method === 'POST') {
+        status = 'approved';
+        return {ok: true, json: async () => ({status})};
+      }
+      throw Error(`Unexpected request: ${url}`);
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync('frontend/manager_dashboard/devices.js', 'utf8'), context);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(get('pendingCount').textContent, '(1)');
+  const row = get('pendingDevices').children[0];
+  assert.equal(row.children[0].textContent, '<employee>');
+  assert.equal(row.children[4].children.length, 2);
+  await row.children[4].children[0].listeners.click();
+  assert.ok(calls.includes('/api/admin/devices/2/approve'));
+  assert.equal(get('pendingCount').textContent, '(0)');
+  assert.equal(get('reviewedDevices').children.length, 1);
+});

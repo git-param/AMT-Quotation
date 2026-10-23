@@ -1,0 +1,16 @@
+.device-page { padding-top: 24px; padding-bottom: 40px; }
+.device-page .page-head { align-items: center; }
+.device-page .page-head p { margin: 6px 0 0; color: #64748b; }
+.device-page .panel { margin-top: 20px; }
+.device-message { min-height: 1.5em; margin: 16px 0; color: #334155; }
+.device-message.is-error { color: #b91c1c; }
+.device-table { width: 100%; border-collapse: collapse; }
+.device-table th, .device-table td { padding: 11px 12px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: middle; }
+.device-table th { color: #475569; font-size: 12px; }
+.device-table td { overflow-wrap: anywhere; }
+.device-table .actions { white-space: nowrap; }
+.device-table .actions button + button { margin-left: 8px; }
+.device-table button { min-width: 75px; }
+.device-table .approve { background: #166534; color: #fff; }
+.device-empty { padding: 12px; color: #64748b; }
+@media (max-width: 700px) { .device-table { min-width: 660px; } }

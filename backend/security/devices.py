@@ -6,10 +6,16 @@ from flask import Blueprint, g, jsonify, request, send_file, session
 
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
-from backend.common.auth import get_current_user, get_permissions
+from backend.common.auth import get_current_user, get_permissions, permission_required
 from backend.security.mac import normalize_mac
 
 bp = Blueprint('devices', __name__)
+
+
+@bp.get('/admin/devices')
+@permission_required('devices.manage')
+def device_management_page():
+    return send_file(str(FRONTEND_DIR / 'manager_dashboard' / 'devices.html'))
 
 
 def registration(user_id, mac):

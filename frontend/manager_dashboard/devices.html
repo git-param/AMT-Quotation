@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Device Approvals — AMT Quotation</title>
+  <link rel="stylesheet" href="/static/manager_dashboard/manager.css">
+  <link rel="stylesheet" href="/static/manager_dashboard/devices.css">
+  <link rel="stylesheet" href="/static/common/sidebar.css">
+  <script src="/static/common/sidebar.js" defer></script>
+  <script src="/static/manager_dashboard/devices.js" defer></script>
+</head>
+<body>
+  <header class="hdr">
+    <div class="hdr-brand"><div><div class="hdr-logo">AMT Quotation</div><div class="hdr-sub">Device approvals</div></div></div>
+    <nav class="hdr-nav" aria-label="Main"><a class="nav-link" href="/manager">Dashboard</a><a class="nav-link" href="/">Quotation Tool</a><a class="nav-link is-signout" href="/logout">Sign Out</a></nav>
+  </header>
+  <main class="wrap device-page">
+    <div class="page-head">
+      <div><h1>Device approvals</h1><p>Review requests before employees can use AMT Quotation on a new PC.</p></div>
+      <button id="refreshDevices" class="refresh-btn" type="button">Refresh</button>
+    </div>
+    <p id="deviceMessage" class="device-message" role="status" aria-live="polite">Loading device requests…</p>
+    <section class="panel" aria-labelledby="pendingTitle">
+      <div class="panel-title" id="pendingTitle">Pending requests <span id="pendingCount"></span></div>
+      <div class="table-scroll"><table class="device-table"><thead><tr><th>Employee</th><th>Computer</th><th>MAC address</th><th>Requested</th><th>Actions</th></tr></thead><tbody id="pendingDevices"></tbody></table></div>
+      <p id="emptyPending" class="device-empty" hidden>No pending device requests.</p>
+    </section>
+    <section class="panel" aria-labelledby="historyTitle">
+      <div class="panel-title" id="historyTitle">Approved and past requests</div>
+      <div class="table-scroll"><table class="device-table"><thead><tr><th>Employee</th><th>Computer</th><th>MAC address</th><th>Status</th><th>Decided by</th><th>Actions</th></tr></thead><tbody id="reviewedDevices"></tbody></table></div>
+      <p id="emptyReviewed" class="device-empty" hidden>No reviewed devices yet.</p>
+    </section>
+  </main>
+</body>
+</html>

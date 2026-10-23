@@ -71,11 +71,17 @@ class DeviceTests(unittest.TestCase):
         self.assertEqual(self.login(worker, 'worker', '02-AA-BB-CC-DD-02').location, '/device/wait')
         admin = self.app.test_client()
         self.login(admin, 'admin1', '02:aa:bb:cc:dd:01')
+        page = admin.get('/admin/devices')
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b'Pending requests', page.data)
+        page.close()
+        self.assertEqual(worker.get('/admin/devices').location, '/device/wait')
         rows = admin.get('/api/admin/devices').json['devices']
         self.assertEqual(len(rows), 2)
         pending = next(row for row in rows if row['status'] == 'pending')
         self.assertEqual(admin.post(f"/api/admin/devices/{pending['id']}/approve", headers=self.csrf(admin)).json['status'], 'approved')
         self.assertEqual(worker.get('/api/device/status').json['status'], 'approved')
+        self.assertEqual(worker.get('/admin/devices').status_code, 403)
         self.assertEqual(worker.get('/api/protected').status_code, 200)
         self.assertEqual(worker.get('/api/admin/devices').status_code, 403)
         self.assertEqual(worker.post(f"/api/admin/devices/{pending['id']}/revoke",

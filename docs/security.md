@@ -2,9 +2,11 @@
 
 ## Device registration (migration 32)
 
-Every browser session must supply a physical adapter MAC address and device name after password validation. New registrations remain pending until an approved Admin uses Dashboard > Device Management. The waiting screen polls approval status every five seconds. Rejected and revoked registrations stay blocked; a new request does not reset those decisions. A MAC is unique across accounts. Admins cannot decide their own registration through the web API.
+Every browser session must supply a physical adapter MAC address and device name after password validation. New registrations remain pending until an approved Admin opens **Device Approvals** in the sidebar (or `/admin/devices`) and approves the request. The waiting screen polls approval status every five seconds. Rejected and revoked registrations stay blocked; a new request does not reset those decisions. A MAC is unique across accounts. Admins cannot decide their own registration through the web API.
 
-For Windows, start the server as usual and run `python desktop_launcher.py --url https://your-server/login` from the project directory on the employee PC. The launcher uses only Python's standard library; the Flask server still uses the project environment. It chooses an active physical adapter, preferring one with a default network route, and opens the login page in the user's browser. If Windows denies access to `Get-NetAdapter`, it reads `ipconfig /all` instead. It supplies the MAC and Windows computer name to the login request without showing device fields. A direct browser visit cannot read a physical MAC and shows instructions to use the launcher. No MAC is generated when an adapter is unavailable.
+For Windows employees, build the standalone launcher once on a Windows developer PC by running `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_desktop_launcher.ps1` from the project directory. Give employees only `dist\AMTQuotationLauncher.exe`; they do not need Python or the source files. They double-click it, enter the HTTPS server address supplied by their Admin, and click **Open login**. The address is remembered for the next launch and can be changed in the same window. The executable uses Windows network APIs to select an active physical Wi-Fi or Ethernet adapter and opens the browser with the MAC and Windows computer name. It permits local HTTP only for `127.0.0.1` or `localhost`. Build a new executable after changing its source. The executable is unsigned; distribute it through a trusted internal channel and sign it before broad deployment.
+
+For development, `python desktop_launcher.py --url https://your-server/login` remains available from the project directory. It prefers the physical adapter with the lowest-cost default route and falls back to `ipconfig /all` when `Get-NetAdapter` is unavailable. A direct browser visit cannot read a physical MAC and shows instructions to use a launcher. No MAC is generated when an adapter is unavailable. Each new employee device requests approval; an approved Admin or Manager approves it on the Device Approvals page. The one-time local bootstrap command below is only for the first Admin device and must not be run on every employee PC.
 
 For the first Admin only, sign in to create a pending registration, then run this command locally on the database host after checking the request and MAC:
 
@@ -12,7 +14,7 @@ For the first Admin only, sign in to create a pending registration, then run thi
 python -m backend.security.bootstrap_device --database database/quotation.db --username ADMIN_USERNAME --mac 02:11:22:33:44:55
 ```
 
-Use the actual database path from `backend/config.py`. This local command records an audit event. Subsequent approvals use Device Management. The migration leaves existing user and business records intact, but existing sessions without a registered device must sign in again.
+Use the actual database path from `backend/config.py`. This local command records an audit event. Subsequent approvals use Device Approvals. The migration leaves existing user and business records intact, but existing sessions without a registered device must sign in again.
 
 MAC addresses are client reported matching identifiers. They can be spoofed and do not prove possession of a physical device. The launcher and browser request can be altered by a user. Strong device assurance would require managed certificates or comparable hardware backed attestation. Legacy API keys cannot access protected APIs because they have no approved device session.
 

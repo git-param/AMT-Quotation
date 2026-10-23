@@ -41,17 +41,18 @@ async function setup(user,mobile=false){
 }
 
 test('header links move to sidebar with original IDs and active-page state',async()=>{
-  const view=await setup({role:'admin',permissions:['management.view','sources.manage','leads.share_manage','settings.manage']});
+  const view=await setup({role:'admin',permissions:['management.view','sources.manage','leads.share_manage','settings.manage','devices.manage']});
   assert.equal(view.header.querySelectorAll('a[href]').length,0);
   assert.equal(view.original['/client-access'].id,'accessLink');
   assert.equal(view.original['/manager'].getAttribute('target'),null);
   assert.equal(view.sidebar.children[1].children.find(row=>row.children[0].href==='/clients-orders').children[0].attributes['aria-current'],'page');
   const rows=view.sidebar.children[1].children;
-  assert.equal(rows.length,9);
+  assert.equal(rows.length,10);
   assert.ok(rows.every(row=>!row.hidden));
   assert.ok(rows.some(row=>row.children[0].href==='/clients-orders'));
   assert.ok(rows.some(row=>row.children[0].href==='/search-pi'));
   assert.ok(rows.some(row=>row.children[0].href==='/tl-dashboard'));
+  assert.equal(rows.find(row=>row.children[0].href==='/admin/devices').hidden,false);
 });
 
 test('executives do not see management, source, or sharing links',async()=>{
@@ -60,6 +61,7 @@ test('executives do not see management, source, or sharing links',async()=>{
   assert.equal(view.original['/leads'].parent,null);
   assert.equal(view.sidebar.children[1].children.find(row=>row.children[0].href==='/configuration').hidden,true);
   assert.equal(view.sidebar.children[1].children.find(row=>row.children[0].href==='/tl-dashboard').hidden,true);
+  assert.equal(view.sidebar.children[1].children.find(row=>row.children[0].href==='/admin/devices').hidden,true);
   assert.ok(!view.sidebar.children[1].children.some(row=>['/leads','/enquiries','/orders'].includes(row.children[0].href)));
 });
 
