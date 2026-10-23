@@ -1,5 +1,5 @@
 /* Editable commercial snapshot; the server owns identity, bank details and totals. */
-window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}) {
+window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}, onClosed = () => {}) {
   let state = null,
     issued = null,
     busy = false,
@@ -193,7 +193,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     if(calculationTimer)clearTimeout(calculationTimer);calculationVersion++;calculated=[];
     host.replaceChildren();host.hidden=false;inputs=[];rateHeaders=[];
     toolbar=node('div',undefined,'pi-preview-toolbar');host.append(toolbar);
-    button('Close preview',async()=>{host.hidden=true;});
+    button('Close preview',async()=>{host.hidden=true;await onClosed();});
     if(!issued){
       button('Update preview',save);
       button('Edit invoice',async()=>{printFrame.hidden=true;paper.hidden=false;});

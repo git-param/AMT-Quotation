@@ -62,6 +62,9 @@ def persist_order_edits(connection, order_id, user, order, previous, doc):
         'delivery_time','dispatch_method','notes')
         if doc['order'][key] != previous['order'][key]}
     if doc['date'] != previous['date']:
+        if connection.execute('SELECT 1 FROM order_invoices WHERE order_id=? AND deleted_at IS NULL',
+                              (order_id,)).fetchone():
+            raise ValueError('Generated PI dates cannot be edited.')
         order_changes['pi_date'] = doc['date']
     if doc['totals']['shipping'] != previous['totals']['shipping']:
         from backend.enquiries.lines import number

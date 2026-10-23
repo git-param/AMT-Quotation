@@ -500,6 +500,8 @@ const invoicePreview=window.createPiPreview(el('piPreview'),api,json,async resul
   if(current)current.order.pi_reference=doc.reference;
   el('pi_reference').value=doc.reference;
   if(doc.pi_format==='bulk')el('bulkDescription').value=doc.bulk_description;
+},async()=>{
+  if(current)await showDetails(current.order.id);
 });
 el('piForm').onsubmit=async event=>{
   event.preventDefault();

@@ -78,6 +78,17 @@ class NativePiTests(unittest.TestCase):
         self.assertEqual(again.status_code,200,again.json)
         self.assertEqual(len(self.client.get(f'/api/orders/{self.order_id}').json['revisions']),2)
 
+    def test_update_preview_rejects_stale_order_details_without_partial_write(self):
+        preview=self.preview()
+        changed=self.client.put(f'/api/orders/{self.order_id}',json={'notes':'Later order edit'})
+        self.assertEqual(changed.status_code,200,changed.json)
+        saved=self.client.put(self.base+'/preview/'+preview['preview_id'],
+                              json={'order':{'po_reference':'PO/stale'}})
+        self.assertEqual(saved.status_code,409,saved.json)
+        order=self.client.get(f'/api/orders/{self.order_id}').json['order']
+        self.assertEqual(order['po_reference'],'PO/123')
+        self.assertEqual(order['notes'],'Later order edit')
+
     def issue(self,preview):
         return self.client.post(self.base+'/issue',json={'preview_id':preview['preview_id']})
 
