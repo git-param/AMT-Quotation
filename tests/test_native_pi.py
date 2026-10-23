@@ -655,7 +655,7 @@ class NativePiTests(unittest.TestCase):
         with ZipFile(BytesIO(pi_exports.xlsx(preview['document']))) as book:
             self.assertIn('Consignee\nOrder destination',book.read('xl/sharedStrings.xml').decode())
 
-    def test_edits_recalculate_in_selected_currency_and_keep_source_order_unchanged(self):
+    def test_edits_recalculate_in_selected_currency_and_update_source_order(self):
         automatic=self.client.post(self.base+'/preview',json={'currency':'INR'})
         self.assertEqual(automatic.status_code,201,automatic.json)
         self.assertEqual(automatic.json['document']['totals']['usd_inr_rate'],'80')
@@ -671,7 +671,11 @@ class NativePiTests(unittest.TestCase):
         self.assertEqual((total['subtotal'],total['shipping'],total['tax'],total['grand_total']),('200.02','25.50','40.59','266.11'))
         self.assertIn('Rupees',total['amount_in_words'])
         self.assertEqual(saved.json['document']['source_conversion']['usd_inr_rate'],'80')
-        self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['lines'][0]['unit_price'],'12.34')
+        updated=self.client.get(f'/api/orders/{self.order_id}').json
+        self.assertEqual(updated['lines'][0]['unit_price'],'100.01')
+        self.assertEqual(updated['lines'][0]['currency'],'INR')
+        self.assertEqual(updated['order']['shipping_charges'],'25.50')
+        self.assertEqual(updated['order']['po_reference'],'Edited PO')
         self.assertEqual(self.issue(saved.json).status_code,201)
 
     def test_live_calculation_and_excel_formulas_keep_line_and_invoice_totals_in_sync(self):
@@ -866,7 +870,7 @@ class NativePiTests(unittest.TestCase):
         self.assertEqual(issued.status_code,201,issued.json)
         with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
             self.assertIn('INDIA',book.read('xl/sharedStrings.xml').decode())
-        self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['order']['destination'],'USA')
+        self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['order']['destination'],'INDIA')
 
     def test_india_consignee_gst_is_editable_and_exported_once(self):
         preview=self.preview()
