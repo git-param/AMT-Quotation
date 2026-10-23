@@ -247,11 +247,13 @@ function showTab(name) {
   });
   document.getElementById('viewOverview').hidden = name !== 'overview';
   document.getElementById('viewUsers').hidden = name !== 'users';
+  document.getElementById('viewDevices').hidden = name !== 'devices';
   document.getElementById('dashboardTitle').textContent = name === 'users' ? 'Team & access' : 'Team activity at a glance';
   document.getElementById('dashboardSubtitle').textContent = name === 'users'
     ? 'Manage user accounts, departments, and access for your team.'
     : 'See how your team is using the quotation tool today.';
   document.getElementById('activityActions').hidden = name === 'users';
+  if (name === 'devices') loadDevices();
   if (name === 'overview' && _lastStats) drawCharts(_lastStats);   // canvases need a visible box
 }
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => showTab(tab.dataset.tab)));
@@ -272,12 +274,51 @@ fetch('/api/me').then(async response => {
   document.getElementById('accessLink').style.display = user.permissions.includes('leads.share_manage') ? 'inline-flex' : 'none';
   _currentUserId = user.id;
   const manage = user.permissions.includes('users.manage');
+  const devicesManage = user.permissions.includes('devices.manage');
+  document.getElementById('devicesTab').hidden = !devicesManage;
   document.getElementById('dashboardContent').hidden = false;
-  document.getElementById('tabs').hidden = !manage;        // tabs only make sense with 2+ views
+  document.getElementById('tabs').hidden = !manage && !devicesManage;
   loadStats();
   if (manage) loadUsers();
   setInterval(loadStats, 60000);                           // auto-refresh every 60s
 }).catch(() => { document.getElementById('accessStatus').textContent = 'Unable to load permissions. Reload to retry.'; });
+
+async function loadDevices() {
+  const message = document.getElementById('deviceMessage');
+  message.textContent = 'Loading devices…';
+  try {
+    const response = await fetch('/api/admin/devices');
+    if (!response.ok) throw new Error('Unable to load devices.');
+    const {devices} = await response.json();
+    const rows = document.getElementById('deviceRows');
+    rows.replaceChildren();
+    for (const device of devices) {
+      const row = document.createElement('tr');
+      for (const value of [device.username, device.mac_address, device.device_name, device.requested_at, device.status, device.decided_by || '—']) {
+        const cell = row.insertCell(); cell.textContent = value;
+      }
+      const actions = row.insertCell();
+      const choices = device.status === 'pending' ? ['approve', 'reject'] : device.status === 'approved' ? ['revoke'] : [];
+      for (const action of choices) {
+        const button = document.createElement('button'); button.type = 'button'; button.textContent = action[0].toUpperCase() + action.slice(1);
+        button.className = 'btn-sm'; button.onclick = () => updateDevice(device.id, action); actions.append(button);
+      }
+      rows.append(row);
+    }
+    message.textContent = devices.length ? '' : 'No device registrations yet.';
+  } catch (error) { message.textContent = error.message; }
+}
+
+async function updateDevice(id, action) {
+  const message = document.getElementById('deviceMessage');
+  try {
+    const response = await fetch(`/api/admin/devices/${id}/${action}`, {method: 'POST'});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Unable to update device.');
+    await loadDevices();
+    message.textContent = `Device ${data.status}.`;
+  } catch (error) { message.textContent = error.message; }
+}
 
 let _resizeTimer;
 window.addEventListener('resize', () => {

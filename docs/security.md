@@ -1,5 +1,21 @@
 # Security change log
 
+## Device registration (migration 32)
+
+Every browser session must supply a physical adapter MAC address and device name after password validation. New registrations remain pending until an approved Admin uses Dashboard > Device Management. The waiting screen polls approval status every five seconds. Rejected and revoked registrations stay blocked; a new request does not reset those decisions. A MAC is unique across accounts. Admins cannot decide their own registration through the web API.
+
+For Windows, start the server as usual and run `python desktop_launcher.py --url https://your-server/login` from the project directory on the employee PC. The launcher uses only Python's standard library; the Flask server still uses the project environment. It chooses an active physical adapter, preferring one with a default network route, and opens the login page in the user's browser. If Windows denies access to `Get-NetAdapter`, it reads `ipconfig /all` instead. It supplies the MAC and Windows computer name to the login request without showing device fields. A direct browser visit cannot read a physical MAC and shows instructions to use the launcher. No MAC is generated when an adapter is unavailable.
+
+For the first Admin only, sign in to create a pending registration, then run this command locally on the database host after checking the request and MAC:
+
+```text
+python -m backend.security.bootstrap_device --database database/quotation.db --username ADMIN_USERNAME --mac 02:11:22:33:44:55
+```
+
+Use the actual database path from `backend/config.py`. This local command records an audit event. Subsequent approvals use Device Management. The migration leaves existing user and business records intact, but existing sessions without a registered device must sign in again.
+
+MAC addresses are client reported matching identifiers. They can be spoofed and do not prove possession of a physical device. The launcher and browser request can be altered by a user. Strong device assurance would require managed certificates or comparable hardware backed attestation. Legacy API keys cannot access protected APIs because they have no approved device session.
+
 This document records security releases, operating requirements, and known limits.
 
 ## Version 1 — 2026-10-19

@@ -781,8 +781,6 @@ MIGRATIONS = (
     (31, 'sku_lookup_limit', (
         "INSERT OR IGNORE INTO app_settings(key,value) VALUES('sku_lookup_limit','50')",
     )),
-    # Compatibility with databases upgraded before device enrollment was stashed.
-    # Keep the original statements byte-for-byte stable for checksum validation.
     (32, 'device_registrations', (
         "CREATE TABLE device_registrations ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT, "

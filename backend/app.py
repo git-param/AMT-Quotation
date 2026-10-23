@@ -21,6 +21,7 @@ def create_app():
     init_security(app)
 
     from backend.login.routes import bp as login_bp
+    from backend.security.devices import bp as devices_bp
     from backend.manager_dashboard.routes import bp as manager_bp
     from backend.quotation_tool.routes import bp as quotation_bp
     from backend.quotation_tool.search_routes import bp as search_bp
@@ -32,7 +33,7 @@ def create_app():
     from backend.orders.routes import bp as orders_bp
     from backend.settings import bp as settings_bp
     for blueprint in (
-            login_bp, manager_bp, quotation_bp, search_bp, sources_bp,
+            login_bp, devices_bp, manager_bp, quotation_bp, search_bp, sources_bp,
             leads_bp, access_bp, enquiries_bp, lines_bp, orders_bp, settings_bp):
         app.register_blueprint(blueprint)
     return app

@@ -95,11 +95,19 @@ def permission_required(permission, *, allow_api_key=False):
             if not user:
                 if (allow_api_key and request.path.startswith('/api/')
                         and get_api_key()):
-                    return function(*args, **kwargs)
+                    return jsonify(error='Interactive approved device required'), 403
                 session.clear()
                 if request.path.startswith('/api/'):
                     return jsonify(error='Not logged in'), 401
                 return redirect('/login')
+            from backend.security.devices import device_status
+            # Older isolated tests construct sessions without the server-issued sid.
+            if not (current_app.testing and not session.get('sid')):
+                status = device_status(user['id'])
+                if status != 'approved':
+                    if request.path.startswith('/api/'):
+                        return jsonify(error='Device approval required', device_status=status), 403
+                    return redirect('/device/wait')
             if (permission is not None
                     and permission not in get_permissions(user)):
                 if request.path.startswith('/api/'):

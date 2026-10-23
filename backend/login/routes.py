@@ -15,6 +15,7 @@ from backend.security.limiter import hit
 from backend.security.passwords import error as password_error
 from backend.security.request import client_ip
 from backend.security.sessions import create as create_session, revoke_current
+from backend.security.devices import normalize_mac, request_registration, device_status
 
 bp = Blueprint('login', __name__)
 
@@ -22,8 +23,9 @@ bp = Blueprint('login', __name__)
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
     """Accept legacy credentials while denying inactive accounts."""
-    if get_current_user():
-        return redirect('/')
+    existing = get_current_user()
+    if existing:
+        return redirect('/' if device_status(existing['id']) == 'approved' else '/device/wait')
     if request.method == 'POST':
         username = (request.form.get('username') or '').strip()
         password = request.form.get('password') or ''
@@ -50,11 +52,21 @@ def login():
             ).fetchone()
             if (user and user['is_active']
                     and check_password_hash(user['password_hash'], password)):
+                mac = normalize_mac(request.form.get('mac_address'))
+                name = request.form.get('device_name') or ''
+                if not mac or not isinstance(name, str) or not name.strip():
+                    return jsonify(error='Device identification is unavailable. Open AMT Quotation through the Windows desktop launcher.'), 400
+                status = request_registration(user['id'], mac, name)
+                if status == 'unavailable':
+                    return jsonify(error='This MAC address is registered to another account.'), 409
+                if status == 'invalid':
+                    return jsonify(error='Device details from the Windows launcher are invalid. Reopen the application.'), 400
                 create_session(connection, user)
+                session['device_mac'] = mac
                 record('login_succeeded', user_id=user['id'], username=user['username'],
                        details={'replaced_previous_session': True}, connection=connection)
                 connection.commit()
-                return redirect('/')
+                return redirect('/' if status == 'approved' else '/device/wait')
             record('login_failed', 'warning', user['id'] if user else None,
                    username, {'known_account': bool(user)}, connection=connection)
             detect_login_anomaly(connection, username)

@@ -62,6 +62,11 @@ class RBACTests(unittest.TestCase):
                         (role, generate_password_hash('fixture-pass'), role),
                     )
                     self.ids[role] = cursor.lastrowid
+                uid = self.ids['user']
+                connection.execute(
+                    "INSERT INTO device_registrations(user_id,mac_address,device_name,status,decided_at,decided_by) "
+                    "VALUES(?,'02:11:22:33:44:66','Fixture','approved',strftime('%Y-%m-%dT%H:%M:%fZ','now'),?)",
+                    (uid, self.ids['admin']))
         finally:
             connection.close()
 
@@ -105,19 +110,14 @@ class RBACTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/me').status_code, 401)
         self.assertEqual(self.client.get('/api/me', headers={'X-API-Key': 'wrong'}).status_code, 401)
         response = self.client.get('/api/me', headers=headers)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json, {
-            'auth': 'api_key', 'role': 'api', 'username': 'api-key',
-        })
+        self.assertEqual(response.status_code, 403)
         with patch('backend.quotation_tool.routes.fetch_sku',
                    return_value={'found': True, 'price': 25}) as lookup, \
                 patch('backend.quotation_tool.routes.threading.Thread') as thread:
             response = self.client.post('/api/lookup', headers=headers,
                                         json={'skus': ['SKU-1']})
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.json['found'], 1)
-            lookup.assert_called_once_with('SKU-1')
-            self.assertEqual(thread.call_args.kwargs['args'][0], 'API: Inbox')
+            self.assertEqual(response.status_code, 403)
+            lookup.assert_not_called()
         self.assertEqual(self.client.get('/api/manager/users', headers=headers).status_code, 401)
         self.assertEqual(self.client.post('/api/change-password', headers=headers,
                                           json={}).status_code, 401)
@@ -148,7 +148,7 @@ class RBACTests(unittest.TestCase):
         self.assertNotIn('key', listed[0])
         separate_client = self.app.test_client()
         self.assertEqual(separate_client.get('/api/me',
-                         headers={'X-API-Key': key}).status_code, 200)
+                         headers={'X-API-Key': key}).status_code, 403)
         self.assertEqual(self.client.post(
             f"/api/manager/api-keys/{created.json['id']}/revoke"
         ).status_code, 200)
@@ -196,6 +196,7 @@ class RBACTests(unittest.TestCase):
         }).status_code, 401)
         self.assertEqual(self.client.post('/login', data={
             'username': 'user', 'password': 'fixture-pass',
+            'mac_address': '02:11:22:33:44:66', 'device_name': 'Fixture',
         }).status_code, 302)
         self.assertEqual(self.client.post('/api/change-password', json={
             'current': 'fixture-pass', 'new_password': 'updated-pass',
@@ -204,6 +205,7 @@ class RBACTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/me').status_code, 401)
         self.assertEqual(self.client.post('/login', data={
             'username': 'user', 'password': 'updated-pass',
+            'mac_address': '02:11:22:33:44:66', 'device_name': 'Fixture',
         }).status_code, 302)
         self.session_as('admin')
         self.client.post(
@@ -444,6 +446,7 @@ class RBACTests(unittest.TestCase):
         self.client.get('/logout')
         self.assertEqual(self.client.post('/login', data={
             'username': 'user', 'password': 'fixture-pass',
+            'mac_address': '02:11:22:33:44:66', 'device_name': 'Fixture',
         }).status_code, 302)
 
     def test_quotation_lookup_and_rate_keep_existing_response_format(self):
@@ -498,8 +501,7 @@ class RBACTests(unittest.TestCase):
         with patch('backend.quotation_tool.routes.fetch_sku') as lookup:
             response = self.client.post('/api/lookup',
                 headers={'X-API-Key': 'amtq-limited'}, json={'skus': ['A', 'B']})
-            self.assertEqual(response.status_code, 400)
-            self.assertIn('at most 1 SKU', response.json['error'])
+            self.assertEqual(response.status_code, 403)
             lookup.assert_not_called()
 
 

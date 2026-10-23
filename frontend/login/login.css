@@ -7,6 +7,9 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#F3F4F6;min-height:100vh
 .field{margin-bottom:18px}
 label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}
 input[type=text],input[type=password]{width:100%;padding:10px 13px;border:1px solid #D1D5DB;border-radius:6px;font-size:14px;color:#111827;transition:border-color .15s}
+.device-notice{font-size:13px;line-height:1.5;color:#7C2D12;background:#FFF7ED;border:1px solid #FED7AA;border-radius:6px;padding:10px 12px;margin-bottom:16px}
+.device-notice[hidden]{display:none}
+.card h2{font-size:18px;color:#1E3A5F;margin-bottom:12px}.card p{font-size:14px;line-height:1.5;margin-bottom:18px}.card>button{padding:9px 12px;margin-right:8px;border:1px solid #D1D5DB;border-radius:6px;background:#fff;cursor:pointer}
 .password-wrap{position:relative}
 .password-wrap input{padding-right:64px}
 .password-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#1E3A5F;font-size:12px;font-weight:600;cursor:pointer;padding:4px}

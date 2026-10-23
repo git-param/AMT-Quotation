@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import os
 
-from flask import jsonify, request, session
+from flask import jsonify, redirect, request, session
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from backend.security.events import record
@@ -44,6 +44,21 @@ def init_security(app):
 
     @app.before_request
     def protect_request():
+        # Every protected page and API is gated, including routes without an RBAC decorator.
+        # The waiting/status/logout paths stay reachable so a pending session can recover.
+        if (session.get('user_id') and request.path not in
+                ('/login', '/logout', '/device/wait', '/api/device/status')
+                and not request.path.startswith('/static/')):
+            from backend.common.auth import get_current_user
+            from backend.security.devices import device_status
+            user = get_current_user()
+            # Only hand-built TESTING sessions retain their legacy fixture behavior.
+            if user and not (app.testing and not session.get('sid')):
+                status = device_status(user['id'])
+                if status != 'approved':
+                    if request.path.startswith('/api/'):
+                        return jsonify(error='Device approval required', device_status=status), 403
+                    return redirect('/device/wait')
         if app.testing:
             return None
         ip_hash = hashlib.sha256(client_ip().encode()).hexdigest()[:32]

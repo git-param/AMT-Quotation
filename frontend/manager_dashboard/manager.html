@@ -48,6 +48,7 @@
   <div class="tabs" id="tabs" role="tablist" hidden>
     <button class="tab is-active" type="button" role="tab" data-tab="overview" aria-selected="true">Activity</button>
     <button class="tab" type="button" role="tab" data-tab="users" aria-selected="false">Team &amp; Access</button>
+    <button class="tab" type="button" role="tab" data-tab="devices" aria-selected="false" id="devicesTab" hidden>Device Management</button>
   </div>
 
   <!-- ================= ACTIVITY ================= -->
@@ -130,6 +131,7 @@
   </section>
 
   <!-- ================= TEAM & ACCESS ================= -->
+  <section id="viewDevices" hidden><div class="panel"><div class="panel-title">Device Management</div><p>Review registrations for all employees.</p><button class="refresh-btn" type="button" onclick="loadDevices()">Refresh</button><p id="deviceMessage" role="status"></p><div class="table-scroll"><table class="tbl"><thead><tr><th>Employee</th><th>MAC address</th><th>Device</th><th>Requested</th><th>Status</th><th>Decided by</th><th>Actions</th></tr></thead><tbody id="deviceRows"></tbody></table></div></div></section>
   <section id="viewUsers" hidden>
 
     <div class="user-grid" id="userManagement">

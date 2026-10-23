@@ -61,7 +61,7 @@ class SettingsTests(unittest.TestCase):
         self.as_user(None)
         headers = {'X-API-Key': 'amtq-limit-test'}
         self.assertEqual(self.client.get('/api/sku-lookup-limit',
-                                         headers=headers).json['max_sku_lookup'], 2)
+                                         headers=headers).status_code, 403)
         self.assertEqual(self.client.put('/api/sku-lookup-limit', headers=headers,
                                          json={'max_sku_lookup': 3}).status_code, 401)
         connection = database.get_db()

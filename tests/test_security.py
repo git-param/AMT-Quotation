@@ -25,10 +25,14 @@ class SecurityTests(unittest.TestCase):
         patcher.start(); self.addCleanup(patcher.stop)
         connection = database.get_db()
         with connection:
-            connection.execute(
+            cursor = connection.execute(
                 "INSERT INTO users(username,password_hash,role) VALUES(?,?, 'admin')",
                 ('security-user', generate_password_hash('fixture-password')),
             )
+            connection.execute(
+                "INSERT INTO device_registrations(user_id,mac_address,device_name,status,decided_at,decided_by) "
+                "VALUES(?,'02:11:22:33:44:55','Fixture','approved',strftime('%Y-%m-%dT%H:%M:%fZ','now'),?)",
+                (cursor.lastrowid, cursor.lastrowid))
         connection.close()
         self.app = Flask(__name__)
         self.app.config.update(SECRET_KEY='security-test-key', TESTING=False)
@@ -44,7 +48,8 @@ class SecurityTests(unittest.TestCase):
 
     def login(self, client):
         response = client.post('/login', data={
-            'username': 'security-user', 'password': 'fixture-password'})
+            'username': 'security-user', 'password': 'fixture-password',
+            'mac_address': '02:11:22:33:44:55', 'device_name': 'Fixture'})
         self.assertEqual(response.status_code, 302, response.get_data(as_text=True))
         return client.get_cookie('amt_csrf_v2').value
 
