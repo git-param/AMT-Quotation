@@ -63,9 +63,6 @@ def persist_order_edits(connection, order_id, user, order, previous, doc):
         if doc['order'][key] != previous['order'][key]}
     if doc['date'] != previous['date']:
         order_changes['pi_date'] = doc['date']
-    if order_changes.get('destination','').strip().upper() == 'INDIA':
-        order_changes['currency'] = 'INR'
-        doc['order']['currency'] = 'INR'
     if doc['totals']['shipping'] != previous['totals']['shipping']:
         from backend.enquiries.lines import number
         from decimal import Decimal
@@ -87,6 +84,9 @@ def persist_order_edits(connection, order_id, user, order, previous, doc):
                 order_changes['discount_json'] = json.dumps(discount)
                 doc['order']['discount'] = discount
             doc['order']['currency'] = doc['currency']
+    if order_changes.get('destination','').strip().upper() == 'INDIA' and doc['currency'] == 'INR':
+        order_changes['currency'] = 'INR'
+        doc['order']['currency'] = 'INR'
 
     delivery_changed = doc['delivery'] != previous['delivery']
     old_lines = {line['id']:line for line in previous['totals']['lines']}
