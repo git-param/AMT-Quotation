@@ -15,6 +15,20 @@ SHIPPING_NOTICE = ('Please note that the shipment will be dispatched and the fin
                    'to avoid any changes after order processing.')
 
 
+def shipping_notice(doc):
+    """The order destination, rather than invoice currency, controls this note."""
+    destination = ((doc.get('order') or {}).get('destination') or '').strip()
+    if not destination:
+        consignee = (doc.get('delivery') or {}).get('consignee_text') or ''
+        match = re.search(r'^\s*Country\s*:\s*(.+?)\s*$', consignee, re.I | re.M)
+        destination = match[1] if match else ''
+    if not destination:
+        source_delivery = (doc.get('source_state') or {}).get('delivery') or {}
+        destination = (source_delivery.get('shipping_address') or {}).get('country') or ''
+    destination = destination.strip().casefold()
+    return SHIPPING_NOTICE if destination and destination not in ('india', 'in') else ''
+
+
 def display_uom(unit):
     return 'Set' if unit.lower() == 'set' else unit
 
@@ -156,7 +170,7 @@ def layout(doc):
         clauses.append([c(0,11,value,'final_term' if final else 'terms',
             field='terms' if index==0 else None, value=term_text if index==0 else None,
             multiline=True, aria='Terms and conditions', preview_hidden=index>0)])
-    return {'widths':WIDTHS,'currency':doc['currency'],'shipping_notice':SHIPPING_NOTICE,'sections':[
+    return {'widths':WIDTHS,'currency':doc['currency'],'shipping_notice':shipping_notice(doc),'sections':[
         {'name':'header','rows':header},{'name':'parties','rows':parties},
         {'name':'items','rows':items},{'name':'bank','rows':bank_rows},
         {'name':'terms','rows':clauses}]}

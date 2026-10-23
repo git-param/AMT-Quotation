@@ -143,4 +143,9 @@ test('bulk PI summary and annexure remain independently editable in save and pri
   await host.querySelectorAll('button').find(button=>button.textContent==='PDF print preview').onclick();
   assert.equal(printed[0].bulk_description,'Unsaved print description');
   assert.ok(host.querySelectorAll('div').some(node=>node.className==='pi-annexure-page'));
+  state.layout.shipping_notice='';
+  preview.open(state,'/bulk-preview');
+  assert.equal(host.querySelectorAll('div').filter(item=>item.className==='pi-shipping-notice').length,0);
+  const css=fs.readFileSync(path.join(__dirname,'../frontend/orders/orders.css'),'utf8');
+  assert.match(css,/\.pi-shipping-notice\{[^}]*font-family:Cambria[^}]*font-size:11pt[^}]*font-weight:700/);
 });

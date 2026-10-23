@@ -107,6 +107,35 @@ class BulkPiTests(unittest.TestCase):
                     self.assertIn(float(doc['totals']['grand_total']), [float(v) for v in cached])
                     self.assertNotIn('xl/vbaProject.bin', book.namelist())
 
+    def test_annexure_cover_shipping_notice_excludes_india(self):
+        from backend.orders.normal_pi.layout import SHIPPING_NOTICE
+        self.items(5)
+        base = self.preview()['document']
+        for destination, shown in (('INDIA', False), ('USA', True)):
+            with self.subTest(destination=destination):
+                doc = deepcopy(base)
+                doc['order']['destination'] = destination
+                self.assertEqual(layout(doc)['shipping_notice'], SHIPPING_NOTICE if shown else '')
+                exporter = pi_exports.renderer(doc)
+                original = exporter.Paragraph
+                notice_styles = []
+                def capture(text, style, *args, **kwargs):
+                    if style.name == 'shipping_notice':
+                        notice_styles.append(style)
+                    return original(text, style, *args, **kwargs)
+                from unittest.mock import patch
+                with patch.object(exporter, 'Paragraph', side_effect=capture):
+                    pdf = pi_exports.pdf(doc)
+                self.assertTrue(pdf.startswith(b'%PDF'))
+                self.assertEqual(len(re.findall(rb'/Type /Page\b', pdf)), 2)
+                self.assertEqual(len(notice_styles), int(shown))
+                if shown:
+                    self.assertEqual(notice_styles[0].fontSize, 11)
+                    self.assertIn('Bold', notice_styles[0].fontName)
+                with ZipFile(BytesIO(pi_exports.xlsx(doc))) as book:
+                    strings = book.read('xl/sharedStrings.xml').decode()
+                    self.assertEqual(strings.count(SHIPPING_NOTICE), int(shown))
+
     def test_description_and_annexure_edits_persist_print_and_issue_without_changing_order(self):
         self.items(5)
         preview = self.preview('INR')

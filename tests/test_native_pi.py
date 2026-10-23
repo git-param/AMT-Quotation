@@ -95,6 +95,98 @@ class NativePiTests(unittest.TestCase):
             self.assertIn('filename=PI-1234.'+extension,
                           self.client.get(issued.json[extension+'_url']).headers['Content-Disposition'])
 
+    def test_shipping_notice_uses_destination_and_eleven_point_cambria_bold(self):
+        from backend.orders.normal_pi.layout import SHIPPING_NOTICE, layout
+        preview = self.preview()
+        base = preview['document']
+        inr_abroad = deepcopy(base)
+        inr_abroad['currency'] = 'INR'
+        inr_abroad['order']['destination'] = 'UAE'
+        self.assertEqual(layout(inr_abroad)['shipping_notice'], SHIPPING_NOTICE)
+        legacy_india = deepcopy(base)
+        legacy_india['order']['destination'] = ''
+        legacy_india['delivery']['consignee_text'] = 'Consignee\nCountry: India'
+        self.assertEqual(layout(legacy_india)['shipping_notice'], '')
+        unknown = deepcopy(base)
+        unknown['order']['destination'] = ''
+        unknown['delivery']['consignee_text'] = 'Consignee without a country'
+        unknown['source_state'] = {}
+        self.assertEqual(layout(unknown)['shipping_notice'], '')
+        for destination, shown in (('INDIA', False), ('UAE', True)):
+            with self.subTest(destination=destination):
+                doc = deepcopy(base)
+                doc['order']['destination'] = destination
+                self.assertEqual(layout(doc)['shipping_notice'], SHIPPING_NOTICE if shown else '')
+                exporter = pi_exports.renderer(doc)
+                original = exporter.Paragraph
+                styles = []
+                def capture(text, style, *args, **kwargs):
+                    if style.name == 'shipping_notice':
+                        styles.append(style)
+                    return original(text, style, *args, **kwargs)
+                with patch.object(exporter, 'Paragraph', side_effect=capture):
+                    pdf = pi_exports.pdf(doc)
+                self.assertTrue(pdf.startswith(b'%PDF'))
+                import re
+                self.assertEqual(len(re.findall(rb'/Type /Page\b', pdf)), 1)
+                self.assertEqual(len(styles), int(shown))
+                if shown:
+                    self.assertEqual(styles[0].fontSize, 11)
+                    self.assertIn('Bold', styles[0].fontName)
+                with ZipFile(BytesIO(pi_exports.xlsx(doc))) as book:
+                    labels = [''.join(si.itertext()) for si in ET.fromstring(book.read('xl/sharedStrings.xml'))]
+                    self.assertEqual(labels.count(SHIPPING_NOTICE), int(shown))
+                    if shown:
+                        sheet = ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
+                        notice_index = labels.index(SHIPPING_NOTICE)
+                        notice_cell = next(cell for cell in sheet.findall('.//{*}c')
+                            if cell.find('{*}v') is not None and cell.find('{*}v').text == str(notice_index))
+                        stylebook = ET.fromstring(book.read('xl/styles.xml'))
+                        cell_style = stylebook.find('{*}cellXfs')[int(notice_cell.get('s'))]
+                        font = stylebook.find('{*}fonts')[int(cell_style.get('fontId'))]
+                        self.assertEqual(font.find('{*}name').get('val'), 'Cambria')
+                        self.assertEqual(font.find('{*}sz').get('val'), '11')
+                        self.assertIsNotNone(font.find('{*}b'))
+
+    def test_four_item_normal_invoice_keeps_footer_on_one_page(self):
+        import base64
+        import re
+        import zlib
+
+        doc = self.preview()['document']
+        line = doc['totals']['lines'][0]
+        doc['totals']['lines'] = [
+            {**line, 'id': index + 1, 'sku': f'PART-{index + 1}',
+             'description': 'Electrical spare component with tested condition and reference number ' + 'X' * 300}
+            for index in range(4)
+        ]
+        pdf = pi_exports.pdf(doc)
+        self.assertEqual(len(re.findall(rb'/Type /Page\b', pdf)), 1)
+        decoded_streams = []
+        for encoded in re.findall(rb'stream\r?\n(.*?)endstream', pdf, re.S):
+            try:
+                decoded_streams.append(zlib.decompress(base64.a85decode(encoded, adobe=True)))
+            except (ValueError, zlib.error):
+                continue
+        page_stream = next(stream for stream in decoded_streams if b'PROFORMA INVOICE' in stream)
+        # The fit changes only vertical scale, so the body rule meets the full-width header rule.
+        transforms = re.findall(rb'(?m)^([\d.]+) 0 0 ([\d.]+) [\d.]+ [\d.]+ cm$', page_stream)
+        self.assertTrue(any(float(horizontal) == 1 and 0 < float(vertical) < 1
+                            for horizontal, vertical in transforms))
+
+        with ZipFile(BytesIO(pi_exports.xlsx(doc))) as book:
+            sheet = ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
+            stylebook = ET.fromstring(book.read('xl/styles.xml'))
+            cell_styles = stylebook.find('{*}cellXfs')
+            # The left edge is stronger than the divider beside it.
+            first = sheet.find('.//{*}c[@r="A6"]')
+            second = sheet.find('.//{*}c[@r="F6"]')
+            borders = stylebook.find('{*}borders')
+            first_border = borders[int(cell_styles[int(first.get('s'))].get('borderId'))]
+            second_border = borders[int(cell_styles[int(second.get('s'))].get('borderId'))]
+            self.assertEqual(first_border.find('{*}left').get('style'), 'medium')
+            self.assertEqual(second_border.find('{*}left').get('style'), 'thin')
+
     def test_pi_rendering_does_not_hold_sqlite_writer_lock(self):
         preview=self.preview()
         original=pi_exports.xlsx

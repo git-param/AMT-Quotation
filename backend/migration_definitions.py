@@ -781,4 +781,25 @@ MIGRATIONS = (
     (31, 'sku_lookup_limit', (
         "INSERT OR IGNORE INTO app_settings(key,value) VALUES('sku_lookup_limit','50')",
     )),
+    # Compatibility with databases upgraded before device enrollment was stashed.
+    # Keep the original statements byte-for-byte stable for checksum validation.
+    (32, 'device_registrations', (
+        "CREATE TABLE device_registrations ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+        "mac_address TEXT NOT NULL CHECK(length(mac_address)=17 AND mac_address=lower(mac_address)), "
+        "device_name TEXT NOT NULL CHECK(length(device_name) BETWEEN 1 AND 120), "
+        "status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected','revoked')), "
+        "requested_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), "
+        "decided_at TEXT, decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL, "
+        "last_seen_at TEXT, "
+        "CHECK ((status='pending' AND decided_at IS NULL AND decided_by IS NULL) OR "
+        "(status<>'pending' AND decided_at IS NOT NULL AND decided_by IS NOT NULL)))",
+        "CREATE UNIQUE INDEX idx_device_mac ON device_registrations(mac_address)",
+        "CREATE INDEX idx_device_status_time ON device_registrations(status,requested_at)",
+        "CREATE INDEX idx_device_user ON device_registrations(user_id,status)",
+        "INSERT INTO permissions(code,description) VALUES('devices.manage','Approve and revoke device registrations')",
+        "INSERT INTO role_permissions(role_code,permission_code) VALUES "
+        "('admin','devices.manage'),('manager','devices.manage')",
+    )),
 )

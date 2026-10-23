@@ -20,7 +20,6 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, PageBreak, NextPageTemplate
 
 from backend.orders.normal_pi.exports import section_borders, rich_required, fonts, _font_lock
-from backend.orders.normal_pi.layout import SHIPPING_NOTICE
 from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words, WIDTHS
 
 
@@ -208,19 +207,23 @@ def pdf(doc):
                 *([('LINEABOVE',(0,-1),(-1,-1),.8,colors.black)] if section['name']=='bank' else [])]))
             story.append(table)
     append_sections([section for section in model['sections'] if not section.get('annexure')])
-    footer_block=Table([
-        [image('payment_options.png',usable*.46),image('signature.png',usable*.44)],
-        [Paragraph(escape(SHIPPING_NOTICE),ParagraphStyle('shipping_notice',fontName=bold,
-            fontSize=8,leading=10,textColor=colors.red)),''],
-        [image('address.png',usable-12),'']],colWidths=[usable*.5]*2,splitByRow=0)
+    footer_rows=[[image('payment_options.png',usable*.46),image('signature.png',usable*.44)]]
+    if model['shipping_notice']:
+        footer_rows.append([Paragraph(escape(model['shipping_notice']),ParagraphStyle(
+            'shipping_notice',fontName=bold,fontSize=11,leading=13,
+            textColor=colors.red)),''])
+    address_row=len(footer_rows)
+    footer_rows.append([image('address.png',usable-12),''])
+    footer_block=Table(footer_rows,colWidths=[usable*.5]*2,splitByRow=0)
     footer_block.setStyle(TableStyle([
-        ('SPAN',(0,1),(1,1)),('SPAN',(0,2),(1,2)),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        *([('SPAN',(0,1),(1,1)),('BACKGROUND',(0,1),(-1,1),colors.yellow)]
+          if model['shipping_notice'] else []),
+        ('SPAN',(0,address_row),(1,address_row)),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
         ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),
         ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),
         ('BOX',(0,0),(-1,-1),.9,colors.black),
-        ('BACKGROUND',(0,1),(-1,1),colors.yellow),
-        ('LINEABOVE',(0,1),(-1,1),.9,colors.black),
-        ('LINEABOVE',(0,2),(-1,2),.9,colors.black)]))
+        ('LINEABOVE',(0,address_row),(-1,address_row),.9,colors.black),
+        *([('LINEABOVE',(0,1),(-1,1),.9,colors.black)] if model['shipping_notice'] else [])]))
     story.append(footer_block)
     story.extend([NextPageTemplate('Annexure'), PageBreak()])
     append_sections([section for section in model['sections'] if section.get('annexure')])
@@ -338,12 +341,13 @@ def xlsx(doc):
             for col in range(11):sheet.write_blank(row_index,col,None,left if col==0 else right if col==10 else edge)
             row_index+=1
         if part==0:
-            notice_format=book.add_format({'font_name':'Cambria','font_size':10,'bold':True,
+            if model['shipping_notice']:
+                notice_format=book.add_format({'font_name':'Cambria','font_size':11,'bold':True,
                 'font_color':'#FF0000','bg_color':'#FFFF00','text_wrap':True,
                 'valign':'vcenter','border':2,'border_color':'#000000'})
-            sheet.merge_range(row_index,0,row_index,10,SHIPPING_NOTICE,notice_format)
-            sheet.set_row(row_index,32)
-            row_index+=1
+                sheet.merge_range(row_index,0,row_index,10,model['shipping_notice'],notice_format)
+                sheet.set_row(row_index,36)
+                row_index+=1
             image('address.png',row_index,0,950,92)
     sheet.print_area(0,0,row_index-1,10);sheet.set_footer('&CPage &P of &N')
     annexure_start = row_index + 3

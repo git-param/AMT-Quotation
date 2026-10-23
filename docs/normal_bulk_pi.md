@@ -40,6 +40,11 @@ worksheet, separated by three blank rows and a print page break. Cover subtotal/
 annexure line and total formulas have cached server amounts. No macros or
 external reference workbooks are required at runtime.
 
+The yellow shipping notice appears once on the first page when the order
+destination is outside India. It is omitted for India in normal and bulk PIs,
+  including the annexure. Preview, PDF and XLSX use Cambria Bold at 11 pt for
+the notice.
+
 Opening and issuance require a nonblank bulk description. In-progress print preview
 retains the existing ability to print unsaved/unfinished text. Preview edits
 apply to the invoice snapshot, not source order products. Permissions, stale

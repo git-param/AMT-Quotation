@@ -18,11 +18,27 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable
+from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, KeepInFrame
 
-from backend.orders.normal_pi.layout import layout,terms,SHIPPING_NOTICE
+from backend.orders.normal_pi.layout import layout,terms
 
 _font_lock = Lock()
+
+
+class FullWidthKeepInFrame(KeepInFrame):
+    """Fit a short invoice vertically without pulling its outer rule inward."""
+
+    def drawOn(self, canv, x, y, _sW=0):
+        scale = getattr(self, '_scale', 1.0)
+        if scale == 1.0:
+            return super().drawOn(canv, x, y, _sW=_sW)
+        canv.saveState()
+        try:
+            canv.translate(x, y)
+            canv.scale(1.0, 1.0 / scale)
+            super(KeepInFrame, self).drawOn(canv, 0, 0, _sW=_sW, scale=scale)
+        finally:
+            canv.restoreState()
 
 
 def asset(doc,name):
@@ -75,14 +91,17 @@ def fonts():
 def section_borders(name):
     """Keep the summary open above its first amount and between labels and amounts."""
     if name not in ('header', 'items', 'bank'):
-        return [('BOX',(0,0),(-1,-1),.9,colors.black)]
-    edges = [('LINEBEFORE',(0,0),(0,-1),.9,colors.black),
-             ('LINEAFTER',(-1,0),(-1,-1),.9,colors.black)]
-    edges.append(('LINEBELOW',(0,-1),(7 if name == 'items' else -1,-1),.9,colors.black))
+        return [('LINEBEFORE',(0,0),(0,-1),1.2,colors.black),
+                ('LINEAFTER',(-1,0),(-1,-1),1.2,colors.black),
+                ('LINEABOVE',(0,0),(-1,0),.6,colors.black),
+                ('LINEBELOW',(0,-1),(-1,-1),.6,colors.black)]
+    edges = [('LINEBEFORE',(0,0),(0,-1),1.2,colors.black),
+             ('LINEAFTER',(-1,0),(-1,-1),1.2,colors.black)]
+    edges.append(('LINEBELOW',(0,-1),(7 if name == 'items' else -1,-1),.6,colors.black))
     if name == 'items':
-        edges.append(('LINEABOVE',(0,0),(-1,0),.9,colors.black))
+        edges.append(('LINEABOVE',(0,0),(-1,0),.6,colors.black))
     elif name == 'bank':
-        edges.append(('LINEABOVE',(0,0),(7,0),.9,colors.black))
+        edges.append(('LINEABOVE',(0,0),(7,0),.6,colors.black))
     return edges
 
 
@@ -115,7 +134,7 @@ def pdf(doc):
         canvas.clipPath(clip,stroke=0)
         header.drawOn(canvas,margin,height-margin-header.drawHeight)
         canvas.restoreState()
-        canvas.saveState();canvas.setLineWidth(.9)
+        canvas.saveState();canvas.setLineWidth(1.2)
         top=height-margin;bottom=top-header_height-2
         canvas.line(margin,top,width-margin,top)
         canvas.line(margin,top,margin,bottom);canvas.line(width-margin,top,width-margin,bottom)
@@ -190,12 +209,12 @@ def pdf(doc):
                 content=cell['_paragraph'];row[col]=content
                 if span>1:commands.append(('SPAN',(col,index),(col+span-1,index)))
                 if cell.get('bottom_aligned'):commands.append(('VALIGN',(col,index),(col+span-1,index),'BOTTOM'))
-                if not cell.get('open_left'):commands.append(('LINEBEFORE',(col,index),(col,index),.8,colors.black))
-                if not cell.get('open_right'):commands.append(('LINEAFTER',(col+span-1,index),(col+span-1,index),.8,colors.black))
+                if not cell.get('open_left'):commands.append(('LINEBEFORE',(col,index),(col,index),1.2 if col==0 else .6,colors.black))
+                if not cell.get('open_right'):commands.append(('LINEAFTER',(col+span-1,index),(col+span-1,index),1.2 if col+span==11 else .6,colors.black))
                 if kind=='warning':commands.append(('BACKGROUND',(col,index),(col+span-1,index),colors.yellow))
                 if kind=='final_term':commands.append(('BACKGROUND',(col,index),(col+span-1,index),colors.HexColor('#FFF2CC')))
-                if cell.get('line_top'):commands.append(('LINEABOVE',(col,index),(col+span-1,index),.8,colors.black))
-                if cell.get('line_bottom'):commands.append(('LINEBELOW',(col,index),(col+span-1,index),.8,colors.black))
+                if cell.get('line_top'):commands.append(('LINEABOVE',(col,index),(col+span-1,index),.6,colors.black))
+                if cell.get('line_bottom'):commands.append(('LINEBELOW',(col,index),(col+span-1,index),.6,colors.black))
                 _,h=content.wrap(sum(columns[col:col+span])-6,10000)
                 min_height=max(min_height,h+3)
                 if cell.get('header_metadata'):min_height=max(min_height,h+3)
@@ -207,29 +226,39 @@ def pdf(doc):
             rows.append(row);heights.append(min_height)
         table=LongTable(rows,colWidths=columns,rowHeights=heights,
             repeatRows=1 if section['name']=='items' else 0,splitInRow=1,hAlign='LEFT')
-        table_style=TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),
-            ('LEFTPADDING',(0,0),(-1,-1),3),('RIGHTPADDING',(0,0),(-1,-1),3),
-            ('TOPPADDING',(0,0),(-1,-1),1.5),('BOTTOMPADDING',(0,0),(-1,-1),1.5),
+        table_style=TableStyle([
+            ('VALIGN',(0,0),(-1,-1),'TOP'),
+            ('LEFTPADDING',(0,0),(-1,-1),3),
+            ('RIGHTPADDING',(0,0),(-1,-1),3),
+            ('TOPPADDING',(0,0),(-1,-1),1.5),
+            ('BOTTOMPADDING',(0,0),(-1,-1),1.5),
             *section_borders(section['name']),*commands,
-            *([('LINEBELOW',(0,0),(-1,0),.8,colors.black)] if section['name']=='items' else []),
-            *([('LINEABOVE',(0,-1),(-1,-1),.8,colors.black)] if section['name']=='bank' else [])])
+            *([('LINEBELOW',(0,0),(-1,0),.6,colors.black)] if section['name']=='items' else []),
+            *([('LINEABOVE',(0,-1),(-1,-1),.6,colors.black)] if section['name']=='bank' else [])])
         table.setStyle(table_style)
         if section['name']=='items' and doc.get('pi_format','normal')=='normal' and len(doc['totals']['lines'])<=4:
             item_table=(len(story),rows,heights,table_style)
         story.append(table)
-    footer_block=Table([
-        [image('payment_options.png',usable*.46),image('signature.png',usable*.44)],
-        [Paragraph(escape(SHIPPING_NOTICE),ParagraphStyle('shipping_notice',fontName=bold,
-            fontSize=8,leading=10,textColor=colors.red)),''],
-        [image('address.png',usable-12),'']],colWidths=[usable*.5]*2,splitByRow=0)
+    footer_rows=[[image('payment_options.png',usable*.46),image('signature.png',usable*.44)]]
+    if model['shipping_notice']:
+        footer_rows.append([Paragraph(escape(model['shipping_notice']),ParagraphStyle(
+            'shipping_notice',fontName=bold,fontSize=10,leading=13,
+            textColor=colors.red)),''])
+    address_row=len(footer_rows)
+    footer_rows.append([image('address.png',usable-12),''])
+    footer_block=Table(footer_rows,colWidths=[usable*.5]*2,splitByRow=0)
     footer_block.setStyle(TableStyle([
-        ('SPAN',(0,1),(1,1)),('SPAN',(0,2),(1,2)),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        *([('SPAN',(0,1),(1,1)),('BACKGROUND',(0,1),(-1,1),colors.yellow)]
+          if model['shipping_notice'] else []),
+        ('SPAN',(0,address_row),(1,address_row)),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
         ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),
         ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),
-        ('BOX',(0,0),(-1,-1),.9,colors.black),
-        ('BACKGROUND',(0,1),(-1,1),colors.yellow),
-        ('LINEABOVE',(0,1),(-1,1),.9,colors.black),
-        ('LINEABOVE',(0,2),(-1,2),.9,colors.black)]))
+        ('LINEBEFORE',(0,0),(0,-1),1.2,colors.black),
+        ('LINEAFTER',(-1,0),(-1,-1),1.2,colors.black),
+        ('LINEABOVE',(0,0),(-1,0),.6,colors.black),
+        ('LINEBELOW',(0,-1),(-1,-1),1.2,colors.black),
+        ('LINEABOVE',(0,address_row),(-1,address_row),.6,colors.black),
+        *([('LINEABOVE',(0,1),(-1,1),.6,colors.black)] if model['shipping_notice'] else [])]))
     story.append(footer_block)
     if item_table:
         table_index,rows,heights,table_style=item_table
@@ -250,6 +279,13 @@ def pdf(doc):
                 repeatRows=1,splitInRow=1,hAlign='LEFT')
             table.setStyle(table_style)
             story[table_index]=table
+    if item_table:
+        first_frame_height=height-2*margin-header_height-2
+        used_height=sum(flowable.wrap(usable,first_frame_height)[1] for flowable in story)
+        # Keep ordinary one-to-four item invoices together; retain pagination
+        # for unusually large text rather than making it unreadably small.
+        if first_frame_height-8 < used_height <= first_frame_height*1.4:
+            story=[FullWidthKeepInFrame(usable,first_frame_height-4,story,mode='shrink',hAlign='LEFT',vAlign='TOP')]
     document.build(story)
     return output.getvalue()
 
@@ -265,7 +301,7 @@ def xlsx(doc):
     for kind in ('','bold','head','bank_title','warning','final_term','title','center','amount','bold_amount','terms','date_label'):
         values={'font_name':'Cambria','font_size':20 if kind=='title' else 10 if kind in ('terms','final_term') else 12,
             'font_color':'#FF0000' if kind=='warning' else '#000000','text_wrap':True,'valign':'top',
-            'left':2,'right':2,'top':0,'bottom':0,'border_color':'#000000',
+            'left':1,'right':1,'top':0,'bottom':0,'border_color':'#000000',
             'bold':kind in ('bold','head','bank_title','warning','final_term','title','bold_amount')}
         if kind=='bank_title':values['underline']=1
         if kind=='warning':values['bg_color']='#FFFF00'
@@ -318,17 +354,19 @@ def xlsx(doc):
                          or (cell.get('line_top') and chunk_index==0))
                     bottom=((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1 and not (section['name']=='items' and col>=8)) or cell['style']=='head'
                             or (cell.get('line_bottom') and chunk_index==len(parts)-1))
-                    key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False))
+                    left=0 if cell.get('open_left') else 2 if col==0 else 1
+                    right=0 if cell.get('open_right') else 2 if end==10 else 1
+                    key=(cell['style'],top,bottom,left,right,cell.get('bottom_aligned',False))
                     if key not in formats:
-                        formats[key]=book.add_format({**format_values[cell['style']],'top':2 if top else 0,'bottom':2 if bottom else 0,
-                            'left':0 if cell.get('open_left') else 2,'right':0 if cell.get('open_right') else 2,
+                        formats[key]=book.add_format({**format_values[cell['style']],'top':1 if top else 0,'bottom':1 if bottom else 0,
+                            'left':left,'right':right,
                             'valign':'bottom' if cell.get('bottom_aligned') else 'top'})
                     fmt=formats[key]
                     path=cell.get('calculated') or cell.get('field')
                     if chunk_index==0 and path:coordinates[path]=xl_rowcol_to_cell(row_index,col)
                     quantity=(cell.get('field') or '').endswith('.quantity')
                     if quantity:
-                        fmt=book.add_format({**format_values[cell['style']],'num_format':'0 "'+cell.get('uom','PCs')+'"','top':2 if top else 0,'bottom':2 if bottom else 0})
+                        fmt=book.add_format({**format_values[cell['style']],'num_format':'0 "'+cell.get('uom','PCs')+'"','top':1 if top else 0,'bottom':1 if bottom else 0,'left':left,'right':right})
                     number=(cell.get('numeric') or cell['field']=='shipping_charges' or quantity or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
                     if cell['span']>1:sheet.merge_range(row_index,col,row_index,end,'',fmt)
                     if number:
@@ -352,19 +390,20 @@ def xlsx(doc):
     for part in range(2):
         for offset in range(4):
             top=offset==0;bottom_edge=offset==3
-            left=book.add_format({'left':2,'top':2 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
-            right=book.add_format({'right':2,'top':2 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
-            edge=book.add_format({'top':2 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
+            left=book.add_format({'left':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
+            right=book.add_format({'right':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
+            edge=book.add_format({'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
             sheet.set_row(row_index,20 if part==0 else 18)
             for col in range(11):sheet.write_blank(row_index,col,None,left if col==0 else right if col==10 else edge)
             row_index+=1
         if part==0:
-            notice_format=book.add_format({'font_name':'Cambria','font_size':10,'bold':True,
+            if model['shipping_notice']:
+                notice_format=book.add_format({'font_name':'Cambria','font_size':10,'bold':True,
                 'font_color':'#FF0000','bg_color':'#FFFF00','text_wrap':True,
-                'valign':'vcenter','border':2,'border_color':'#000000'})
-            sheet.merge_range(row_index,0,row_index,10,SHIPPING_NOTICE,notice_format)
-            sheet.set_row(row_index,32)
-            row_index+=1
+                'valign':'vcenter','left':2,'right':2,'top':1,'bottom':1,'border_color':'#000000'})
+                sheet.merge_range(row_index,0,row_index,10,model['shipping_notice'],notice_format)
+                sheet.set_row(row_index,36)
+                row_index+=1
             image('address.png',row_index,0,950,92)
     sheet.print_area(0,0,row_index-1,10);sheet.set_footer('&CPage &P of &N')
     for row,col,fmt,path,cached in formula_cells:
