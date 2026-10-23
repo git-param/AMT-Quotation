@@ -562,6 +562,8 @@ function stripTags(html) {
 
 // ── Search Modal ─────────────────────────────────────────────────────────────
 let _allResults   = [];
+let _priceHistory = [];
+let _priceHistoryUnavailable = false;
 let _activeFilter = 'all';
 let _lastQuery    = '';
 
@@ -587,7 +589,8 @@ function srchModalBgClick(e) {
 }
 
 function clearSearch() {
-  _allResults = []; _lastQuery = ''; _activeFilter = 'all';
+  _allResults = []; _priceHistory = []; _priceHistoryUnavailable = false;
+  _lastQuery = ''; _activeFilter = 'all';
   document.getElementById('searchInput').value = '';
   document.getElementById('resultsGrid').innerHTML = '';
   document.getElementById('filterTabs').style.display = 'none';
@@ -603,17 +606,21 @@ async function searchAll() {
   btn.disabled = true; btn.textContent = 'Searching…';
   document.getElementById('searchLoading').style.display = 'block';
   document.getElementById('filterTabs').style.display = 'none';
-  _allResults = []; _activeFilter = 'all'; _lastQuery = q;
+  _allResults = []; _priceHistory = []; _priceHistoryUnavailable = false;
+  _activeFilter = 'all'; _lastQuery = q;
 
   try {
     const resp = await fetch('/api/search-all?q=' + encodeURIComponent(q));
     const data = await resp.json();
     _allResults = data.results || [];
+    _priceHistory = Array.isArray(data.price_history) ? data.price_history : [];
+    _priceHistoryUnavailable = Boolean(data.errors && data.errors.price);
     const counts = data.counts || {};
     document.getElementById('cnt-all').textContent    = counts.total  || 0;
     document.getElementById('cnt-zoho').textContent   = counts.zoho   || 0;
     document.getElementById('cnt-atlas').textContent  = counts.atlas  || 0;
     document.getElementById('cnt-alreza').textContent = counts.alreza || 0;
+    document.getElementById('cnt-price').textContent = _priceHistory.length;
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.src === 'all'));
     _activeFilter = 'all';
     renderCards();
@@ -621,7 +628,7 @@ async function searchAll() {
     document.getElementById('copySkusBtn').style.display = counts.zoho > 0 ? 'inline-flex' : 'none';
     document.getElementById('srchClear').style.display = 'inline-block';
   } catch(e) {
-    _allResults = [];
+    _allResults = []; _priceHistory = []; _priceHistoryUnavailable = true;
     renderCards();
     document.getElementById('filterTabs').style.display = 'flex';
   } finally {
@@ -633,11 +640,17 @@ async function searchAll() {
 function filterResults(src) {
   _activeFilter = src;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.src === src));
+  document.getElementById('copySkusBtn').style.display = src === 'price' ? 'none' :
+    _allResults.some(r => r.source === 'zoho') ? 'inline-flex' : 'none';
   renderCards();
 }
 
 function renderCards() {
   const grid = document.getElementById('resultsGrid');
+  if (_activeFilter === 'price') {
+    renderPriceHistory(grid);
+    return;
+  }
   const filtered = _activeFilter === 'all'
     ? _allResults
     : _allResults.filter(r => r.source === _activeFilter);
@@ -707,6 +720,34 @@ function renderCards() {
   }).join('');
 
   grid.innerHTML = hdr + rows;
+}
+
+function renderPriceHistory(grid) {
+  if (!/^\d{3,12}$/.test(_lastQuery.replace(/^'/, ''))) {
+    grid.innerHTML = '<div class="search-empty" role="status">Enter a numeric SKU (3–12 digits) to see its price history.</div>';
+    return;
+  }
+  if (_priceHistoryUnavailable) {
+    grid.innerHTML = '<div class="search-empty" role="status">Price history is unavailable. The shared Pricing App database could not be reached.</div>';
+    return;
+  }
+  if (!_priceHistory.length) {
+    grid.innerHTML = '<div class="search-empty" role="status">No price history found for this SKU.</div>';
+    return;
+  }
+  const money = value => value == null || !Number.isFinite(Number(value)) ? '—' :
+    Number(value).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  grid.innerHTML = `<div class="price-history-head">Price history for SKU ${escH(_lastQuery.replace(/^'/, ''))}</div>
+    <div class="price-history-scroll"><table class="price-history-table">
+      <thead><tr><th>Date</th><th>Previous</th><th>Price</th><th>Change</th><th>Entered by</th><th>Details</th></tr></thead>
+      <tbody>${_priceHistory.map(row => {
+        const change = row.delta_pct == null ? '—' : `${Number(row.delta_pct) > 0 ? '+' : ''}${Number(row.delta_pct).toFixed(1)}%`;
+        const details = [row.remarks, row.ref ? `Ref: ${row.ref}` : '', row.lot ? `Lot: ${row.lot}` : ''].filter(Boolean).join(' · ');
+        return `<tr><td>${escH(row.date || '—')}</td><td>${money(row.prev_price)}</td><td><strong>${money(row.price)}</strong></td>
+          <td class="${Number(row.delta_pct) > 0 ? 'price-up' : Number(row.delta_pct) < 0 ? 'price-down' : ''}">${escH(change)}</td>
+          <td>${escH(row.by || 'Unknown')}${row.automated ? ' <span class="price-automated">Automated</span>' : ''}</td>
+          <td>${escH(details || '—')}</td></tr>`;
+      }).join('')}</tbody></table></div>`;
 }
 
 function fillSKU(sku) {

@@ -6,13 +6,12 @@ For session controls, CSRF, rate limiting, security events, and production setti
 ## Quotation API keys
 
 Existing keys in the legacy `api_keys` SQLite table are preserved by migration 30
-when the new app uses the same database. The live monolith used
-`/app/quotation.db`; this source defaults to `database/quotation.db`. Set
-`AMT_QUOTATION_DB_PATH` to the persistent live database path during deployment,
-or migrate the complete database before starting the new build. Back it up first.
-The path is loaded from `backend/.env` before database initialization. If an
-explicit `AMT_QUOTATION_DB_PATH` does not exist, startup stops instead of
-creating a blank database there.
+when the new app uses the same database. The live monolith used a root-level
+`quotation.db`; this app now uses that same file when it exists. In a checkout
+without the root-level file, it uses the existing `database/quotation.db`.
+`AMT_QUOTATION_DB_PATH` remains an optional override. Back up the live file
+before deployment. An explicit override to a missing file stops startup instead
+of creating a blank database there.
 Send a key in the `X-API-Key` header to call quotation API endpoints such as
 `GET /api/me` and `POST /api/lookup` without a browser session. A valid key gets
 `{"auth":"api_key","role":"api","username":"api-key"}` from `/api/me`;
@@ -47,6 +46,8 @@ shared `pricing` Postgres schema used by the supplied live app. Install the
 updated requirements before enabling that source. Price history and line-level
 quote logs require the shared Postgres database; without it, lookup and
 quotations still work, and `GET /api/price-history` reports unavailable.
+In the quotation page, search a numeric SKU and open the **Price History** tab
+to see its pricing timeline. The tab shows when prices changed, by whom, and why.
 The shared Pricing App IP policy is documented in [Security](docs/security.md).
 
 The active CRM workflow is now **Clients & Orders** at `/clients-orders`: search
@@ -143,11 +144,11 @@ unchanged. No migration rewrites, renames, or deletes an existing table or row.
 
 The `.env` file contains settings; quotation accounts, search/copy history,
 clients, orders, and invoices live in the SQLite database. The shared Pricing
-App Postgres catalog is a separate database. On the VPS, first confirm the
-actual path of the current `quotation.db` and set, for example,
-`AMT_QUOTATION_DB_PATH=/app/quotation.db` in `backend/.env`. Preserve that file
-and `backend/secret.key` across code deployments. The default path under a new
-checkout is different and would otherwise be a new database.
+App Postgres catalog, including price history, is separate. On the VPS, keep
+the original root-level `quotation.db` in `/app`, one level above
+`backend/app.py`. The app selects it automatically. Preserve that file and
+`backend/secret.key` across deployments.
+If the live file is elsewhere, use the optional `AMT_QUOTATION_DB_PATH` override.
 
 Stop the old app and other database writers. Make a SQLite-aware backup of the
 existing file (the backup API includes committed WAL data), and verify the

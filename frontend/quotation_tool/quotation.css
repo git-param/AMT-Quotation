@@ -125,6 +125,15 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#F3F4F6;color:#111827;mi
 /* Action bar */
 .search-actions{display:flex;align-items:center;gap:10px;margin:10px 0 6px;flex-wrap:wrap}
 .search-empty{text-align:center;padding:48px 20px;color:#9CA3AF;font-size:14px}
+.price-history-head{padding:12px 14px;font-size:13px;font-weight:700;color:#1E3A5F;background:#F8FAFC;border-bottom:1px solid #E5E7EB}
+.price-history-scroll{overflow-x:auto}
+.price-history-table{width:100%;border-collapse:collapse;font-size:12px;min-width:720px}
+.price-history-table th,.price-history-table td{padding:9px 10px;text-align:left;border-bottom:1px solid #E5E7EB;vertical-align:top}
+.price-history-table th{background:#F3F4F6;color:#374151;font-size:11px;white-space:nowrap}
+.price-history-table td:nth-child(2),.price-history-table td:nth-child(3),.price-history-table td:nth-child(4){font-variant-numeric:tabular-nums;white-space:nowrap}
+.price-history-table .price-up{color:#B45309;font-weight:700}
+.price-history-table .price-down{color:#047857;font-weight:700}
+.price-automated{display:inline-block;margin-left:4px;padding:1px 5px;border-radius:4px;background:#FEF3C7;color:#92400E;font-size:10px}
 .loading-row{display:flex;gap:10px;margin-top:14px}
 .loading-bar{flex:1;height:52px;background:linear-gradient(90deg,#F3F4F6 25%,#E9EAEB 50%,#F3F4F6 75%);background-size:200% 100%;border-radius:8px;animation:shimmer 1.2s infinite;margin-bottom:4px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}

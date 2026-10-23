@@ -19,7 +19,7 @@
     </div>
   </div>
   <div class="hdr-right">
-    <button class="hdr-search-btn" onclick="openSearchModal()">🔍 Search <span>Zoho · Atlas · Al Reza</span></button>
+    <button class="hdr-search-btn" onclick="openSearchModal()">🔍 Search <span>Zoho · Atlas · Al Reza · Prices</span></button>
     <span id="hdrUser" style="font-size:12px;color:#93C5FD"></span>
      <a class="mgr-link" id="accessLink" href="/client-access" style="display:none">Client Access / Sharing</a> <a class="mgr-link" href="/clients-orders">Clients &amp; Orders</a> <a href="/sources" id="sourcesLink" class="mgr-link" style="display:none">Enquiry Sources</a>
     <a href="/manager" id="mgrLink" style="display:none" class="mgr-link">Manager Dashboard</a>
@@ -101,6 +101,7 @@
             <span class="tab"        data-src="zoho"   onclick="filterResults('zoho')">Zoho <span class="cnt" id="cnt-zoho">0</span></span>
             <span class="tab"        data-src="atlas"  onclick="filterResults('atlas')">Atlas Ship <span class="cnt" id="cnt-atlas">0</span></span>
             <span class="tab"        data-src="alreza" onclick="filterResults('alreza')">Al Reza <span class="cnt" id="cnt-alreza">0</span></span>
+            <span class="tab"        data-src="price" onclick="filterResults('price')">Price History <span class="cnt" id="cnt-price">0</span></span>
           </div>
           <button class="btn btn-primary" id="copySkusBtn" style="display:none;padding:4px 12px;font-size:12px" onclick="copyAllSkus()">📋 Copy SKUs to Quote</button>
           <span id="srchClear" class="srch-clear" style="display:none" onclick="clearSearch()">✕ Clear search</span>
