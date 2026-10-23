@@ -70,6 +70,11 @@ def log_copy(user_name, user_ip, copy_type, sku_count):
 
 
 def initialize_database():
+    if os.getenv('AMT_QUOTATION_DB_PATH') and not Path(DB_PATH).is_file():
+        raise RuntimeError(
+            f'Configured quotation database does not exist: {DB_PATH}. '
+            'Refusing to create an empty database at this path.'
+        )
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     init_db()
     enable_wal(DB_PATH)

@@ -84,6 +84,25 @@ class SecurityTests(unittest.TestCase):
         finally:
             connection.close()
 
+    def test_pricing_ip_rule_blocks_login_after_valid_password(self):
+        client = self.app.test_client()
+        with patch('backend.login.routes.hit', return_value=(True, 0, 'test')), \
+                patch('backend.login.routes.access_decision', return_value=(False, 'blocked_ip')):
+            response = client.post('/login', data={
+                'username': 'security-user', 'password': 'fixture-password'})
+        self.assertEqual(response.status_code, 403)
+        self.assertIsNone(client.get_cookie('amt_session_v2'))
+
+    def test_pricing_ip_rule_revokes_existing_session(self):
+        client = self.app.test_client()
+        with patch('backend.login.routes.hit', return_value=(True, 0, 'test')):
+            self.login(client)
+        with patch('backend.security.middleware.access_decision',
+                   return_value=(False, 'blocked_ip')):
+            response = client.get('/api/me')
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(client.get('/api/me').status_code, 401)
+
 
 if __name__ == '__main__':
     unittest.main()

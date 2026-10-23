@@ -1,5 +1,7 @@
 // ── State ───────────────────────────────────────────────────────────────────
 let _rows     = [];
+const MAX_DISC_PCT = 7;
+let _hasRecheckRows = false;
 let _rate     = null;
 let _urlMap   = {};   // sr -> url
 let _imgSkus  = [];
@@ -73,6 +75,8 @@ async function lookupSKUs() {
   }
 
   _rows = []; _urlMap = {};
+  _hasRecheckRows = false;
+  updateCopyButtonState();
   toggleImageDownloadButtons(false);
   const btn = document.getElementById('lookupBtn');
   btn.disabled = true;
@@ -139,6 +143,8 @@ function renderResults() {
   if (!_rows.length) {
     tbody.innerHTML = '<tr><td colspan="12" class="empty-state">No results</td></tr>';
     toggleImageDownloadButtons(false);
+    _hasRecheckRows = false;
+    updateCopyButtonState();
     return;
   }
   tbody.innerHTML = _rows.map((r, i) => {
@@ -163,6 +169,7 @@ function renderResults() {
       if (r.price == null) return 'N/A';
       if (r.sale_price != null) {
         const pct = Math.round((1 - r.sale_price / r.price) * 100);
+        if (pct > MAX_DISC_PCT) return `$ ${r.price.toFixed(2)} <span style="color:#92400E;font-size:10px;">&#9888; recheck</span>`;
         return `<span style="text-decoration:line-through;color:#9ca3af;font-size:10px;">$ ${r.price.toFixed(2)}</span><br><strong>$ ${r.sale_price.toFixed(2)}</strong><br><span style="color:#16a34a;font-size:10px;font-weight:600;">${pct}% off</span>`;
       }
       return `$ ${r.price.toFixed(2)}`;
@@ -171,6 +178,7 @@ function renderResults() {
       if (!rate || r.price == null) return '—';
       if (r.sale_price != null) {
         const pct = Math.round((1 - r.sale_price / r.price) * 100);
+        if (pct > MAX_DISC_PCT) return `₹ ${(r.price*rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="color:#92400E;font-size:10px;">&#9888; recheck</span>`;
         const caInr = (r.price * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
         const spInr = (r.sale_price * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
         return `<span style="text-decoration:line-through;color:#9ca3af;font-size:10px;">₹ ${caInr}</span><br><strong>₹ ${spInr}</strong><br><span style="color:#16a34a;font-size:10px;font-weight:600;">${pct}% off</span>`;
@@ -202,6 +210,21 @@ function renderResults() {
   // Show/hide image download buttons
   const hasFound = _rows.some(r => r.found);
   toggleImageDownloadButtons(hasFound);
+  // Disable copy buttons if any row has discount > MAX_DISC_PCT
+  _hasRecheckRows = _rows.some(r => r.found && r.sale_price != null && r.price != null
+    && r.sale_price < r.price && Math.round((1 - r.sale_price / r.price) * 100) > MAX_DISC_PCT);
+  updateCopyButtonState();
+}
+
+function updateCopyButtonState() {
+  const warn = document.getElementById('recheckWarningBar');
+  // All copy buttons are inside .copy-section — select by onclick attribute pattern
+  document.querySelectorAll('.copy-section button').forEach(function(btn) {
+    btn.disabled = _hasRecheckRows;
+  });
+  if (warn) {
+    warn.style.display = _hasRecheckRows ? 'block' : 'none';
+  }
 }
 
 function toggleImageDownloadButtons(show) {
@@ -251,11 +274,16 @@ function buildHTMLTable(currency) {
   const th = `background:${GREY};color:${BLACK};font-family:Calibri,Arial,sans-serif;font-size:11pt;font-weight:bold;padding:8px 10px;border:1px solid #B8B8B8;text-align:center;`;
   const thw = (w, extra) => `${th}width:${w}%;${extra||''}`;
 
-  // Detect if any found row has a discount
-  const hasDiscount = _rows.some(r => r.found && r.sale_price != null);
-  // Compute a single discount % for the column header (first discounted row)
-  const _discFirstRow = _rows.find(r => r.found && r.sale_price != null && r.price != null);
-  const _discHeaderPct = _discFirstRow ? Math.round((1 - _discFirstRow.sale_price / _discFirstRow.price) * 100) + '%' : '';
+  // Only treat as discount when sale_price < price (markup is not a discount)
+  const hasDiscount = _rows.some(r => r.found && r.sale_price != null && r.price != null && r.sale_price < r.price);
+  // Separate valid discounts (≤7%) from error discounts (>7%)
+  const _discPcts = _rows.filter(r => r.found && r.sale_price != null && r.price != null && r.sale_price < r.price)
+                         .map(r => Math.round((1 - r.sale_price / r.price) * 100));
+  const _validPcts = _discPcts.filter(p => p <= MAX_DISC_PCT);
+  const _hasRecheckRows = _discPcts.some(p => p > MAX_DISC_PCT);
+  const _discMaxPct = _validPcts.length ? Math.max(..._validPcts) : 0;
+  const _multiDiscount = _validPcts.length > 1 && new Set(_validPcts).size > 1;
+  const _discHeaderPct = _discMaxPct > 0 ? (_multiDiscount ? 'up to ' + _discMaxPct + '%' : _discMaxPct + '%') : '';
   const priceHdr = isINR ? 'Rate/Pcs (INR)' : 'Rate/Pcs (USD)';
 
   let html = `<table style="border-collapse:collapse;width:100%;">
@@ -297,9 +325,17 @@ ${hasDiscount ? `<td style="${tdD}">—</td><td style="${tdC}">—</td>` : ''}
 
     let rateTd, discTd = '', finalTd = '';
     if (hasDiscount) {
-      if (r.sale_price != null && r.price != null) {
-        const pct = Math.round((1 - r.sale_price / r.price) * 100);
-        if (isINR && rate) {
+      // Only show actual discount (sale_price < price); markup rows show — in discount/final
+      if (r.sale_price != null && r.price != null && r.sale_price < r.price) {
+        const rowPct = Math.round((1 - r.sale_price / r.price) * 100);
+        if (rowPct > MAX_DISC_PCT) {
+          // Discount exceeds max allowed — pricing error, show recheck warning
+          const tdWarn = `font-family:Calibri,Arial,sans-serif;font-size:10pt;color:#92400E;padding:6px 10px;border:1px solid #E0E0E0;vertical-align:middle;text-align:center;background:#FEF3C7;`;
+          let priceFmt = isINR && rate ? `&#8377;&nbsp;${(r.price*rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}` : `$&nbsp;${r.price.toFixed(2)}`;
+          rateTd  = `<td style="${tdC}">${priceFmt}</td>`;
+          discTd  = `<td style="${tdWarn}">&#9888; Price recheck needed</td>`;
+          finalTd = `<td style="${tdC}">—</td>`;
+        } else if (isINR && rate) {
           const caI  = (r.price * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
           const spI  = (r.sale_price * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
           const dscI = ((r.price - r.sale_price) * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});

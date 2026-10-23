@@ -1,4 +1,5 @@
 import re
+import json
 import requests
 import threading
 import time
@@ -129,12 +130,103 @@ def fetch_sku(sku_raw, *, refresh=False):
             'condition': (cond + _cond_suffix(cond)) if cond else '',
             'url':       product.get('onlineStoreUrl', ''),
             'qty':       node.get('inventoryQuantity', ''),
-            'price':     (float(node['compareAtPrice']) if node.get('compareAtPrice') else float(node['price'])) if (node.get('compareAtPrice') or node.get('price')) else None,
-            'sale_price': float(node['price']) if (node.get('compareAtPrice') and node.get('price')) else None,
+            'price':     float(node['compareAtPrice']) if (node.get('compareAtPrice') and node.get('price') and float(node['compareAtPrice']) > float(node['price'])) else (float(node['price']) if node.get('price') else None),
+            'sale_price': float(node['price']) if (node.get('compareAtPrice') and node.get('price') and float(node['compareAtPrice']) > float(node['price'])) else None,
         }
 
     with _sku_lock:
         _sku_cache[key] = (result, time.time())
+    return result
+
+
+def fetch_skus_batch(skus, chunk=40):
+    """Resolve bulk requests with Shopify OR queries and reuse the SKU cache."""
+    result = {}
+    pending = []
+    for raw in skus:
+        key = raw.strip().upper()
+        with _sku_lock:
+            cached = _sku_cache.get(key)
+        if cached and time.time() - cached[1] < 900:
+            result[key] = cached[0]
+        elif key not in pending:
+            pending.append(key)
+    if not pending:
+        return result
+
+    seen = set()
+    fields = []
+    for namespace in CONDITION_NS:
+        for field in CONDITION_KEYS:
+            alias = _mf_alias(namespace, field)
+            if alias not in seen:
+                seen.add(alias)
+                fields.append(f'{alias}: metafield(namespace:"{namespace}", key:"{field}") {{ value }}')
+    meta = '\n'.join(fields)
+    token = _get_token()
+    for start in range(0, len(pending), chunk):
+        part = pending[start:start + chunk]
+        search = ' OR '.join('sku:"' + sku.replace('\\', '\\\\').replace('"', '\\"') + '"' for sku in part)
+        query = ('{ productVariants(first:' + str(len(part) * 2) + ', query:' + json.dumps(search) +
+                 ') { edges { node { sku price compareAtPrice inventoryQuantity ' + meta +
+                 ' product { title onlineStoreUrl ' + meta + ' } } } } }')
+        response = None
+        for attempt in range(3):
+            try:
+                response = requests.post(
+                    f'https://{SHOP}/admin/api/2026-01/graphql.json',
+                    headers={'X-Shopify-Access-Token': token, 'Content-Type': 'application/json'},
+                    json={'query': query}, timeout=30)
+            except requests.RequestException:
+                response = None
+                break
+            if response.status_code != 429:
+                break
+            time.sleep((attempt + 1) * 2)
+        found = {}
+        valid = False
+        if response is not None and response.status_code == 200:
+            try:
+                payload = response.json()
+                if not payload.get('errors'):
+                    valid = True
+                    for edge in ((payload.get('data') or {}).get('productVariants') or {}).get('edges', []):
+                        node = edge.get('node') or {}
+                        key = str(node.get('sku') or '').strip().upper()
+                        if key:
+                            product = node.get('product') or {}
+                            condition = next((value for alias in seen if
+                                              (value := ((node.get(alias) or {}).get('value') or
+                                                         (product.get(alias) or {}).get('value')))), '')
+                            price = float(node['price']) if node.get('price') else None
+                            compare = float(node['compareAtPrice']) if node.get('compareAtPrice') else None
+                            discount = compare is not None and price is not None and compare > price
+                            found[key] = {
+                                'found': True, 'sku': node.get('sku', key),
+                                'title': product.get('title', ''),
+                                'condition': condition + _cond_suffix(condition) if condition else '',
+                                'url': product.get('onlineStoreUrl', ''),
+                                'qty': node.get('inventoryQuantity', ''),
+                                'price': compare if discount else price,
+                                'sale_price': price if discount else None,
+                            }
+            except (ValueError, TypeError, KeyError):
+                valid = False
+                found = {}
+        for key in part:
+            if key in found:
+                value = found[key]
+            elif valid:
+                value = {'found': False}
+            else:
+                try:
+                    value = fetch_sku(key)
+                except Exception as error:
+                    value = {'found': False, 'error': str(error)[:120]}
+            result[key] = value
+            if valid:
+                with _sku_lock:
+                    _sku_cache[key] = (value, time.time())
     return result
 
 def get_inr_rate():

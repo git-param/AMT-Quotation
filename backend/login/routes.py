@@ -14,6 +14,7 @@ from backend.security.events import detect_login_anomaly, record
 from backend.security.limiter import hit
 from backend.security.passwords import error as password_error
 from backend.security.request import client_ip
+from backend.security.pricing_access import access_decision
 from backend.security.sessions import create as create_session, revoke_current
 
 bp = Blueprint('login', __name__)
@@ -50,6 +51,14 @@ def login():
             ).fetchone()
             if (user and user['is_active']
                     and check_password_hash(user['password_hash'], password)):
+                permitted, reason = access_decision(
+                    user['username'], user['role'], client_ip())
+                if not permitted:
+                    record('login_blocked_ip', 'warning', user['id'],
+                           user['username'], {'reason': reason}, connection=connection)
+                    connection.commit()
+                    return jsonify(error='Login is only allowed from the office network. '
+                                         'Ask an admin if you need access.'), 403
                 create_session(connection, user)
                 record('login_succeeded', user_id=user['id'], username=user['username'],
                        details={'replaced_previous_session': True}, connection=connection)

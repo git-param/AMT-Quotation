@@ -2,6 +2,25 @@
 
 This document records security releases, operating requirements, and known limits.
 
+## Pricing App IP policy
+
+The Quotation app reads `public.sec_config` and `public.sec_user_ips` from the
+shared Pricing App Postgres database. Set `PGHOST` and the normal `PG*`
+connection variables, or provide the production `/etc/aeliya/.pg.env` mount.
+The policy cache refreshes every 30 seconds. A shared database outage uses the
+last successful policy; if none has loaded, login remains available, matching
+the supplied production behavior.
+
+The Pricing App's `ip_enforce=1` switch activates the policy. `office_ips`
+allows all users from the listed IPs or CIDR ranges; `sec_user_ips` adds
+username-specific ranges. An unlisted user on an unlisted public IP is denied
+even after entering the correct password. The `admin_anywhere` switch defaults
+to enabled for `admin` and legacy `manager` accounts; set it to `0` to restrict
+them too. An existing browser session is revoked if a later request comes from
+a blocked IP. The production policy permits private or loopback IPs as a
+lockout safeguard when the app only sees an internal proxy address. Configure
+`AMT_TRUSTED_PROXY_COUNT` for the real client IP before relying on IP enforcement.
+
 ## Version 1 — 2026-10-19
 
 ### Implemented

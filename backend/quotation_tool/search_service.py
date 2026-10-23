@@ -4,14 +4,33 @@ import requests
 import threading
 from datetime import datetime
 from backend.config import BASE_DIR
+from backend.quotation_tool.pricing_db import connect as pricing_connect
 
 def _search_zoho(q):
     import json as _json
     cat_db = os.path.join(os.path.dirname(BASE_DIR), 'Pricing-App', 'catalog.db')
     like = f'%{q}%'
-    con  = sqlite3.connect(cat_db)
-    con.row_factory = sqlite3.Row
-    rows = con.execute('''
+    if os.environ.get('PGHOST') or os.path.isfile('/etc/aeliya/.pg.env'):
+        con = pricing_connect()
+        cur = con.cursor()
+        cur.execute('''
+        SELECT sku, item_name, stock_on_hand, condition,
+               weight_lbs, weight_unit, brand, image_docs_json,
+               zoho_item_id, raw_json
+        FROM pricing.zoho_inventory
+        WHERE (sku ILIKE %s OR item_name ILIKE %s OR brand ILIKE %s OR mpn ILIKE %s OR description ILIKE %s)
+          AND (status IS NULL OR status != 'inactive')
+        ORDER BY CASE WHEN sku = %s THEN 0 WHEN sku ILIKE %s THEN 1 ELSE 2 END,
+                 item_name
+        LIMIT 60
+        ''', (like, like, like, like, like, q, f'{q}%'))
+        rows = cur.fetchall()
+        cur.close()
+        con.close()
+    else:
+        con  = sqlite3.connect(cat_db)
+        con.row_factory = sqlite3.Row
+        rows = con.execute('''
         SELECT sku, item_name, stock_on_hand, condition,
                weight_lbs, weight_unit, brand, image_docs_json,
                zoho_item_id, raw_json
@@ -22,8 +41,8 @@ def _search_zoho(q):
           CASE WHEN sku = ? THEN 0 WHEN sku LIKE ? THEN 1 ELSE 2 END,
           item_name COLLATE NOCASE
         LIMIT 60
-    ''', (like, like, like, like, like, q, f'{q}%')).fetchall()
-    con.close()
+        ''', (like, like, like, like, like, q, f'{q}%')).fetchall()
+        con.close()
     results = []
     for r in rows:
         w  = r['weight_lbs']
@@ -125,18 +144,28 @@ def _zoho_img_get_token():
         db_path   = os.path.join(apex_dir, 'pricesync.db')
         cfg_path  = os.path.join(apex_dir, 'config.json')
 
-        con = sqlite3.connect(db_path)
-        con.row_factory = sqlite3.Row
-        row = con.execute('SELECT * FROM zoho_tokens LIMIT 1').fetchone()
-        con.close()
+        use_pg = bool(os.environ.get('PGHOST') or os.path.isfile('/etc/aeliya/.pg.env'))
+        if use_pg:
+            con = pricing_connect()
+            cur = con.cursor()
+            cur.execute('SELECT * FROM pricing.zoho_tokens LIMIT 1')
+            row = cur.fetchone()
+            cur.close()
+            con.close()
+        else:
+            con = sqlite3.connect(db_path)
+            con.row_factory = sqlite3.Row
+            row = con.execute('SELECT * FROM zoho_tokens LIMIT 1').fetchone()
+            con.close()
         if not row:
             return None
+        row = dict(row)
 
         token   = (row['access_token']  or '').strip()
         refresh = (row['refresh_token'] or '').strip()
         org_id  = row['org_id']
         region  = row.get('region') or 'com'
-        exp_str = (row['expires_at']    or '').strip()
+        exp_str = str(row['expires_at'] or '').strip()
 
         # Check if stored token still valid
         if token and exp_str:
@@ -175,9 +204,16 @@ def _zoho_img_get_token():
                 from datetime import timezone, timedelta
                 exp = (datetime.now(timezone.utc) + timedelta(seconds=3600)).isoformat()
                 # Update DB
-                con = sqlite3.connect(db_path)
-                con.execute('UPDATE zoho_tokens SET access_token=?, expires_at=? WHERE org_id=?',
-                            (new_token, exp, org_id))
+                if use_pg:
+                    con = pricing_connect()
+                    cur = con.cursor()
+                    cur.execute('UPDATE pricing.zoho_tokens SET access_token=%s, expires_at=%s WHERE org_id=%s',
+                                (new_token, exp, org_id))
+                    cur.close()
+                else:
+                    con = sqlite3.connect(db_path)
+                    con.execute('UPDATE zoho_tokens SET access_token=?, expires_at=? WHERE org_id=?',
+                                (new_token, exp, org_id))
                 con.commit()
                 con.close()
                 cached['token'] = new_token

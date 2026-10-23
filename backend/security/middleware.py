@@ -3,12 +3,13 @@ import hashlib
 import hmac
 import os
 
-from flask import jsonify, request, session
+from flask import jsonify, redirect, request, session
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from backend.security.events import record
 from backend.security.limiter import hit
 from backend.security.request import client_ip
+from backend.security.pricing_access import access_decision
 
 
 UNSAFE = {'POST', 'PUT', 'PATCH', 'DELETE'}
@@ -46,6 +47,29 @@ def init_security(app):
     def protect_request():
         if app.testing:
             return None
+        if session.get('user_id'):
+            from backend.database import get_db
+            from backend.security.sessions import revoke_current
+            connection = get_db()
+            try:
+                user = connection.execute(
+                    'SELECT username, role FROM users WHERE id = ?',
+                    (session['user_id'],)).fetchone()
+                if user:
+                    permitted, reason = access_decision(
+                        user['username'], user['role'], client_ip())
+                    if not permitted:
+                        with connection:
+                            revoke_current(connection, 'blocked_ip')
+                            record('session_blocked_ip', 'warning', session['user_id'],
+                                   user['username'], {'reason': reason},
+                                   connection=connection)
+                        session.clear()
+                        if request.path.startswith('/api/'):
+                            return jsonify(error='Access is not allowed from this network.'), 403
+                        return redirect('/login')
+            finally:
+                connection.close()
         ip_hash = hashlib.sha256(client_ip().encode()).hexdigest()[:32]
         response = _limited('ip', ip_hash, 3000, 60)
         if response:
@@ -54,7 +78,9 @@ def init_security(app):
             response = _limited('user', str(session['user_id']), 300, 60)
             if response:
                 return response
-            if ('sku-lookup' in request.path or request.path == '/api/lookup'):
+            if ('sku-lookup' in request.path or request.path in (
+                    '/api/lookup', '/api/quotation/letter', '/api/images',
+                    '/api/download-images-zip')):
                 response = _limited('lookup', str(session['user_id']), 30, 60)
             elif '/invoices/' in request.path and request.method in UNSAFE:
                 response = _limited('pi', str(session['user_id']), 10, 60)

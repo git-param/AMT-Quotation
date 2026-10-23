@@ -18,6 +18,105 @@ from backend.common.auth import (
 bp = Blueprint('manager_dashboard', __name__)
 
 
+@bp.route('/api/manager/logs')
+@manager_required
+def api_manager_logs():
+    """Page through search and copy activity with server-side filters."""
+    kind = (request.args.get('kind') or 'search').strip().lower()
+    kind = 'copy' if kind == 'copy' else 'search'
+    table = 'copy_logs' if kind == 'copy' else 'search_logs'
+    columns = ('id, user_name, user_ip, copy_type, sku_count, ts' if kind == 'copy'
+               else 'id, user_name, user_ip, skus, found_count, not_found, ts')
+    searchable = ('user_name', 'copy_type') if kind == 'copy' else ('user_name', 'skus')
+    try:
+        page = max(1, int(request.args.get('page') or 1))
+    except ValueError:
+        page = 1
+    clauses, params = [], []
+    user = (request.args.get('user') or '').strip()
+    if user:
+        clauses.append('user_name = ?')
+        params.append(user)
+    for param, operator in (('from', '>='), ('to', '<=')):
+        value = (request.args.get(param) or '').strip()
+        if value:
+            clauses.append(f'date(ts) {operator} date(?)')
+            params.append(value)
+    query = (request.args.get('q') or '').strip()
+    if query:
+        clauses.append('(' + ' OR '.join(f'{column} LIKE ?' for column in searchable) + ')')
+        params.extend([f'%{query}%'] * len(searchable))
+    where = ' WHERE ' + ' AND '.join(clauses) if clauses else ''
+    connection = get_db()
+    try:
+        total = connection.execute(f'SELECT COUNT(*) FROM {table}{where}', params).fetchone()[0]
+        rows = connection.execute(
+            f'SELECT {columns} FROM {table}{where} ORDER BY id DESC LIMIT ? OFFSET ?',
+            params + [100, (page - 1) * 100]).fetchall()
+        users = [row['user_name'] for row in connection.execute(
+            f'SELECT DISTINCT user_name FROM {table} ORDER BY user_name')]
+    finally:
+        connection.close()
+    return jsonify(kind=kind, page=page, per_page=100, total=total,
+                   pages=max(1, (total + 99) // 100), rows=[dict(row) for row in rows],
+                   users=users)
+
+
+@bp.route('/api/manager/reports')
+@manager_required
+def api_manager_reports():
+    """Summarize quotation demand and copy activity."""
+    connection = get_db()
+    try:
+        missing = connection.execute('''
+            SELECT TRIM(skus) sku, COUNT(*) times, MAX(ts) last_asked
+            FROM search_logs WHERE not_found > 0 AND found_count = 0
+              AND skus NOT LIKE '%,%' AND TRIM(skus) <> ''
+            GROUP BY TRIM(skus) ORDER BY times DESC, last_asked DESC LIMIT 200
+        ''').fetchall()
+        weekly = connection.execute('''
+            SELECT strftime('%Y-%W', ts) week, MIN(date(ts)) week_start,
+                   COALESCE(SUM(found_count), 0) found,
+                   COALESCE(SUM(not_found), 0) missed
+            FROM search_logs WHERE ts >= datetime('now', '-84 days', 'localtime')
+            GROUP BY week ORDER BY week
+        ''').fetchall()
+        hours = connection.execute('''
+            SELECT CAST(strftime('%H', ts) AS INTEGER) hour, COUNT(*) searches
+            FROM search_logs GROUP BY hour ORDER BY hour
+        ''').fetchall()
+        copies = connection.execute('''
+            SELECT copy_type, COUNT(*) copies, COALESCE(SUM(sku_count), 0) skus
+            FROM copy_logs GROUP BY copy_type ORDER BY copies DESC
+        ''').fetchall()
+        totals = connection.execute('''
+            SELECT COALESCE(SUM(found_count), 0) found,
+                   COALESCE(SUM(not_found), 0) missed, COUNT(*) searches
+            FROM search_logs
+        ''').fetchone()
+        frequency = {}
+        for row in connection.execute("SELECT skus FROM search_logs WHERE TRIM(COALESCE(skus,'')) <> ''"):
+            for sku in str(row['skus'] or '').split(','):
+                sku = sku.strip()
+                if sku:
+                    frequency[sku] = frequency.get(sku, 0) + 1
+    finally:
+        connection.close()
+    found, missed = int(totals['found']), int(totals['missed'])
+    return jsonify(
+        totals={'searches': int(totals['searches']), 'skus_found': found,
+                'skus_missed': missed,
+                'hit_rate': round(found * 100 / (found + missed), 1)
+                            if found + missed else None,
+                'distinct_missing': len(missing)},
+        missing=[dict(row) for row in missing], hit_by_week=[dict(row) for row in weekly],
+        by_hour=[dict(row) for row in hours], copy_types=[dict(row) for row in copies],
+        top_skus=[{'sku': sku, 'count': count} for sku, count in
+                  sorted(frequency.items(), key=lambda item: -item[1])[:50]],
+        note='The could not quote list includes only single-SKU searches.'
+    )
+
+
 @bp.route('/api/manager/api-keys')
 @permission_required('users.manage')
 def api_manager_list_keys():

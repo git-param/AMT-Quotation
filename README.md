@@ -10,6 +10,9 @@ when the new app uses the same database. The live monolith used
 `/app/quotation.db`; this source defaults to `database/quotation.db`. Set
 `AMT_QUOTATION_DB_PATH` to the persistent live database path during deployment,
 or migrate the complete database before starting the new build. Back it up first.
+The path is loaded from `backend/.env` before database initialization. If an
+explicit `AMT_QUOTATION_DB_PATH` does not exist, startup stops instead of
+creating a blank database there.
 Send a key in the `X-API-Key` header to call quotation API endpoints such as
 `GET /api/me` and `POST /api/lookup` without a browser session. A valid key gets
 `{"auth":"api_key","role":"api","username":"api-key"}` from `/api/me`;
@@ -28,6 +31,23 @@ is 50, and the allowed range is 1 to 500. Quotation and enquiry lookup requests,
 including API-key requests, reject larger batches before calling providers.
 Fresh stock checks during order and enquiry saves use the same limit; a save
 with more distinct SKUs than the configured limit returns an error.
+
+## Production quotation catalog
+
+The quotation tool also supports the live catalog workflow: batched Shopify
+lookups, Atlas and Al Reza reference fallback, guarded discounts, image
+downloads, a quotation letter API, price history, and manager activity reports.
+`POST /api/quotation/letter` accepts `{"skus":["26733"],"currency":"USD"}`;
+set `"letter":false` to receive the quotation table alone. The response
+includes HTML, plain text, and lookup rows. The configured SKU limit applies.
+
+The local Zoho search and image reader uses the adjacent `Pricing-App` SQLite
+catalog. When `PGHOST` is set, or `/etc/aeliya/.pg.env` exists, it reads the
+shared `pricing` Postgres schema used by the supplied live app. Install the
+updated requirements before enabling that source. Price history and line-level
+quote logs require the shared Postgres database; without it, lookup and
+quotations still work, and `GET /api/price-history` reports unavailable.
+The shared Pricing App IP policy is documented in [Security](docs/security.md).
 
 The active CRM workflow is now **Clients & Orders** at `/clients-orders`: search
 clients, manage their profiles, save independent pending orders, and generate
@@ -118,6 +138,31 @@ existing sibling `Pricing-App` directory next to this project.
 Application startup now applies pending migrations before the existing user
 seeding logic. Flask, SQLite, authentication, URLs, and legacy records remain
 unchanged. No migration rewrites, renames, or deletes an existing table or row.
+
+### Upgrading the existing VPS database
+
+The `.env` file contains settings; quotation accounts, search/copy history,
+clients, orders, and invoices live in the SQLite database. The shared Pricing
+App Postgres catalog is a separate database. On the VPS, first confirm the
+actual path of the current `quotation.db` and set, for example,
+`AMT_QUOTATION_DB_PATH=/app/quotation.db` in `backend/.env`. Preserve that file
+and `backend/secret.key` across code deployments. The default path under a new
+checkout is different and would otherwise be a new database.
+
+Stop the old app and other database writers. Make a SQLite-aware backup of the
+existing file (the backup API includes committed WAL data), and verify the
+backup before starting the new code. Then inspect the existing file:
+
+```bash
+python3 -m backend.migrations status --database /app/quotation.db
+```
+
+On the first new-app startup, `initialize_database()` applies only pending
+versions to that same file, records them in `schema_migrations`, and then serves
+requests. You may instead run `python3 -m backend.migrations migrate --database
+/app/quotation.db` while the app is stopped. Do not replace the live file with
+the checkout's `database/quotation.db`; doing that replaces its history. If an
+upgrade fails, its pending schema changes roll back and startup fails.
 
 | Version | Purpose |
 | --- | --- |
