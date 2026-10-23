@@ -136,7 +136,7 @@ class BulkPiTests(unittest.TestCase):
                     strings = book.read('xl/sharedStrings.xml').decode()
                     self.assertEqual(strings.count(SHIPPING_NOTICE), int(shown))
 
-    def test_description_and_annexure_edits_persist_print_and_issue_without_changing_order(self):
+    def test_description_and_annexure_edits_update_order_and_preserve_print_snapshot(self):
         self.items(5)
         preview = self.preview('INR')
         original = self.client.get(f'/api/orders/{self.order_id}').json
@@ -160,7 +160,13 @@ class BulkPiTests(unittest.TestCase):
             self.assertIn('User edited cover description', strings)
             self.assertNotIn('Unsaved print edit', strings)
             self.assertIn('Edited annexure description', strings)
-        self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['lines'], original['lines'])
+        updated=self.client.get(f'/api/orders/{self.order_id}').json['lines']
+        self.assertEqual(updated[2]['description'],'Edited annexure description')
+        self.assertEqual(updated[2]['quantity'],'2')
+        self.assertEqual(updated[2]['unit_price'],'100.01')
+        self.assertEqual(updated[2]['currency'],'INR')
+        self.assertEqual([line for i,line in enumerate(updated) if i!=2],
+                         [line for i,line in enumerate(original['lines']) if i!=2])
         self.assertEqual(self.client.post(self.base+'/issue', json={'preview_id':preview['preview_id']}).json, issued.json)
 
     def test_blank_description_can_print_but_cannot_be_issued(self):
@@ -247,7 +253,8 @@ class BulkPiTests(unittest.TestCase):
                 self.assertEqual(alignment.get('vertical'), 'center')
                 border = borders[int(style.get('borderId'))]
                 for edge in ('left','right','top','bottom'):
-                    self.assertEqual(border.find('{*}'+edge).get('style'), 'medium')
+                    expected = 'medium' if (edge=='left' and column=='A') or (edge=='right' and column=='J') else 'thin'
+                    self.assertEqual(border.find('{*}'+edge).get('style'), expected)
 
     def test_annexure_uom_and_editable_total_survive_save_print_and_exports(self):
         self.items(5)

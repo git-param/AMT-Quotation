@@ -49,6 +49,35 @@ class NativePiTests(unittest.TestCase):
         self.assertEqual(result.status_code,201,result.json)
         return result.json
 
+    def test_update_preview_persists_changed_order_details_only(self):
+        preview=self.preview()
+        doc=preview['document']
+        line=doc['totals']['lines'][0]
+        changes={'date':'2026-10-20','order':{'po_reference':'PO/updated','notes':'Packed for dispatch'},
+                 'delivery':{'consignee_text':doc['delivery']['consignee_text'].replace('Consignee','Updated Consignee',1)},
+                 'lines':[{key:line[key] for key in ('id','sku','description','hsn_code','item_condition','uom','quantity','unit_price')}],
+                 'shipping_charges':'15.00','amount_in_words':'Custom invoice wording'}
+        changes['lines'][0]['description']='Updated item description'
+        changes['lines'][0]['quantity']='4'
+        changes['lines'][0]['unit_price']='20.50'
+        saved=self.client.put(self.base+'/preview/'+preview['preview_id'],json=changes)
+        self.assertEqual(saved.status_code,200,saved.json)
+        order=self.client.get(f'/api/orders/{self.order_id}').json
+        self.assertEqual(order['order']['po_reference'],'PO/updated')
+        self.assertEqual(order['order']['notes'],'Packed for dispatch')
+        self.assertEqual(order['order']['pi_date'],'2026-10-20')
+        self.assertEqual(order['order']['shipping_charges'],'15.00')
+        self.assertEqual(order['order']['payment_terms'],'100% advance')
+        self.assertIn('Updated Consignee',order['delivery']['consignee_text'])
+        self.assertEqual(order['lines'][0]['description'],'Updated item description')
+        self.assertEqual(order['lines'][0]['quantity'],'4')
+        self.assertEqual(order['lines'][0]['unit_price'],'20.50')
+        self.assertEqual(saved.json['document']['amount_in_words'],'Custom invoice wording')
+        self.assertEqual(len(order['revisions']),2)
+        again=self.client.put(self.base+'/preview/'+preview['preview_id'],json=changes)
+        self.assertEqual(again.status_code,200,again.json)
+        self.assertEqual(len(self.client.get(f'/api/orders/{self.order_id}').json['revisions']),2)
+
     def issue(self,preview):
         return self.client.post(self.base+'/issue',json={'preview_id':preview['preview_id']})
 

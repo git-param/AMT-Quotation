@@ -241,8 +241,9 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         footer(paper);
         annexurePaper=node('div',undefined,'pi-annexure-page');
         annexurePaper.setAttribute('role','region');annexurePaper.setAttribute('aria-label','Annexure-1 product list');
+        const annexureHeader=node('div',undefined,'pi-header-box');
         const annexureBranding=node('div',undefined,'pi-branding');image(annexureBranding,'header.png');
-        annexurePaper.append(annexureBranding);paper.append(annexurePaper);
+        annexureHeader.append(annexureBranding);annexurePaper.append(annexureHeader);paper.append(annexurePaper);
       }
       const table = node("table", undefined, "pi-company-grid pi-grid-" + section.name + (section.name === "bank" ? " pi-preview-totals" : "") + (section.name === "items" && doc.pi_format !== 'bulk' && doc.totals.lines.length <= 4 ? " pi-roomy-items" : "") + (section.name === "items" && section.rows.length === 2 ? " pi-single-item" : "") + (section.name === "items" && doc.pi_format !== 'bulk' && doc.totals.lines.length === 1 ? " pi-single-sku" : ""));
       const columns = node("colgroup");

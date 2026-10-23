@@ -1,6 +1,7 @@
 """Client-authorized editable previews and idempotent native PI issuance."""
 from io import BytesIO
 import json
+import sqlite3
 from uuid import uuid4
 
 from flask import jsonify, request, send_file
@@ -9,6 +10,8 @@ from backend.common.auth import authenticated_required,get_current_user
 from backend.database import get_db
 from backend.orders.routes import bp
 from backend.orders.service import details,read_order,record_revision
+from backend.orders.service import save_delivery,order_line
+from backend.orders.parties import text_delivery
 from backend.orders.pi_document import prepare,edit,validate_ready,validate_pdf_details,print_document,recalculate,missing_details
 from backend.orders import pi_exports
 from backend.orders.pi_layout import layout
@@ -19,6 +22,10 @@ from backend.scalability.pi_render import files as render_invoice_files
 
 def validation_error(error):
     return jsonify(error=str(error), missing_fields=getattr(error, 'missing_fields', [])), 400
+
+
+class PreviewConflict(ValueError):
+    pass
 
 
 def authorized(connection,order_id):
@@ -48,6 +55,85 @@ def issued_response(connection,order_id,invoice_id,doc):
         pdf_filename=invoice_filename(doc['reference'],'pdf')),201
 
 
+def persist_order_edits(connection, order_id, user, order, previous, doc):
+    """Copy only edited, order-backed preview fields into the order transaction."""
+    order_changes = {key:doc['order'][key] for key in (
+        'po_reference','pi_reference','payment_terms','delivery_terms','destination',
+        'delivery_time','dispatch_method','notes')
+        if doc['order'][key] != previous['order'][key]}
+    if doc['date'] != previous['date']:
+        order_changes['pi_date'] = doc['date']
+    if doc['totals']['shipping'] != previous['totals']['shipping']:
+        from backend.enquiries.lines import number
+        from decimal import Decimal
+        order_changes['shipping_minor'] = number(doc['totals']['shipping'],2,Decimal('999999999.99'))
+        if order['currency'] != doc['currency']:
+            order_changes['currency'] = doc['currency']
+            discount = doc['order'].get('discount')
+            if discount and discount['type'] == 'amount':
+                from backend.orders.invoices import money
+                from decimal import Decimal
+                rates = doc['source_conversion'].get('exchange_rates')
+                amount = Decimal(discount['value'])
+                if rates:
+                    amount = amount / Decimal(rates[order['currency']]) * Decimal(rates[doc['currency']])
+                else:
+                    rate = Decimal(doc['source_conversion']['usd_inr_rate'])
+                    amount = amount * rate if order['currency'] == 'USD' else amount / rate
+                discount = {**discount,'value':format(money(amount),'.2f')}
+                order_changes['discount_json'] = json.dumps(discount)
+                doc['order']['discount'] = discount
+            doc['order']['currency'] = doc['currency']
+
+    delivery_changed = doc['delivery'] != previous['delivery']
+    old_lines = {line['id']:line for line in previous['totals']['lines']}
+    line_changes = []
+    for line in doc['totals']['lines']:
+        old = old_lines[line['id']]
+        changed = {key for key in ('sku','description','hsn_code','item_condition','uom','quantity','unit_price')
+                   if line[key] != old[key]}
+        if changed:
+            line_changes.append((line,changed))
+    if not order_changes and not delivery_changed and not line_changes:
+        return False
+    if order['updated_at'] != previous['source_updated_at']:
+        raise PreviewConflict('The order changed after this preview was opened. Open a new PI preview.')
+
+    if line_changes:
+        skus = [line['sku'].strip().casefold() for line in doc['totals']['lines']]
+        if len(skus) != len(set(skus)):
+            raise ValueError('Keep each SKU only once in the order.')
+        for line,changed in line_changes:
+            row = connection.execute('SELECT * FROM order_sku_lines WHERE id=? AND order_id=? AND is_active=1',
+                                     (line['id'],order_id)).fetchone()
+            if not row:
+                raise PreviewConflict('An order item changed after this preview was opened. Open a new PI preview.')
+            values = order_line({**{key:line[key] for key in changed},
+                **({'currency':doc['currency']} if 'unit_price' in changed else {})},row)
+            columns = {'quantity':'quantity_milli','unit_price':'unit_price_minor'}
+            updates = {columns.get(key,key):values[columns.get(key,key)] for key in changed}
+            if 'unit_price' in changed:
+                updates['currency'] = values['currency']
+            connection.execute('UPDATE order_sku_lines SET '+', '.join(key+'=?' for key in updates)+
+                ",updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+                [*updates.values(),user['id'],line['id']])
+    if delivery_changed:
+        snapshot = text_delivery(doc['delivery'],previous['delivery'],doc['order']['destination'],True)
+        save_delivery(connection,order_id,snapshot,user['id'])
+    if order_changes:
+        connection.execute('UPDATE client_orders SET '+', '.join(key+'=?' for key in order_changes)+
+            ",updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+            [*order_changes.values(),user['id'],order_id])
+    else:
+        connection.execute("UPDATE client_orders SET updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+                           (user['id'],order_id))
+    record_revision(connection,order_id,user,'edit')
+    doc['source_state'] = details(connection,read_order(connection,user,order_id))
+    doc['source_updated_at'] = doc['source_state']['order']['updated_at']
+    doc['order']['pi_date'] = doc['source_state']['order']['pi_date']
+    return True
+
+
 @bp.route('/api/orders/<int:order_id>/invoices/preview',methods=['POST'])
 @bp.route('/api/orders/<int:order_id>/invoices/preview/<preview_id>',methods=['PUT'])
 @authenticated_required
@@ -68,10 +154,12 @@ def save_preview(order_id,preview_id=None):
             if row['issued_invoice_id']:
                 return jsonify(error='This PI has already been issued. Open a new preview for further changes.'),409
             original_document_json=row['document_json']
-            if request.args.get('for_generation')=='1':
-                doc=print_document(json.loads(original_document_json),data)
+            previous_doc=json.loads(original_document_json)
+            for_generation=request.args.get('for_generation')=='1'
+            if for_generation:
+                doc=print_document(previous_doc,data)
                 validate_ready(doc)
-            else:doc=edit(json.loads(original_document_json),data)
+            else:doc=edit(previous_doc,data)
             if doc['reference']!=order['pi_reference']:
                 if order['updated_at']!=doc['source_updated_at']:
                     return jsonify(error='The order changed after this preview was opened. Open a new PI preview.'),409
@@ -89,6 +177,8 @@ def save_preview(order_id,preview_id=None):
         missing = missing_details(doc)
         if not missing:
             validate_pdf_details(doc)
+    except PreviewConflict as error:
+        return jsonify(error=str(error)),409
     except ValueError as error:
         return validation_error(error)
     finally:
@@ -109,12 +199,15 @@ def save_preview(order_id,preview_id=None):
                 return jsonify(error='This PI has already been issued. Open a new preview for further changes.'),409
             if row['document_json']!=original_document_json:
                 return jsonify(error='The PI preview changed while it was prepared. Review the latest preview and try again.'),409
-            if doc['reference']!=order['pi_reference']:
-                connection.execute("UPDATE client_orders SET pi_reference=?,updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
-                    (doc['reference'],user['id'],order_id))
-                doc['source_updated_at']=connection.execute('SELECT updated_at FROM client_orders WHERE id=?',(order_id,)).fetchone()[0]
-                doc['source_state']['order']['pi_reference']=doc['reference']
-                record_revision(connection,order_id,user,'edit')
+            if for_generation:
+                if doc['reference']!=order['pi_reference']:
+                    connection.execute("UPDATE client_orders SET pi_reference=?,updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+                        (doc['reference'],user['id'],order_id))
+                    doc['source_updated_at']=connection.execute('SELECT updated_at FROM client_orders WHERE id=?',(order_id,)).fetchone()[0]
+                    doc['source_state']['order']['pi_reference']=doc['reference']
+                    record_revision(connection,order_id,user,'edit')
+            else:
+                persist_order_edits(connection,order_id,user,order,previous_doc,doc)
             connection.execute("UPDATE invoice_previews SET document_json=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
                                (json.dumps(doc),preview_id))
         else:
@@ -129,8 +222,12 @@ def save_preview(order_id,preview_id=None):
         connection.commit()
         return jsonify(preview_id=preview_id,document=doc,layout=layout(doc),
             missing_fields=missing, pdf_url=f'/api/orders/{order_id}/invoices/preview/{preview_id}/pdf'),200 if request.method=='PUT' else 201
+    except PreviewConflict as error:
+        return jsonify(error=str(error)),409
     except ValueError as error:
         return validation_error(error)
+    except sqlite3.IntegrityError:
+        return jsonify(error='Conflicting order or item details.'),409
     finally:
         connection.rollback();connection.close()
 

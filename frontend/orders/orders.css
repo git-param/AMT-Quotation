@@ -1861,7 +1861,7 @@ body.embedded #orderForm .consignee-editor textarea {
   border-top: 12px solid #edf1f6;
 }
 .pi-grid-annexure tr:nth-child(2) {
-  border-bottom: 1.5px solid #000;
+  border-bottom: 1px solid #000;
 }
 .pi-grid-annexure_totals {
   font-size: 12px;
@@ -1871,7 +1871,8 @@ body.embedded #orderForm .consignee-editor textarea {
   font-family: "Times New Roman", Times, serif;
   font-size: 12px;
   line-height: 1.15;
-  border: 2px solid #000;
+  border: 1.5px solid #000;
+  border-top-width: 1px;
 }
 .pi-paper .pi-grid-annexure td {
   border: 1px solid #000;
@@ -1884,11 +1885,11 @@ body.embedded #orderForm .consignee-editor textarea {
     sans-serif;
   text-align: center;
   vertical-align: bottom;
-  border-bottom: 2px solid #000;
+  border-bottom: 1px solid #000;
 }
 .pi-paper .pi-grid-annexure .pi-cell-head {
-  border-top: 2px solid #000;
-  border-bottom: 2px solid #000;
+  border-top: 1px solid #000;
+  border-bottom: 1px solid #000;
 }
 .pi-paper .pi-grid-annexure .pi-cell-bold_center {
   font-weight: 700;
@@ -1900,7 +1901,7 @@ body.embedded #orderForm .consignee-editor textarea {
   gap: 4px;
 }
 .pi-paper .pi-grid-annexure td.pi-total-cell {
-  border: 2px solid #000;
+  border: 1px solid #000;
   text-align: center;
   vertical-align: middle;
   font-weight: 700;
