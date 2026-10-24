@@ -7,6 +7,16 @@
   const ratesButton = document.getElementById('saveCurrencyRates');
   const refreshButton = document.getElementById('refreshCurrencyRates');
   let providerErrorShown = false;
+  async function responseData(response, fallback) {
+    if (typeof response.text !== 'function') return response.json();
+    const body = await response.text();
+    try {
+      return body ? JSON.parse(body) : {};
+    } catch {
+      const status = response.status ? ' ('+response.status+')' : '';
+      throw new Error(fallback+status+' The server returned a non-JSON response.');
+    }
+  }
   function showRates(data) {
     const hasRates = ['INR','AED','GBP','EUR'].every(code => data.rates?.[code]);
     for (const code of ['INR','AED','GBP','EUR']) {
@@ -39,7 +49,8 @@
     }
   }
   async function ratesRequest(options) {
-    const response = await fetch('/api/currency-rates', options); const data = await response.json();
+    const response = await fetch('/api/currency-rates', options);
+    const data = await responseData(response, 'Unable to load currency rates.');
     if (!response.ok) throw new Error(data.error || 'Unable to load currency rates.');
     showRates(data);
     return data;
@@ -59,7 +70,7 @@
     refreshButton.disabled = true; ratesMessage.textContent = 'Fetching current published rates…';
     try {
       const response = await fetch('/api/currency-rates/refresh',{method:'POST'});
-      const data = await response.json();
+      const data = await responseData(response, 'Unable to refresh rates.');
       if (!response.ok) throw new Error(data.error || 'Unable to refresh rates.');
       showRates(data);ratesMessage.className = '';ratesMessage.textContent = 'Rates refreshed.';
     } catch (error) { ratesMessage.className = 'error'; ratesMessage.textContent = error.message; }

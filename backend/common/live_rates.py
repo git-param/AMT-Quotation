@@ -14,6 +14,8 @@ SOURCE_URL = 'https://frankfurter.dev/'
 API_URL = 'https://api.frankfurter.dev/v2/rates'
 QUOTES = ('INR', 'AED', 'GBP', 'EUR')
 DEFAULT_HOURS = 24
+IST = timezone(timedelta(hours=5, minutes=30))
+MAX_PROVIDER_DATE_AHEAD = 1
 _refresh_lock = threading.Lock()
 _wake = threading.Event()
 _started = False
@@ -49,7 +51,7 @@ def _fetch():
     if not isinstance(rows, list):
         raise ValueError('The rate provider returned an invalid response.')
     rates, dates, providers = {}, {}, {}
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(IST).date()
     for row in rows:
         if not isinstance(row, dict) or row.get('base') != 'USD' or row.get('quote') not in QUOTES:
             continue
@@ -63,8 +65,10 @@ def _fetch():
             raise ValueError('The rate provider returned invalid rate data.') from error
         if not rate.is_finite() or not 0 < rate <= 1000000:
             raise ValueError('The rate provider returned an invalid exchange rate.')
-        if not today - timedelta(days=10) <= published <= today:
+        if published < today - timedelta(days=10):
             raise ValueError('The rate provider returned an outdated exchange rate.')
+        if published > today + timedelta(days=MAX_PROVIDER_DATE_AHEAD):
+            raise ValueError('The rate provider returned a future-dated exchange rate.')
         rates[code] = str(rate)
         dates[code] = published.isoformat()
         providers[code] = row.get('providers') if isinstance(row.get('providers'), list) else []
@@ -81,7 +85,7 @@ def refresh_if_due(force=False):
         connection = get_db()
         try:
             current = status(connection)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(IST)
             last = current.get('fetched_at')
             attempted = current.get('attempted_at')
             if not force:
