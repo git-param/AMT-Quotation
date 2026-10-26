@@ -21,6 +21,7 @@ from flask import jsonify, request, send_file
 
 from backend.common.auth import authenticated_required, get_current_user
 from backend.database import get_db
+from backend.settings import allocate_pi_reference
 from backend.enquiries.lines import number
 from backend.common.currencies import CURRENCIES, UNITS
 from backend.orders.routes import bp
@@ -402,6 +403,9 @@ def generate_invoice(order_id):
             raise ValueError('Choose USD or INR PI currency.')
         if order['status'] == 'cancelled':
             raise ValueError('Cancelled orders cannot generate a PI.')
+        generated_reference = allocate_pi_reference(connection, user['id'])
+        order = dict(order)
+        order['pi_reference'] = generated_reference
         state = details(connection, order)
         if state['order'].get('discount'):
             raise ValueError('Use Preview PI to generate a discounted invoice with PDF and Excel exports.')

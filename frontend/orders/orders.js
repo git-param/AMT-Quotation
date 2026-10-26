@@ -397,10 +397,7 @@ async function createOrder() {
   el('shipping_charges').value='0.00';
   el('bank_charges').value='0.00';
   el('delivery_terms').value='DAP';el('delivery_time').value='4 to 6 business days';el('dispatch_method').value='DHL/Fedex/Aramex';
-  el('pi_reference').value='';el('pi_reference').readOnly=false;
-  const piDefaults=await api('/api/orders/pi-defaults');
-  if(version!==formVersion)return;
-  el('pi_reference').value=piDefaults.pi_prefix?piDefaults.pi_prefix+'/':'';
+  el('pi_reference').value='';el('pi_reference').readOnly=true;
   if(!await prepareClient(Number(clientScope),null,version))return;
   if(!clientData.lead.can_edit||!clientData.lead.is_active)throw new Error('Choose an editable, active client.');
   el('editor').hidden=false;el('detail').hidden=true;resetComposer();el('editor').scrollIntoView({behavior:'smooth'});
@@ -413,8 +410,7 @@ async function editOrder(id) {
   updateOrderStatusUI(data.order);
   editing=id;initialDrafts.reset();el('initialLines').hidden=true;
   headerFields.forEach(key=>{el(key).value=data.order[key];});if(!await prepareClient(data.order.client_id,data.delivery,version))return;
-  if(!data.order.pi_reference&&data.pi_defaults?.pi_prefix&&!data.invoices?.length)el('pi_reference').value=data.pi_defaults.pi_prefix+'/';
-  el('pi_reference').readOnly=Boolean(data.invoices?.some(invoice=>invoice.workbook_format==='xlsm'));
+  el('pi_reference').readOnly=true;
   el('detail').hidden=true;el('formTitle').textContent='Edit order';el('referenceHint').textContent=data.order.reference;el('editor').hidden=false;resetComposer();el('editor').scrollIntoView({behavior:'smooth'});
 }
 el('orderForm').onsubmit=async event=>{

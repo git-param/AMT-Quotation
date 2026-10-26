@@ -212,6 +212,8 @@ def edit(document, edits):
         if not isinstance(edits['order'],dict) or set(edits['order'])-ORDER_FIELDS:
             raise ValueError('Invalid PI commercial fields.')
         validated = header(edits['order'],doc['order'])
+        if validated['pi_reference'] != doc['order']['pi_reference']:
+            raise ValueError('PI numbers are assigned automatically from the configured sequence.')
         for key in ORDER_FIELDS:
             doc['order'][key] = validated[key]
         if not doc['order']['pi_reference']:
@@ -318,6 +320,8 @@ def print_document(document, edits):
     for key in ('date','prepared_phone','terms','bulk_description','amount_in_words'):
         if isinstance(edits.get(key),str):doc[key]=edits[key][:20000]
     if isinstance(edits.get('order'),dict):
+        if edits['order'].get('pi_reference',doc['order']['pi_reference']) != doc['order']['pi_reference']:
+            raise ValueError('PI numbers are assigned automatically from the configured sequence.')
         for key in ORDER_FIELDS:
             if isinstance(edits['order'].get(key),str):doc['order'][key]=edits['order'][key][:5000]
         doc['reference']=doc['order']['pi_reference']

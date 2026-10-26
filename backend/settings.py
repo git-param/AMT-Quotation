@@ -159,6 +159,57 @@ def user_pi_defaults(connection, user_id):
     return dict(row) if row else {'department': '', 'pi_prefix': ''}
 
 
+PI_NUMBER_SETTING = 'pi_number_last_used'
+
+
+def pi_number_last_used(connection):
+    row = connection.execute('SELECT value FROM app_settings WHERE key=?', (PI_NUMBER_SETTING,)).fetchone()
+    return int(row[0]) if row and str(row[0]).isdigit() else 0
+
+
+def allocate_pi_reference(connection, user_id):
+    """Reserve the next global PI number; caller must hold a write transaction."""
+    number = pi_number_last_used(connection) + 1
+    if number > 2_000_000_000:
+        raise ValueError('The PI number sequence has reached its maximum value.')
+    connection.execute(
+        'INSERT INTO app_settings(key,value) VALUES(?,?) '
+        'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+        (PI_NUMBER_SETTING, str(number)),
+    )
+    prefix = user_pi_defaults(connection, user_id)['pi_prefix']
+    return f'{prefix}/{number}' if prefix else str(number)
+
+
+@bp.route('/api/pi-number-counter', methods=['GET', 'PUT'])
+@permission_required('users.manage')
+def pi_number_counter():
+    user = get_current_user()
+    connection = get_db()
+    try:
+        if request.method == 'PUT':
+            data = request.get_json(silent=True)
+            value = data.get('last_used') if isinstance(data, dict) and set(data) == {'last_used'} else None
+            if type(value) is not int or not 0 <= value <= 2_000_000_000:
+                return jsonify(error='Enter a whole PI number from 0 to 2,000,000,000.'), 400
+            with connection:
+                before = pi_number_last_used(connection)
+                connection.execute(
+                    'INSERT INTO app_settings(key,value) VALUES(?,?) '
+                    'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                    (PI_NUMBER_SETTING, str(value)),
+                )
+                connection.execute(
+                    'INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
+                    "VALUES(?,?,'pi_number_counter_update','app_settings',?,?)",
+                    (user['id'], user['username'], PI_NUMBER_SETTING,
+                     json.dumps({'before': before, 'after': value})),
+                )
+        return jsonify(last_used=pi_number_last_used(connection))
+    finally:
+        connection.close()
+
+
 @bp.route('/api/departments', methods=['GET'])
 @permission_required('settings.manage')
 def list_departments():

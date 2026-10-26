@@ -297,6 +297,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
           const td = node("td", undefined, "pi-cell-" + (cell.style || "normal")); td.colSpan = cell.span;
           if (cell.rowspan) td.rowSpan = cell.rowspan;
           if (cell.total_cell) td.classList.add('pi-total-cell');
+          if (cell.center) td.classList.add('pi-cell-center');
           if (cell.nowrap) td.classList.add('pi-nowrap');
           if (cell.open_left) td.classList.add('pi-open-left');
           if (cell.open_right) td.classList.add('pi-open-right');
@@ -311,7 +312,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
             const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.free ? 'Free' : cell.value, cell.field, cell.multiline, cell.free ? 'text' : cell.type || "text");
             if(cell.calculated)calculated.push({path:cell.calculated,input,autoQuantity:cell.auto_quantity});
             if(cell.auto_quantity){input.maxLength=200;input.title='Edit the displayed total quantity. Clear to restore the automatic total.';}
-            if (cell.readonly) { input.readOnly = true; input.title = cell.field==='order.delivery_terms'?'Delivery terms are fixed at DAP.':cell.field?.endsWith('.line_total')?'Calculated after discount. Edit quantity or unit price to change this amount.':'Shared HSN code managed in Configuration'; }
+            if (cell.readonly || cell.field === 'order.pi_reference') { input.readOnly = true; input.title = cell.field==='order.pi_reference'?'PI numbers are assigned automatically from the configured sequence.':cell.field==='order.delivery_terms'?'Delivery terms are fixed at DAP.':cell.field?.endsWith('.line_total')?'Calculated after discount. Edit quantity or unit price to change this amount.':'Shared HSN code managed in Configuration'; }
             if (!cell.label && !amount) td.lastChild.classList.add("pi-unlabelled");
             if (cell.editor_rows) input.rows = 12;
             else if (cell.multiline) input.rows = cell.field.startsWith("delivery.") ? 5 : 2;

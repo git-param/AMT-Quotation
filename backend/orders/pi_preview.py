@@ -16,7 +16,7 @@ from backend.orders.pi_document import prepare,edit,validate_ready,validate_pdf_
 from backend.orders import pi_exports
 from backend.orders.pi_layout import layout
 from backend.orders.filenames import invoice_filename
-from backend.settings import user_pi_defaults
+from backend.settings import allocate_pi_reference
 from backend.scalability.pi_render import files as render_invoice_files
 
 
@@ -158,7 +158,7 @@ def save_preview(order_id,preview_id=None):
         if order['status']=='cancelled':raise ValueError('Cancelled orders cannot generate a PI.')
         original_updated_at=order['updated_at']
         original_document_json=None
-        assigned_ref=None
+        needs_pi_number=False
         if preview_id:
             row=preview_row(connection,order_id,preview_id,user)
             if not row:return jsonify(error='PI preview not found.'),404
@@ -176,12 +176,10 @@ def save_preview(order_id,preview_id=None):
                     return jsonify(error='The order changed after this preview was opened. Open a new PI preview.'),409
         else:
             if set(data)-{'currency','usd_inr_rate','bulk_description'}:raise ValueError('Invalid PI preview fields.')
+            needs_pi_number=True
             if not order['pi_reference']:
-                prefix=user_pi_defaults(connection,order['created_by'])['pi_prefix']
-                if prefix:
-                    assigned_ref=prefix+'/'
-                    order=dict(order)
-                    order['pi_reference']=assigned_ref
+                order=dict(order)
+                order['pi_reference']='PI-PENDING'
             doc=prepare(details(connection,order),user,data.get('currency'),data.get('usd_inr_rate'),data.get('bulk_description'))
             preview_id=uuid4().hex
         # Validate the draft here; render only when the PDF is actually requested.
@@ -222,7 +220,11 @@ def save_preview(order_id,preview_id=None):
             connection.execute("UPDATE invoice_previews SET document_json=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
                                (json.dumps(doc),preview_id))
         else:
-            if assigned_ref:
+            if needs_pi_number:
+                assigned_ref=allocate_pi_reference(connection,user['id'])
+                doc['reference']=assigned_ref
+                doc['order']['pi_reference']=assigned_ref
+                doc['source_state']['order']['pi_reference']=assigned_ref
                 connection.execute("UPDATE client_orders SET pi_reference=?,updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
                     (assigned_ref,user['id'],order_id))
                 doc['source_updated_at']=connection.execute('SELECT updated_at FROM client_orders WHERE id=?',(order_id,)).fetchone()[0]

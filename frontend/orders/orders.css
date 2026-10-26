@@ -998,7 +998,18 @@ body.embedded #detail {
 }
 .pi-company-grid .pi-cell-amount,
 .pi-company-grid .pi-cell-bold_amount {
-  text-align: right;
+  text-align: center;
+}
+.pi-grid-bank .pi-cell-amount,
+.pi-grid-bank .pi-cell-bold_amount,
+.pi-company-grid .pi-cell-center {
+  text-align: center;
+}
+.pi-grid-bank .pi-cell-amount input,
+.pi-grid-bank .pi-cell-bold_amount input,
+.pi-company-grid .pi-cell-amount input,
+.pi-company-grid .pi-cell-bold_amount input {
+  text-align: center !important;
 }
 .pi-company-grid .pi-cell-amount > .pi-cell-text:before,
 .pi-company-grid .pi-cell-bold_amount > .pi-cell-text:before {
@@ -1964,7 +1975,7 @@ body.embedded #orderForm .consignee-editor textarea {
 }
 .pi-paper .pi-grid-annexure .pi-accounting {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   gap: 4px;
 }
 .pi-paper .pi-grid-annexure td.pi-total-cell {

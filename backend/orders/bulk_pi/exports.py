@@ -73,7 +73,7 @@ def pdf(doc):
         kind=cell['style'];text=cell.get('display_text',cell['text'])
         is_bold=kind in ('bold','head','bank_title','warning','final_term','title','bold_amount','bold_center','annexure_title')
         size=14 if kind=='title' else 7 if kind in ('terms','final_term') else 8
-        alignment=2 if 'amount' in kind else 1 if kind in ('title','head','center','bold_center','annexure_title') else 0
+        alignment=1 if cell.get('center') or cell.get('free') or cell.get('total_cell') or 'amount' in kind or cell.get('accounting') or kind in ('title','head','center','bold_center','annexure_title') else 0
         face=bold if is_bold else regular
         if cell.get('annexure'):
             face=annex_bold if is_bold else annex_regular
@@ -86,19 +86,7 @@ def pdf(doc):
             leading=size+2,alignment=alignment,textColor=colors.red if kind=='warning' else colors.black)
         if cell.get('accounting') and not cell.get('total_cell'):
             amount=format(Decimal(text),',.2f')
-            # Currency codes such as AED need more room than a one-character
-            # symbol. Measure both parts and fit them on the same baseline.
-            gap=4
-            text_width=pdfmetrics.stringWidth(symbol,face,size)+pdfmetrics.stringWidth(amount,face,size)
-            money_size=size*min(1,max(available_width-gap-1,1)/max(text_width,1))
-            currency_width=pdfmetrics.stringWidth(symbol,face,money_size)+gap
-            left=Paragraph(escape(symbol),ParagraphStyle('currency',parent=style,alignment=0,
-                fontSize=money_size,leading=money_size+2,splitLongWords=0))
-            right=Paragraph(amount,ParagraphStyle('money',parent=style,alignment=2,
-                fontSize=money_size,leading=money_size+2,splitLongWords=0))
-            money=Table([[left,right]],colWidths=[currency_width,available_width-currency_width])
-            money.setStyle(TableStyle([('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
-            return money
+            return Paragraph(escape(symbol+' '+amount),style)
         if cell.get('accounting'):
             text=format(Decimal(text),',.2f')
         if 'uom' in cell:text+=' '+cell['uom']
@@ -236,7 +224,7 @@ def xlsx(doc):
         if kind=='final_term':values['bg_color']='#FFF2CC'
         if kind=='date_label':values['text_wrap']=False
         if kind in ('title','head','center'):values['align']='center'
-        if 'amount' in kind:values.update(align='right',num_format='"'+symbol+'" #,##0.00')
+        if 'amount' in kind:values.update(align='center',num_format='"'+symbol+'" #,##0.00')
         format_values[kind]=values
         formats[kind]=book.add_format(values)
     required_format=book.add_format({'font_color':'#dc2626'})
@@ -281,12 +269,18 @@ def xlsx(doc):
                     bottom=((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1 and not (section['name']=='items' and col>=8)) or cell['style']=='head'
                             or (cell.get('line_bottom') and chunk_index==len(parts)-1))
                     single_item_cell=section['name']=='items' and index>0 and len(section['rows'])==2
-                    key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False),single_item_cell)
+                    center_money='amount' in cell['style']
+                    center_cell=bool(cell.get('center') or cell.get('free'))
+                    key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False),single_item_cell,center_money,center_cell)
                     if key not in formats:
-                        formats[key]=book.add_format({**format_values[cell['style']],'top':1 if top else 0,'bottom':1 if bottom else 0,
+                        style_values={**format_values[cell['style']],'top':1 if top else 0,'bottom':1 if bottom else 0,
                             'left':0 if cell.get('open_left') else 2 if col==0 else 1,
                             'right':0 if cell.get('open_right') else 2 if end==10 else 1,
-                            'valign':'bottom' if cell.get('bottom_aligned') else 'vcenter' if single_item_cell else 'top'})
+                            'valign':'bottom' if cell.get('bottom_aligned') else 'vcenter' if single_item_cell else 'top'}
+                        if center_money:
+                            style_values.update(align='center',num_format='"'+symbol+'" #,##0.00')
+                        if center_cell:style_values['align']='center'
+                        formats[key]=book.add_format(style_values)
                     fmt=formats[key]
                     path=cell.get('calculated') or cell.get('field')
                     if chunk_index==0 and path:coordinates[path]=xl_rowcol_to_cell(row_index,col)
@@ -384,7 +378,7 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row):
             if kind=='annexure_title':
                 options.update(font_name='Arial',font_size=8,valign='bottom')
             if cell.get('accounting'):
-                options.update(num_format='"'+symbol+'"* #,##0.00',align='right')
+                options.update(num_format='"'+symbol+'" #,##0.00',align='center')
             if cell.get('total_cell'):
                 options.update(align='center')
                 if cell.get('accounting'):

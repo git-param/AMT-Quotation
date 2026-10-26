@@ -124,25 +124,12 @@ def pdf(doc):
         kind=cell['style'];text=cell.get('display_text',cell['text'])
         is_bold=kind in ('bold','head','bank_title','warning','final_term','title','bold_amount')
         size=14 if kind=='title' else 7 if kind in ('terms','final_term') else 8
-        alignment=2 if 'amount' in kind else 1 if kind in ('title','head','center') else 0
+        alignment=1 if cell.get('center') or cell.get('free') or 'amount' in kind or kind in ('title','head','center') else 0
         style=ParagraphStyle('cell',fontName=bold if is_bold else regular,fontSize=size,
             leading=size+2,alignment=alignment,textColor=colors.red if kind=='warning' else colors.black)
         if 'amount' in kind and not cell.get('free'):
             amount=format(Decimal(cell['text']),',.2f')
-            face=bold if is_bold else regular
-            gap=4
-            text_width=pdfmetrics.stringWidth(symbol,face,size)+pdfmetrics.stringWidth(amount,face,size)
-            money_size=size*min(1,max(available_width-gap-1,1)/max(text_width,1))
-            symbol_width=pdfmetrics.stringWidth(symbol,face,money_size)+gap
-            left=Paragraph(escape(symbol),ParagraphStyle('currency',parent=style,
-                alignment=0,fontSize=money_size,leading=money_size+2,splitLongWords=0))
-            right=Paragraph(escape(amount),ParagraphStyle('money',parent=style,
-                alignment=2,fontSize=money_size,leading=money_size+2,splitLongWords=0))
-            money=Table([[left,right]],colWidths=[symbol_width,available_width-symbol_width])
-            money.setStyle(TableStyle([('LEFTPADDING',(0,0),(-1,-1),0),
-                ('RIGHTPADDING',(0,0),(-1,-1),0),('TOPPADDING',(0,0),(-1,-1),0),
-                ('BOTTOMPADDING',(0,0),(-1,-1),0)]))
-            return money
+            return Paragraph(escape(symbol+' '+amount),style)
         if 'uom' in cell:text+=' '+cell['uom']
         content=escape(text).replace('\n','<br/>')
         if cell.get('party') and cell.get('field')=='delivery.consignee_text':
@@ -277,7 +264,7 @@ def xlsx(doc):
         if kind=='final_term':values['bg_color']='#FFF2CC'
         if kind=='date_label':values['text_wrap']=False
         if kind in ('title','head','center'):values['align']='center'
-        if 'amount' in kind:values.update(align='right',num_format='"'+symbol+'"* #,##0.00')
+        if 'amount' in kind:values.update(align='center',num_format='"'+symbol+'" #,##0.00')
         format_values[kind]=values
         formats[kind]=book.add_format(values)
     required_format=book.add_format({'font_color':'#dc2626'})
@@ -325,10 +312,16 @@ def xlsx(doc):
                             or (cell.get('line_bottom') and chunk_index==len(parts)-1))
                     left=0 if cell.get('open_left') else 2 if col==0 else 1
                     right=0 if cell.get('open_right') else 2 if end==10 else 1
-                    key=(cell['style'],top,bottom,left,right,cell.get('bottom_aligned',False))
+                    center_money='amount' in cell['style']
+                    center_cell=bool(cell.get('center') or cell.get('free'))
+                    key=(cell['style'],top,bottom,left,right,cell.get('bottom_aligned',False),center_money,center_cell)
                     if key not in formats:
-                        formats[key]=book.add_format({**format_values[cell['style']],'top':1 if top else 0,'bottom':1 if bottom else 0,
-                            'left':left,'right':right,
+                        style_values={**format_values[cell['style']],'top':1 if top else 0,'bottom':1 if bottom else 0,
+                            'left':left,'right':right}
+                        if center_money:
+                            style_values.update(align='center',num_format='"'+symbol+'" #,##0.00')
+                        if center_cell:style_values['align']='center'
+                        formats[key]=book.add_format({**style_values,
                             'valign':'bottom' if cell.get('bottom_aligned') else 'top'})
                     fmt=formats[key]
                     path=cell.get('calculated') or cell.get('field')

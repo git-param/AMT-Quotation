@@ -97,6 +97,30 @@
   request().then(data => { input.value = data.hsn_code; save.disabled = false; })
     .catch(error => { message.className = 'error'; message.textContent = error.message; input.disabled = true; });
 
+  const piCounterSection = document.getElementById('piNumberCounterSection');
+  const piCounterForm = document.getElementById('piNumberCounterForm');
+  const piCounterInput = document.getElementById('piNumberLastUsed');
+  const piCounterButton = document.getElementById('savePiNumberCounter');
+  const piCounterMessage = document.getElementById('piNumberCounterMessage');
+  async function loadPiCounter() {
+    const response = await fetch('/api/pi-number-counter');
+    const data = await responseData(response, 'Unable to load the PI number sequence.');
+    if (!response.ok) throw new Error(data.error || 'Unable to load the PI number sequence.');
+    piCounterInput.value = data.last_used;
+  }
+  piCounterForm.onsubmit = async event => {
+    event.preventDefault(); piCounterButton.disabled = true;
+    try {
+      const response = await fetch('/api/pi-number-counter', {method:'PUT', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({last_used:Number(piCounterInput.value)})});
+      const data = await responseData(response, 'Unable to save the PI number sequence.');
+      if (!response.ok) throw new Error(data.error || 'Unable to save the PI number sequence.');
+      piCounterInput.value = data.last_used;
+      piCounterMessage.className = ''; piCounterMessage.textContent = 'PI number sequence saved.';
+    } catch (error) { piCounterMessage.className = 'error'; piCounterMessage.textContent = error.message; }
+    finally { piCounterButton.disabled = false; }
+  };
+
   const lookupForm = document.getElementById('skuLookupLimitForm');
   const lookupInput = document.getElementById('skuLookupLimit');
   const lookupButton = document.getElementById('saveSkuLookupLimit');
@@ -182,9 +206,11 @@
   ]).then(([user, data]) => {
     departmentForm.hidden = !user.permissions.includes('users.manage');
     prefixForm.hidden = !user.permissions.includes('users.manage');
+    piCounterSection.hidden = !user.permissions.includes('users.manage');
     document.getElementById('currencyRatesSection').hidden = !user.permissions.includes('users.manage');
     document.getElementById('skuLookupLimitSection').hidden = !user.permissions.includes('users.manage');
     if (user.permissions.includes('users.manage')) {
+      loadPiCounter().catch(error => { piCounterMessage.className = 'error'; piCounterMessage.textContent = error.message; piCounterButton.disabled = true; });
       fetch('/api/sku-lookup-limit').then(async response => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Unable to load SKU lookup limit.');

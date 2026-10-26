@@ -6,6 +6,7 @@ is a layout definition only; it never opens a workbook or changes PI amounts.
 from decimal import Decimal
 import re
 from backend.orders.locations import party_parts, address_only, COUNTRIES
+from backend.orders.terms_config import TERMS_BY_CURRENCY
 
 WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
           15.7109375,8.7109375,8,16,8.7109375,8.140625]
@@ -43,7 +44,7 @@ def rate_heading(lines):
 def terms(doc):
     if 'terms' in doc:
         return doc['terms']
-    values = list(doc['company']['terms'][doc['currency']])
+    values = list(TERMS_BY_CURRENCY.get(doc['currency'], TERMS_BY_CURRENCY['USD']))
     for index,value in enumerate(values):
         match=re.match(r'^(\s*\d+[.)]\s*)?PAYMENT\b',value,re.I)
         if match:
@@ -183,7 +184,7 @@ def layout(doc):
     bank_rows.append([c(0,2,'Amount In Word','bold'),
                       editable(2,6,'',amount_in_words,'amount_in_words','bold',
                                aria='Amount in words',multiline=True,calculated='amount_in_words'),
-                      c(8,1,'Grand Total','bold'),c(9,2,total['grand_total'],'bold_amount',numeric=True,calculated='grand_total')])
+                      c(8,1,'Grand Total','bold',center=True),c(9,2,total['grand_total'],'bold_amount',numeric=True,calculated='grand_total')])
     clauses=[[c(0,11,'Terms & Conditions:-','bold')]]
     term_text = terms(doc)
     for index,value in enumerate(term_text.splitlines() or ['']):
