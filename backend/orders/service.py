@@ -78,7 +78,7 @@ def header(data, existing=None):
     if not isinstance(data, dict) or set(data) - set(FIELDS):
         raise ValueError('Invalid fields; ownership and links are immutable.')
     old = dict(existing) if existing else {
-        'delivery_terms':'DAP','delivery_time':'4 to 6 days','dispatch_method':'DHL/Fedex/Aramex'}
+        'delivery_terms':'DAP','delivery_time':'4 to 6 business days','dispatch_method':'DHL/Fedex/Aramex'}
     values = {key: text(data.get(key, old.get(key, '')), limit, key)
               for key, limit in FIELDS.items() if key != 'shipping_charges'}
     values['shipping_minor'] = number(data.get('shipping_charges', format(

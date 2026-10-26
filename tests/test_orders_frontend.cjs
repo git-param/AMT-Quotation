@@ -117,7 +117,7 @@ test('party blocks are prefilled from editable client data without removed order
 test('new orders keep multiline address and contact sections together with delivery defaults',async()=>{
   const fixture=setup();await settle();await fixture.context.createOrder();
   assert.equal(fixture.element('delivery_terms').value,'DAP');
-  assert.equal(fixture.element('delivery_time').value,'4 to 6 days');
+  assert.equal(fixture.element('delivery_time').value,'4 to 6 business days');
   assert.equal(fixture.element('dispatch_method').value,'DHL/Fedex/Aramex');
   assert.match(fixture.element('consignee_primary').value,/Company\nSaved shipping/);
   assert.match(fixture.element('consignee_details').value,/Country: India/);
@@ -367,7 +367,7 @@ test('linked parties stay compact; custom party edits reopen with saved data',as
   f.element('consignee_primary').value='Consignee\nNew shipping';f.element('consignee_primary').oninput();
   assert.equal(f.element('buyerSummary').textContent,'Separate buyer\nBuyer street');
   assert.match(f.element('notifySummary').textContent,/New shipping/);
-  Object.assign(f.data.order,{destination:'INDIA',po_reference:'',pi_reference:'',delivery_terms:'DAP',delivery_time:'4 to 6 days',dispatch_method:'Courier',shipping_charges:'0'});
+  Object.assign(f.data.order,{destination:'INDIA',po_reference:'',pi_reference:'',delivery_terms:'DAP',delivery_time:'4 to business 6 days',dispatch_method:'Courier',shipping_charges:'0'});
   f.data.delivery.buyer_text='Separate buyer\nBuyer street';
   await f.context.editOrder(7);
   assert.equal(f.element('buyerEditor').hidden,false);assert.equal(f.element('notifyEditor').hidden,true);
@@ -408,7 +408,7 @@ test('stock save shows the reason for loading and always stops the spinner on fa
 
 test('pending drafts resume in the composer and enforce client scope',async()=>{
   const f=setup('?client_id=9&order_id=7&edit=1');
-  Object.assign(f.data.order,{destination:'INDIA',po_reference:'',pi_reference:'',delivery_terms:'DAP',delivery_time:'4 to 6 days',dispatch_method:'Courier',shipping_charges:'0'});
+  Object.assign(f.data.order,{destination:'INDIA',po_reference:'',pi_reference:'',delivery_terms:'DAP',delivery_time:'4 to 6 business days',dispatch_method:'Courier',shipping_charges:'0'});
   await settle();await settle();
   assert.equal(f.element('editor').hidden,false);assert.equal(f.element('save').textContent,'Save changes');
   f.data.order.client_id=10;

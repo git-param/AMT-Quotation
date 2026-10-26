@@ -1,4 +1,4 @@
-"""Private client lead creation and database-scoped read access."""
+"""Client lead creation with shared read access and scoped writes."""
 
 import json
 
@@ -18,22 +18,8 @@ bp = Blueprint('client_leads', __name__)
 
 
 def visibility(user):
-    """Return parameterized access predicates shared by list and detail."""
-    permissions = get_permissions(user)
-    if 'leads.view_all' in permissions:
-        return 'l.deleted_at IS NULL', []
-    predicate = (
-        'l.created_by = ? OR EXISTS (SELECT 1 FROM client_lead_shares s '
-        'WHERE s.lead_id = l.id AND s.user_id = ? AND s.is_active = 1)'
-    )
-    parameters = [user['id'], user['id']]
-    if 'leads.view_team' in permissions:
-        predicate += (
-            " OR (u.supervisor_user_id = ? AND u.is_active = 1 "
-            "AND u.role IN ('user', 'sales_executive'))"
-        )
-        parameters.append(user['id'])
-    return '(' + predicate + ') AND l.deleted_at IS NULL', parameters
+    """Every authenticated user can read every nondeleted client."""
+    return 'l.deleted_at IS NULL', []
 
 
 def delete_scope(user):

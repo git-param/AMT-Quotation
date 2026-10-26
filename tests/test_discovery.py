@@ -42,8 +42,9 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(self.listing(q='_')['total'], 0)
         self.as_user('exec2')
         for query in ('marine', 'alice@example.com'):
-            self.assertEqual(self.listing(q=query)['total'], 0)
-        self.assertEqual(self.client.get(f'/api/leads/{uid}').status_code, 404)
+            self.assertEqual(self.listing(q=query)['total'], 1)
+        self.assertEqual(self.client.get(f'/api/leads/{uid}').status_code, 200)
+        self.assertEqual(self.client.put(f'/api/leads/{uid}', json={'notes': 'Denied'}).status_code, 403)
 
     def test_pagination_sort_counts_and_creator_filters_are_scoped(self):
         self.as_user('exec1')
@@ -59,22 +60,21 @@ class DiscoveryTests(unittest.TestCase):
         second = self.listing(
             page=2, page_size=2, sort='company', direction='asc'
         )
-        self.assertEqual(first['total'], 3)
+        self.assertEqual(first['total'], 4)
         self.assertEqual(first['pages'], 2)
         self.assertEqual(
-            [c['name'] for c in first['leads']], ['Alpha', 'Bravo']
+            [c['name'] for c in first['leads']], ['tl2', 'Alpha']
         )
-        self.assertEqual([c['name'] for c in second['leads']], ['Zulu'])
-        self.assertNotIn(hidden, {c['id'] for c in first['leads']})
-        self.assertEqual(self.listing(creator=self.ids['tl2'])['total'], 0)
-        self.assertEqual(self.listing(ownership='others')['total'], 0)
+        self.assertEqual([c['name'] for c in second['leads']], ['Bravo', 'Zulu'])
+        self.assertEqual(self.listing(creator=self.ids['tl2'])['total'], 1)
+        self.assertEqual(self.listing(ownership='others')['total'], 1)
         options = self.client.get('/api/leads/options').json
         self.assertEqual({u['id'] for u in options['creators']},
-                         {self.ids['exec1']})
+                         {self.ids['exec1'], self.ids['tl2']})
         self.assign('exec1', 'tl1')
         self.as_user('tl1')
-        self.assertEqual(self.listing()['total'], 3)
-        self.assertEqual(self.listing(creator=self.ids['tl2'])['total'], 0)
+        self.assertEqual(self.listing()['total'], 4)
+        self.assertEqual(self.listing(creator=self.ids['tl2'])['total'], 1)
         for role in ('admin', 'manager'):
             self.as_user(role)
             self.assertEqual(self.listing()['total'], 4)
@@ -146,7 +146,7 @@ class DiscoveryTests(unittest.TestCase):
             'name': 'Missing source', 'enquiry_source_id': 99999,
         }).status_code, 400)
         self.as_user('exec2')
-        self.assertEqual(self.listing(source=source)['total'], 0)
+        self.assertEqual(self.listing(source=source)['total'], 1)
 
     def test_addresses_history_and_order_address_separation(self):
         self.as_user('exec1')
@@ -181,7 +181,7 @@ class DiscoveryTests(unittest.TestCase):
             f'/api/leads/{uid}'
         ).json['address_history']), 2)
         self.as_user('exec2')
-        self.assertEqual(self.client.get(f'/api/leads/{uid}').status_code, 404)
+        self.assertEqual(self.client.get(f'/api/leads/{uid}').status_code, 200)
 
     def test_invalid_discovery_inputs_and_anonymous_options(self):
         self.as_user('exec1')

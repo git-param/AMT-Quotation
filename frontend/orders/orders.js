@@ -310,7 +310,7 @@ async function createOrder() {
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));
   el('order_date').value=`${parts.year}-${parts.month}-${parts.day}`;
   el('shipping_charges').value='0.00';
-  el('delivery_terms').value='DAP';el('delivery_time').value='4 to 6 days';el('dispatch_method').value='DHL/Fedex/Aramex';
+  el('delivery_terms').value='DAP';el('delivery_time').value='4 to 6 business days';el('dispatch_method').value='DHL/Fedex/Aramex';
   el('pi_reference').value='';el('pi_reference').readOnly=false;
   const piDefaults=await api('/api/orders/pi-defaults');
   if(version!==formVersion)return;

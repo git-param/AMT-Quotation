@@ -83,14 +83,14 @@ class LeadTests(unittest.TestCase):
             lead = self.client.get(f'/api/leads/{lead_id}').json['lead']
             self.assertEqual(lead['creator_name'], name)
 
-    def test_default_privacy_and_cross_tl_isolation(self):
+    def test_default_read_access_for_every_role(self):
         leads = {name: self.create(name) for name in self.ids}
-        self.assertEqual(self.visible('tl1'), {leads['tl1']})
-        self.assertEqual(self.visible('exec1'), {leads['exec1']})
+        for name in self.ids:
+            self.assertEqual(self.visible(name), set(leads.values()))
         self.assertEqual(self.assign('exec1', 'tl1').status_code, 200)
         self.assertEqual(self.assign('exec2', 'tl2').status_code, 200)
-        self.assertEqual(self.visible('tl1'), {leads['tl1'], leads['exec1']})
-        self.assertEqual(self.visible('tl2'), {leads['tl2'], leads['exec2']})
+        self.assertEqual(self.visible('tl1'), set(leads.values()))
+        self.assertEqual(self.visible('tl2'), set(leads.values()))
         self.assertEqual(self.visible('admin'), set(leads.values()))
         self.assertEqual(self.visible('manager'), set(leads.values()))
 
@@ -99,7 +99,7 @@ class LeadTests(unittest.TestCase):
         self.as_user('exec1')
         self.assertEqual(self.client.get(
             f'/api/leads/{lead_id}'
-        ).status_code, 404)
+        ).status_code, 200)
         connection = database.get_db()
         try:
             with connection:
@@ -111,7 +111,7 @@ class LeadTests(unittest.TestCase):
         finally:
             connection.close()
         self.assertEqual(self.visible('exec1'), {lead_id})
-        self.assertEqual(self.visible('tl1'), set())
+        self.assertEqual(self.visible('tl1'), {lead_id})
         self.as_user('exec1')
         self.assertEqual(self.client.get(
             f'/api/leads/{lead_id}'
@@ -125,10 +125,10 @@ class LeadTests(unittest.TestCase):
                 'name': 'Spoofed', field: self.ids['admin'],
             }).status_code, 400)
         response = self.client.get('/api/leads?created_by=1&all=true')
-        self.assertEqual({row['id'] for row in response.json['leads']}, {own})
+        self.assertEqual({row['id'] for row in response.json['leads']}, {hidden, own})
         self.assertEqual(self.client.get(
             f'/api/leads/{hidden}'
-        ).status_code, 404)
+        ).status_code, 200)
         self.assertEqual(self.client.put(
             f'/api/leads/{own}', json={'created_by': self.ids['admin']}
         ).status_code, 400)
@@ -201,7 +201,7 @@ class LeadTests(unittest.TestCase):
         self.assign('exec1', 'tl1')
         self.assertIn(lead_id, self.visible('tl1'))
         self.assign('exec1', 'tl2')
-        self.assertNotIn(lead_id, self.visible('tl1'))
+        self.assertIn(lead_id, self.visible('tl1'))
         self.assertIn(lead_id, self.visible('tl2'))
         connection = database.get_db()
         try:
@@ -212,7 +212,7 @@ class LeadTests(unittest.TestCase):
                 )
         finally:
             connection.close()
-        self.assertNotIn(lead_id, self.visible('tl2'))
+        self.assertIn(lead_id, self.visible('tl2'))
         self.assertIn(lead_id, self.visible('admin'))
 
     def test_existing_permission_grants_can_authorize_additional_access(self):
@@ -253,7 +253,7 @@ class LeadTests(unittest.TestCase):
             self.as_user(name)
             self.assertEqual(self.client.put(
                 f'/api/leads/{uid}', json={'name': 'Forbidden'}
-            ).status_code, 404)
+            ).status_code, 403)
         connection = database.get_db()
         try:
             with connection:
@@ -283,7 +283,7 @@ class LeadTests(unittest.TestCase):
         self.as_user('tl1')
         self.assertEqual(self.client.put(
             f'/api/leads/{uid}', json={'name': 'Forbidden'}
-        ).status_code, 404)
+        ).status_code, 403)
         self.as_user('exec1')
         for field in ('created_by', 'created_at', 'id'):
             self.assertEqual(self.client.put(f'/api/leads/{uid}', json={

@@ -113,11 +113,12 @@ class WorkspaceTests(unittest.TestCase):
         invoice = self.client.post(path + '/invoices', json={'currency': 'USD'})
         self.assertEqual(invoice.status_code, 201, invoice.json)
         self.as_user('exec2')
-        for endpoint in (path, invoice.json['download_url'], path + '/legacy-enquiry'):
-            self.assertEqual(self.client.get(endpoint).status_code, 404)
+        for endpoint in (path, invoice.json['download_url']):
+            self.assertEqual(self.client.get(endpoint).status_code, 200)
+        self.assertEqual(self.client.get(path + '/legacy-enquiry').status_code, 404)
         self.assertEqual(self.client.post('/api/orders', json={
             'client_id': self.parent, 'order_date': '2026-10-15', 'currency': 'USD',
-        }).status_code, 404)
+        }).status_code, 403)
         self.share('VIEW')
         self.as_user('exec2')
         self.assertEqual(self.client.get(invoice.json['download_url']).status_code, 200)
@@ -132,7 +133,7 @@ class WorkspaceTests(unittest.TestCase):
         self.as_user('admin')
         self.client.post(f'/api/client-access/{self.parent}/revoke', json={'user_id': self.ids['exec2']})
         self.as_user('exec2')
-        self.assertEqual(self.client.get(invoice.json['download_url']).status_code, 404)
+        self.assertEqual(self.client.get(invoice.json['download_url']).status_code, 200)
 
     def test_pi_currency_conversion_and_immutable_workbook(self):
         self.templates()
