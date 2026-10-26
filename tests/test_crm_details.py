@@ -75,7 +75,7 @@ class CRMTests(unittest.TestCase):
                 '/api/leads', json=data
             ).status_code, 400)
 
-    def test_duplicates_use_original_owner_and_include_inactive_clients(self):
+    def test_duplicates_across_owners_and_inactive_clients(self):
         self.as_user('exec1')
         uid = self.client.post('/api/leads', json=self.full_details()).json[
             'lead']['id']
@@ -93,7 +93,19 @@ class CRMTests(unittest.TestCase):
         self.as_user('exec2')
         self.assertEqual(self.client.post(
             '/api/leads', json=self.full_details()
-        ).status_code, 201)
+        ).status_code, 409)
+
+    def test_similar_names_are_blocked_across_owners(self):
+        self.as_user('exec1')
+        existing = self.client.post('/api/leads', json={'name': 'airworld.co'}).json['lead']['id']
+        self.as_user('exec2')
+        for name in ('airworld.in', 'Air World', 'airworld.co'):
+            response = self.client.post('/api/leads', json={'name': name})
+            self.assertEqual(response.status_code, 409, name)
+            self.assertEqual(response.json['client']['id'], existing)
+        self.assertEqual(self.client.post('/api/leads', json={'name': 'Different Trading'}).status_code, 201)
+        self.as_user('exec1')
+        self.assertEqual(self.client.put(f'/api/leads/{existing}', json={'notes': 'Existing client'}).status_code, 200)
 
     def test_lifecycle_permissions_and_sharing_history_preservation(self):
         uid = self.create('exec1')
@@ -113,7 +125,7 @@ class CRMTests(unittest.TestCase):
         self.as_user('tl2')
         self.assertEqual(self.client.post(
             f'/api/leads/{uid}/deactivate'
-        ).status_code, 404)
+        ).status_code, 403)
         for actor in ('exec1', 'tl1', 'admin', 'manager'):
             self.as_user(actor)
             self.assertEqual(self.client.post(

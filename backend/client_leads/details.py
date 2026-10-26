@@ -160,7 +160,8 @@ def identities(client):
 def normalized_client_name(value):
     """Compare names across punctuation, web domains and common legal suffixes."""
     value = value.casefold().strip()
-    value = re.sub(r'^https?://|^www\.', '', value)
+    value = re.sub(r'^https?://', '', value)
+    value = re.sub(r'^www\.', '', value)
     value = re.sub(r'\.(?:com|co|in|net|org|io|ai|uk|us)(?:/.*)?$', '', value)
     words = re.findall(r'[\w]+', value)
     while words and words[-1] in {'ltd', 'limited', 'llc', 'inc', 'corp', 'corporation', 'pvt', 'private'}:

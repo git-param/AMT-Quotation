@@ -311,11 +311,14 @@ byId('pageSize').onchange = () => { currentPage = 1; load().catch(fail); };
 const editor = byId('leadEditor');
 let suggestionTimer = null;
 let suggestionVersion = 0;
+let duplicateFound = false;
 function clearSuggestions() {
   clearTimeout(suggestionTimer);
   suggestionVersion++;
+  duplicateFound = false;
   byId('clientSuggestions').replaceChildren();
   byId('clientSuggestions').hidden = true;
+  if (editingId === null) byId('save').disabled = false;
 }
 byId('name').addEventListener('input', () => {
   clearSuggestions();
@@ -327,12 +330,14 @@ byId('name').addEventListener('input', () => {
       if (version !== suggestionVersion || editingId !== null) return;
       const panel = byId('clientSuggestions');
       panel.replaceChildren();
-      if (!clients.length) return;
-      panel.append(h('strong', {text: 'Similar clients already exist'}));
+      duplicateFound = clients.some(client => client.is_duplicate);
+      byId('save').disabled = duplicateFound;
+      if (!clients.length) { panel.hidden = true; return; }
+      panel.append(h('strong', {text: duplicateFound ? 'This client already exists. Open it instead.' : 'Similar clients already exist'}));
       for (const client of clients) {
         panel.append(h('button', {type: 'button', class: 'cl-suggestion',
           onclick: () => { closeForm({restore: false}); openDetails(client.id).catch(fail); }},
-          client.name + (client.company ? ` · ${client.company}` : '')));
+          client.name + (client.company ? ` · ${client.company}` : '') + (client.is_duplicate ? ' · Existing client' : '')));
       }
       panel.hidden = false;
     } catch (error) { if (version === suggestionVersion) fail(error); }
@@ -459,8 +464,8 @@ byId('leadForm').onsubmit = async event => {
     saved = await api(wasEditing ? `/api/leads/${editingId}` : '/api/leads', {
       method: wasEditing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formDetails()),
     });
-  } catch (error) { setFormError(error.message); return; }
-  finally { byId('save').disabled = false; }
+  } catch (error) { setFormError(error.message); if (!wasEditing) byId('name').dispatchEvent(new Event('input')); return; }
+  finally { byId('save').disabled = duplicateFound; }
   resetForm();
   closeForm({ restore: false });
   try {
