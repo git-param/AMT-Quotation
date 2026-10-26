@@ -1,6 +1,5 @@
 """Supported invoice currencies and explicit USD-based conversion rates."""
 import json
-from datetime import date, timedelta
 from decimal import Decimal
 
 CURRENCIES = ('USD', 'INR', 'AED', 'GBP', 'EUR')
@@ -14,18 +13,7 @@ def currency_symbol(currency):
 
 
 def rate_is_stale(connection):
-    row = connection.execute("SELECT value FROM app_settings WHERE key='currency_rate_status'").fetchone()
-    if not row:
-        return False  # Legacy manually configured rates have no provider date.
-    try:
-        details = json.loads(row[0])
-        if not details.get('fetched_at'):
-            return False
-        dates = details['dates']
-        return any(not date.today() - timedelta(days=10) <= date.fromisoformat(dates[code]) <= date.today()
-                   for code in CURRENCIES if code != 'USD')
-    except (KeyError, TypeError, ValueError):
-        return True
+    return False
 
 
 def configured_rates(connection, *, allow_stale=False):

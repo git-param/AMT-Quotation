@@ -67,7 +67,7 @@
     finally { ratesButton.disabled = false; }
   };
   refreshButton.onclick = async () => {
-    refreshButton.disabled = true; ratesMessage.textContent = 'Fetching current published rates…';
+    refreshButton.disabled = true; ratesMessage.textContent = 'Fetching latest available rates…';
     try {
       const response = await fetch('/api/currency-rates/refresh',{method:'POST'});
       const data = await responseData(response, 'Unable to refresh rates.');

@@ -2,7 +2,7 @@
 import json
 import logging
 import threading
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 import requests
@@ -15,7 +15,6 @@ API_URL = 'https://api.frankfurter.dev/v2/rates'
 QUOTES = ('INR', 'AED', 'GBP', 'EUR')
 DEFAULT_HOURS = 24
 IST = timezone(timedelta(hours=5, minutes=30))
-MAX_PROVIDER_DATE_AHEAD = 1
 _refresh_lock = threading.Lock()
 _wake = threading.Event()
 _started = False
@@ -51,7 +50,6 @@ def _fetch():
     if not isinstance(rows, list):
         raise ValueError('The rate provider returned an invalid response.')
     rates, dates, providers = {}, {}, {}
-    today = datetime.now(IST).date()
     for row in rows:
         if not isinstance(row, dict) or row.get('base') != 'USD' or row.get('quote') not in QUOTES:
             continue
@@ -60,17 +58,13 @@ def _fetch():
             raise ValueError('The rate provider returned duplicate currencies.')
         try:
             rate = Decimal(str(row['rate']))
-            published = date.fromisoformat(row['date'])
         except (KeyError, TypeError, ValueError, InvalidOperation) as error:
             raise ValueError('The rate provider returned invalid rate data.') from error
         if not rate.is_finite() or not 0 < rate <= 1000000:
             raise ValueError('The rate provider returned an invalid exchange rate.')
-        if published < today - timedelta(days=10):
-            raise ValueError('The rate provider returned an outdated exchange rate.')
-        if published > today + timedelta(days=MAX_PROVIDER_DATE_AHEAD):
-            raise ValueError('The rate provider returned a future-dated exchange rate.')
         rates[code] = str(rate)
-        dates[code] = published.isoformat()
+        if isinstance(row.get('date'), str):
+            dates[code] = row['date']
         providers[code] = row.get('providers') if isinstance(row.get('providers'), list) else []
     if set(rates) != set(QUOTES):
         raise ValueError('The rate provider did not return all supported currencies.')

@@ -158,7 +158,7 @@
 
   <!-- Price recheck warning bar -->
   <div id="recheckWarningBar" style="display:none;margin-bottom:8px;padding:10px 16px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#92400E;">
-    <strong>&#9888; Price Recheck Needed</strong> — One or more SKUs have a discount greater than 7%. Copy buttons are disabled. Please correct the price in the Pricing App first.
+    <strong>&#9888; Copy Unavailable</strong> — Copying is disabled while one or more SKUs needs attention.
   </div>
   <!-- Copy bar -->
   <div class="card" style="padding:14px 20px">
@@ -166,22 +166,22 @@
       <div class="copy-group">
         <div class="copy-group-label">Formal Quote &middot; Table</div>
         <div class="copy-group-btns">
-          <button class="btn btn-orange" onclick="copyFormal('USD')">$ USD</button>
-          <button class="btn btn-green"  onclick="copyFormal('INR')">&#8377; INR</button>
+          <button class="btn btn-orange copy-action" onclick="copyFormal('USD')">$ USD</button>
+          <button class="btn btn-green copy-action"  onclick="copyFormal('INR')">&#8377; INR</button>
         </div>
       </div>
       <div class="copy-group">
         <div class="copy-group-label">Email &middot; Full Letter</div>
         <div class="copy-group-btns">
-          <button class="btn btn-orange" onclick="copyFormalLetter('USD')">$ USD</button>
-          <button class="btn btn-green"  onclick="copyFormalLetter('INR')">&#8377; INR</button>
+          <button class="btn btn-orange copy-action" onclick="copyFormalLetter('USD')">$ USD</button>
+          <button class="btn btn-green copy-action" onclick="copyFormalLetter('INR')">&#8377; INR</button>
         </div>
       </div>
       <div class="copy-group">
         <div class="copy-group-label">WhatsApp</div>
         <div class="copy-group-btns">
-          <button class="btn btn-orange" onclick="copyWA('USD')">$ USD</button>
-          <button class="btn btn-green"  onclick="copyWA('INR')">&#8377; INR</button>
+          <button class="btn btn-orange copy-action" onclick="copyWA('USD')">$ USD</button>
+          <button class="btn btn-green copy-action" onclick="copyWA('INR')">&#8377; INR</button>
         </div>
       </div>
       <div class="copy-group img-down-btn" id="imgDownGroup" style="display:none">

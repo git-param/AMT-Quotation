@@ -117,9 +117,10 @@ official sources. An admin sets the refresh interval (1–168 hours) in
 Configuration; the default is 24 hours. The background refresh runs while
 `app.py` is running. Configuration shows each published rate date, the last
 fetch time, and the provider site, and offers a manual **Refresh now** action.
-These are daily reference rates, not intraday trading quotes. A failed fetch
-keeps the last valid rates visible; rates more than 10 days old are excluded
-from new conversions. Issued invoices retain their recorded amounts.
+These are daily reference rates, not intraday trading quotes. Each successful
+refresh uses the latest available rate returned by the provider. A failed fetch
+keeps the last valid rates visible. Issued invoices retain their recorded
+amounts.
 
 For a new environment:
 

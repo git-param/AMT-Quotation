@@ -193,7 +193,7 @@ function renderResults() {
     const skuVal = r.sku || r.sku_input;
     const safeSkuJs = esc(String(skuVal)).replace(/'/g, '&#39;');
     return `<tr class="row-ok" ondblclick="openURL(${sr})">
-      <td class="center"><input type="checkbox" class="img-sel img-row-sel" data-sku="${esc(skuVal)}" checked onclick="event.stopPropagation();updateImageSelectionButtons()"></td>
+      <td class="center"><input type="checkbox" class="img-sel img-row-sel" data-sku="${esc(skuVal)}" checked onclick="event.stopPropagation();updateImageSelectionButtons();updateCopyButtonState()"></td>
       <td class="center">${esc(skuVal)}</td>
       <td class="center">${sr}</td>
       <td class="left">${esc(r.title || '')}</td>
@@ -218,13 +218,43 @@ function renderResults() {
 
 function updateCopyButtonState() {
   const warn = document.getElementById('recheckWarningBar');
-  // All copy buttons are inside .copy-section — select by onclick attribute pattern
-  document.querySelectorAll('.copy-section button').forEach(function(btn) {
-    btn.disabled = _hasRecheckRows;
+  const rows = copyRows();
+  const hasZeroQuantity = rows.some(r => r.found && (r.qty === 0 || String(r.qty).trim() === '0'));
+  const hasRecheckRows = rows.some(r => r.found && r.sale_price != null && r.price != null
+    && r.sale_price < r.price && Math.round((1 - r.sale_price / r.price) * 100) > MAX_DISC_PCT);
+  const copyBlocked = hasRecheckRows || hasZeroQuantity;
+  document.querySelectorAll('.copy-action').forEach(function(btn) {
+    btn.disabled = copyBlocked;
   });
   if (warn) {
-    warn.style.display = _hasRecheckRows ? 'block' : 'none';
+    warn.style.display = copyBlocked ? 'block' : 'none';
+    warn.innerHTML = hasZeroQuantity
+      ? '<strong>&#9888; Copy Unavailable</strong> — Copying is disabled because one or more SKUs has zero available quantity.'
+      : '<strong>&#9888; Price Recheck Needed</strong> — One or more SKUs have a discount greater than 7%. Copy buttons are disabled. Please correct the price in the Pricing App first.';
   }
+}
+
+function copyRows() {
+  const checkboxes = [...document.querySelectorAll('.img-row-sel')];
+  if (!checkboxes.length) return _rows;
+  const selected = new Set(checkboxes.filter(cb => cb.checked).map(cb => String(cb.dataset.sku || '').trim()));
+  return _rows.filter(r => !r.found || selected.has(String(r.sku || r.sku_input || '').trim()));
+}
+
+function copyBlocked() {
+  const rows = copyRows();
+  const hasZeroQuantity = rows.some(r => r.found && (r.qty === 0 || String(r.qty).trim() === '0'));
+  const hasRecheckRows = rows.some(r => r.found && r.sale_price != null && r.price != null
+    && r.sale_price < r.price && Math.round((1 - r.sale_price / r.price) * 100) > MAX_DISC_PCT);
+  if (hasRecheckRows) {
+    setCopyStatus('Copying is disabled until the price recheck is resolved.');
+    return true;
+  }
+  if (hasZeroQuantity) {
+    setCopyStatus('Copying is disabled because one or more SKUs has zero available quantity.');
+    return true;
+  }
+  return false;
 }
 
 function toggleImageDownloadButtons(show) {
@@ -248,6 +278,7 @@ function selectedImageSkus() {
 function toggleAllImageSelections(checked) {
   document.querySelectorAll('.img-row-sel').forEach(cb => { cb.checked = checked; });
   updateImageSelectionButtons();
+  updateCopyButtonState();
 }
 function updateImageSelectionButtons() {
   const found = foundImageSkus().length;
@@ -263,7 +294,8 @@ function openURL(sr) {
 
 // ── HTML Quotation Builder (mirrors Python _build_html_quotation) ────────────
 function buildHTMLTable(currency) {
-  if (!_rows.length) return null;
+  const rows = copyRows();
+  if (!rows.length) return null;
   const isINR  = currency === 'INR';
   const rate   = _rate || 0;
   const GREY   = '#CCCCCC';
@@ -275,9 +307,9 @@ function buildHTMLTable(currency) {
   const thw = (w, extra) => `${th}width:${w}%;${extra||''}`;
 
   // Only treat as discount when sale_price < price (markup is not a discount)
-  const hasDiscount = _rows.some(r => r.found && r.sale_price != null && r.price != null && r.sale_price < r.price);
+  const hasDiscount = rows.some(r => r.found && r.sale_price != null && r.price != null && r.sale_price < r.price);
   // Separate valid discounts (≤7%) from error discounts (>7%)
-  const _discPcts = _rows.filter(r => r.found && r.sale_price != null && r.price != null && r.sale_price < r.price)
+  const _discPcts = rows.filter(r => r.found && r.sale_price != null && r.price != null && r.sale_price < r.price)
                          .map(r => Math.round((1 - r.sale_price / r.price) * 100));
   const _validPcts = _discPcts.filter(p => p <= MAX_DISC_PCT);
   const _hasRecheckRows = _discPcts.some(p => p > MAX_DISC_PCT);
@@ -305,7 +337,7 @@ ${hasDiscount ? `<th style="${thw(7)}">Discount${_discHeaderPct ? '<br><span sty
   const tdE = `font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#111827;padding:6px 10px;border:1px solid #E0E0E0;vertical-align:middle;text-align:left;background:${ERR_BG};`;
   const tdD = `font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#111827;padding:6px 10px;border:1px solid #E0E0E0;vertical-align:middle;text-align:center;background:#F9F9F9;`;
 
-  _rows.forEach((r, i) => {
+  rows.forEach((r, i) => {
     const sr = i + 1;
     if (!r.found) {
       html += `<tr>
@@ -423,6 +455,8 @@ ${rateTd}${discTd}${finalTd}
 // ── Copy Formal ──────────────────────────────────────────────────────────────
 async function copyFormal(currency) {
   if (!_rows.length) { setCopyStatus('Look up some SKUs first.'); return; }
+  if (!copyRows().length) { setCopyStatus('Select at least one SKU to copy.'); return; }
+  if (copyBlocked()) return;
   const html = buildHTMLTable(currency);
   try {
     await navigator.clipboard.write([
@@ -432,7 +466,7 @@ async function copyFormal(currency) {
       })
     ]);
     setCopyStatus(`✓ Formal ${currency} quotation copied — paste into Gmail / Outlook!`);
-    logCopy('formal_' + currency.toLowerCase(), _rows.length);
+    logCopy('formal_' + currency.toLowerCase(), copyRows().length);
   } catch(e) {
     // Fallback: plain text
     navigator.clipboard.writeText(stripTags(html)).catch(()=>{});
@@ -443,6 +477,8 @@ async function copyFormal(currency) {
 // ── Copy Full Letter (greeting + same table as Formal Quote + date/sign-off) ──
 async function copyFormalLetter(currency) {
   if (!_rows.length) { setCopyStatus('Look up some SKUs first.'); return; }
+  if (!copyRows().length) { setCopyStatus('Select at least one SKU to copy.'); return; }
+  if (copyBlocked()) return;
   const today = new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
   const F = 'font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#000000;';
 
@@ -474,7 +510,7 @@ ${save5Line}
       })
     ]);
     setCopyStatus(`✓ Full letter (${currency}) copied — paste into Gmail / Outlook!`);
-    logCopy('letter_' + currency.toLowerCase(), _rows.length);
+    logCopy('letter_' + currency.toLowerCase(), copyRows().length);
   } catch(e) {
     navigator.clipboard.writeText(stripTags(html)).catch(()=>{});
     setCopyStatus('Copied as plain text (browser blocked HTML clipboard)');
@@ -484,9 +520,12 @@ ${save5Line}
 // ── Copy WhatsApp ────────────────────────────────────────────────────────────
 function copyWA(currency) {
   if (!_rows.length) { setCopyStatus('Look up some SKUs first.'); return; }
+  const rows = copyRows();
+  if (!rows.length) { setCopyStatus('Select at least one SKU to copy.'); return; }
+  if (copyBlocked()) return;
   const isINR = currency === 'INR';
   const rate  = _rate || 0;
-  const blocks = _rows.map(r => {
+  const blocks = rows.map(r => {
     if (!r.found) {
       return `Dear Sir/Madam,\nGreetings from Aeliya Marine Tech!\nBased on your request we are pleased to offer you the below product.\n\n*Product Name:* SKU ${r.sku_input} — NOT FOUND`;
     }
@@ -533,7 +572,7 @@ Thank you for showing your interest in our products.`;
   });
   const divider = '\n\n' + '─'.repeat(40) + '\n\n';
   navigator.clipboard.writeText(blocks.join(divider))
-    .then(() => { setCopyStatus(`✓ WhatsApp ${currency} message copied!`); logCopy('wa_' + currency.toLowerCase(), _rows.length); })
+    .then(() => { setCopyStatus(`✓ WhatsApp ${currency} message copied!`); logCopy('wa_' + currency.toLowerCase(), rows.length); })
     .catch(() => setCopyStatus('Copy failed — try again'));
 }
 
