@@ -169,7 +169,7 @@ order back to pending; retrying the same issued preview or downloading its files
 does not complete it again.
 
 Native renderers use `assets/PI-img/header.png`, `address.png`,
-`payment_options.png` and `signature.png`. Assets and company settings are frozen
+`payment_options.jpg` and `signature.png`. Assets and company settings are frozen
 in each snapshot. No reference workbook, Excel installation, VBA, country lists
 or helper worksheets are needed for native generation. PDF uses A4 margins,
 a single branding/title box and page numbers; long content and up to 50 lines paginate.

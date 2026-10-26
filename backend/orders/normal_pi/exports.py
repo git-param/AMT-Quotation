@@ -195,18 +195,23 @@ def pdf(doc):
         if section['name']=='items' and doc.get('pi_format','normal')=='normal' and len(doc['totals']['lines'])<=4:
             item_table=(len(story),rows,heights,table_style)
         story.append(table)
-    footer_rows=[[image('payment_options.png',usable*.46),image('signature.png',usable*.44)]]
+    footer_rows=[[image('payment_options.jpg',usable*.46),image('signature.png',usable*.44)]]
     if model['shipping_notice']:
         footer_rows.append([Paragraph(escape(model['shipping_notice']),ParagraphStyle(
             'shipping_notice',fontName=bold,fontSize=10,leading=13,
             textColor=colors.red)),''])
     address_row=len(footer_rows)
     footer_rows.append([image('address.png',usable-12),''])
+    legal_row=len(footer_rows)
+    legal_style=ParagraphStyle('legal_notice',fontName=regular,fontSize=8,leading=10,
+        alignment=1,textColor=colors.HexColor('#333333'))
+    footer_rows.append([Paragraph(escape(model['legal_notice']).replace('\n','<br/>'),legal_style),''])
     footer_block=Table(footer_rows,colWidths=[usable*.5]*2,splitByRow=0)
     footer_block.setStyle(TableStyle([
         *([('SPAN',(0,1),(1,1)),('BACKGROUND',(0,1),(-1,1),colors.yellow)]
           if model['shipping_notice'] else []),
         ('SPAN',(0,address_row),(1,address_row)),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('SPAN',(0,legal_row),(1,legal_row)),('LINEABOVE',(0,legal_row),(-1,legal_row),.4,colors.black),
         ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),
         ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),
         ('LINEBEFORE',(0,0),(0,-1),1.2,colors.black),
@@ -348,7 +353,7 @@ def xlsx(doc):
                     height=max(height,(22 if index==1 else 63 if index==2 else 18) if len(doc['totals']['lines'])==1 else 36 if len(doc['totals']['lines'])<=4 else 18)
                 if section['name']=='header' and index==0:height=max(height,30)
                 sheet.set_row(row_index,min(409,height));row_index+=1
-    image('payment_options.png',row_index,0,440,90);image('signature.png',row_index,5,440,90)
+    image('payment_options.jpg',row_index,0,440,90);image('signature.png',row_index,5,440,90)
     for part in range(2):
         for offset in range(4):
             top=offset==0;bottom_edge=offset==3
@@ -367,7 +372,11 @@ def xlsx(doc):
                 sheet.set_row(row_index,36)
                 row_index+=1
             image('address.png',row_index,0,950,92)
-    sheet.print_area(0,0,row_index-1,10);sheet.set_footer('&CPage &P of &N')
+    legal_format=book.add_format({'font_name':'Cambria','font_size':8,'align':'center','valign':'vcenter',
+        'text_wrap':True,'left':2,'right':2,'top':1,'bottom':2,'border_color':'#000000'})
+    sheet.merge_range(row_index,0,row_index,10,model['legal_notice'],legal_format)
+    sheet.set_row(row_index,28)
+    sheet.print_area(0,0,row_index,10);sheet.set_footer('&CPage &P of &N')
     for row,col,fmt,path,cached in formula_cells:
         if path.endswith('.line_total'):
             prefix=path.rsplit('.',1)[0]

@@ -166,7 +166,7 @@ def pdf(doc):
                    ('LINEAFTER',(-1,0),(-1,-1),1.2,colors.black)] if section['name']=='annexure' else [])]))
             story.append(table)
     append_sections([section for section in model['sections'] if not section.get('annexure')])
-    footer_rows=[[image('payment_options.png',usable*.46),image('signature.png',usable*.44)]]
+    footer_rows=[[image('payment_options.jpg',usable*.46),image('signature.png',usable*.44)]]
     if model['shipping_notice']:
         footer_rows.append([Paragraph(escape(model['shipping_notice']),ParagraphStyle(
             'shipping_notice',fontName=bold,fontSize=10,leading=13,
@@ -191,9 +191,14 @@ def pdf(doc):
     story.append(footer_block)
     story.extend([NextPageTemplate('Annexure'), PageBreak()])
     append_sections([section for section in model['sections'] if section.get('annexure')])
-    annexure_footer=Table([[image('payment_options.png',usable*.46),image('signature.png',usable*.44)]],
+    legal_style=ParagraphStyle('legal_notice',fontName=regular,fontSize=8,leading=10,
+        alignment=1,textColor=colors.HexColor('#333333'))
+    annexure_footer=Table([
+        [image('payment_options.jpg',usable*.46),image('signature.png',usable*.44)],
+        [Paragraph(escape(model['legal_notice']).replace('\n','<br/>'),legal_style),'']],
                          colWidths=[usable*.5]*2,splitByRow=0)
     annexure_footer.setStyle(TableStyle([
+        ('SPAN',(0,1),(1,1)),('LINEABOVE',(0,1),(-1,1),.4,colors.black),
         ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
         ('LINEBEFORE',(0,0),(0,-1),1.2,colors.black),
         ('LINEAFTER',(-1,0),(-1,-1),1.2,colors.black),
@@ -309,7 +314,7 @@ def xlsx(doc):
                 if section['name']=='items' and index>0 and len(section['rows'])==2:height=max(height,85)
                 if section['name']=='header' and index==0:height=max(height,30)
                 sheet.set_row(row_index,min(409,height));row_index+=1
-    image('payment_options.png',row_index,0,440,90);image('signature.png',row_index,5,440,90)
+    image('payment_options.jpg',row_index,0,440,90);image('signature.png',row_index,5,440,90)
     for part in range(2):
         for offset in range(4):
             top=offset==0;bottom_edge=offset==3
@@ -461,7 +466,11 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row):
     footer=book.add_format({'left':2,'right':2,'top':1,'bottom':2,'border_color':'#000000'})
     sheet.merge_range(row,0,row+4,10,'',footer)
     for offset in range(5):sheet.set_row(row+offset,18)
-    image('payment_options.png',row,0,header_width*.5,110)
+    image('payment_options.jpg',row,0,header_width*.5,110)
     image('signature.png',row,6,header_width*.47-10,110)
-    sheet.print_area(0,0,row+4,10)
+    legal=book.add_format({'font_name':'Cambria','font_size':8,'align':'center','valign':'vcenter',
+        'text_wrap':True,'left':2,'right':2,'top':1,'bottom':2,'border_color':'#000000'})
+    sheet.merge_range(row+5,0,row+5,10,model['legal_notice'],legal)
+    sheet.set_row(row+5,28)
+    sheet.print_area(0,0,row+5,10)
     return summary

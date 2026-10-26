@@ -1209,6 +1209,16 @@ body.embedded #detail {
   padding: 6px;
   border-top: 1px solid #000;
 }
+.pi-legal-notice {
+  padding: 5px 8px;
+  border-top: 1px solid #000;
+  color: #333;
+  font-family: Cambria, Cochin, Georgia, serif;
+  font-size: 8pt;
+  line-height: 1.25;
+  text-align: center;
+  white-space: pre-line;
+}
 /* Single-page order composer: a quiet canvas, clear cards and confident accents. */
 #editor.order-composer {
   --order-ink: #22324d;

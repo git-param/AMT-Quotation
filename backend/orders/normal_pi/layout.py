@@ -14,6 +14,8 @@ ITEM_HEADING = 'Electronics and Electrical Spare Parts'
 SHIPPING_NOTICE = ('Please note that the shipment will be dispatched and the final shipping documents '
                    'will be prepared as per the Proforma Invoice. Kindly confirm on the same email '
                    'to avoid any changes after order processing.')
+LEGAL_NOTICE = ('This is a computer-generated Proforma Invoice and does not require a signature.\n'
+                '© Aeliya Marine Tech Private Limited')
 
 
 def shipping_notice(doc):
@@ -192,7 +194,8 @@ def layout(doc):
         clauses.append([c(0,11,value,'final_term' if final else 'terms',
             field='terms' if index==0 else None, value=term_text if index==0 else None,
             multiline=True, aria='Terms and conditions', preview_hidden=index>0)])
-    return {'widths':WIDTHS,'currency':doc['currency'],'shipping_notice':shipping_notice(doc),'sections':[
+    return {'widths':WIDTHS,'currency':doc['currency'],'shipping_notice':shipping_notice(doc),
+        'legal_notice':LEGAL_NOTICE,'sections':[
         {'name':'header','rows':header},{'name':'parties','rows':parties},
         {'name':'items','rows':items},{'name':'bank','rows':bank_rows},
         {'name':'terms','rows':clauses}]}

@@ -265,12 +265,14 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     const branding = node("div", undefined, "pi-branding");
     image(branding, "header.png");headerBox.append(branding);paper.append(headerBox);
     let annexurePaper=null;
-    function footer(parent,includeAddress=true){
+    function footer(parent,includeAddress=true,includeLegal=false){
       const signatures=node('div',undefined,'pi-signatures');
-      image(signatures,'payment_options.png');image(signatures,'signature.png');
+      image(signatures,'payment_options.jpg');image(signatures,'signature.png');
       const box=node('div',undefined,'pi-footer-box');box.append(signatures);
       if(includeAddress&&state.layout.shipping_notice)box.append(node('div',state.layout.shipping_notice,'pi-shipping-notice'));
-      if(includeAddress)image(box,'address.png');parent.append(box);
+      if(includeAddress)image(box,'address.png');
+      if(includeLegal)box.append(node('div',state.layout.legal_notice,'pi-legal-notice'));
+      parent.append(box);
     }
     for (const section of state.layout.sections) {
       if(section.annexure&&!annexurePaper){
@@ -337,7 +339,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       }
       table.append(body);(section.annexure?annexurePaper:section.name === "header" ? headerBox : paper).append(table);
     }
-    footer(annexurePaper||paper,!annexurePaper);
+    footer(annexurePaper||paper,!annexurePaper,true);
     for(const textarea of host.querySelectorAll('textarea'))fitText(textarea);
     if (issued) for (const { input, primaryInput } of inputs) {input.disabled = true;if(primaryInput)primaryInput.disabled=true;}
   }
