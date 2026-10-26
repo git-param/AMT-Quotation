@@ -24,7 +24,7 @@
       if(!commercial)return '';
       const quantity=Number(row.quantity);
       if(!Number.isInteger(quantity)||quantity<=0)return `SKU ${row.sku}: enter a quantity of at least 1 (whole numbers only).`;
-      if(checkAvailability&&row.found&&row.stock!=null&&Number.isFinite(Number(row.stock))){
+      if(checkAvailability&&row.manual_entry!==true&&row.found&&row.stock!=null&&Number.isFinite(Number(row.stock))){
         const available=Number(row.stock);
         if(available<=0)return `SKU ${row.sku} cannot be added: out of stock (0 available).`;
         if(quantity>available)return `SKU ${row.sku} cannot be added: requested ${quantity}, but only ${available} available.`;
@@ -174,7 +174,7 @@
         if(curr!==currency()||target!==JSON.stringify(scope()))throw new Error('Client or currency changed. Add the manual SKU again.');
         const existing=sku&&existingSku([sku]);
         if(existing){rejectExisting(existing);return false;}
-        rows.push({sku,description:'',quantity:'1',unit_price:'',currency:curr,hsn_code:sharedHsn,uom:'PCs'});activeRow=rows.length-1;
+        rows.push({sku,description:'',quantity:'1',unit_price:'',currency:curr,hsn_code:sharedHsn,uom:'PCs',manual_entry:true});activeRow=rows.length-1;
         render();status.className='draft-status';status.textContent=commercial&&sharedHsn?'Manual item added with the configured HSN code. Complete its description, quantity and price.':'Manual item added. Complete its details before saving.';
         editBox.querySelector?.('[aria-label="SKU / item code"]')?.focus();return true;
       }catch(error){if(version===revision)showError(error.message);return false;}
@@ -234,7 +234,7 @@
             if(!unresolved.some(item=>item.sku===draft.sku))unresolved.push({sku:draft.sku,unavailable:draft.lookup_status==='unavailable'||/lookup unavailable/i.test(draft.error||'')});
             continue;
           }
-          if(commercial){draft.item_condition=draft.condition||'';draft.hsn_code=sharedHsn||draft.hsn_code||'';draft.uom='PCs';}
+          if(commercial){draft.item_condition=draft.condition||'';draft.hsn_code=sharedHsn||draft.hsn_code||'';draft.uom='PCs';draft.manual_entry=false;}
           if (Number.isInteger(Number(draft.quantity))) draft.quantity = String(Number(draft.quantity));
           rows.push({...draft});added++;
         }
@@ -267,12 +267,12 @@
           renderEditor();
           throw new Error('Complete each selected item with a positive whole-number quantity and a valid price (up to 2 decimals).');
         }
-        return selected.map(row=>Object.fromEntries(['sku','description','quantity','unit_price','currency',...(commercial?['hsn_code','item_condition','uom']:[])].map(key=>[key,row[key]||(key==='uom'?'PCs':'')])));
+        return selected.map(row=>Object.fromEntries(['sku','description','quantity','unit_price','currency',...(commercial?['hsn_code','item_condition','uom','manual_entry']:[])].map(key=>[key,key==='manual_entry'?row[key]===true:row[key]||(key==='uom'?'PCs':'')])));
       },
       currencyChanged() { rows.forEach(row=>{row.currency=currency();row.unit_price='';});render();status.textContent='Currency changed. Fetch again or enter unit prices in the chosen currency.'; },
       reset() { revision++;rows=[];unresolved=[];activeRow=0;input.value='';status.textContent='';renderLookupNotice();render(); }
     };
-    if(save)save.onclick=async()=>{save.disabled=true;try{const lines=editor.values();status.className='draft-status';status.textContent='Checking current stock and saving SKU items...';await onSave(lines);editor.reset();status.textContent='SKU lines saved.';}catch(error){showError(error.message);}finally{save.disabled=false;}};
+    if(save)save.onclick=async()=>{save.disabled=true;try{const lines=editor.values();status.className='draft-status';status.textContent=lines.some(line=>line.manual_entry!==true)?'Checking current stock for catalog items and saving SKU items...':'Saving manually entered SKU items...';await onSave(lines);editor.reset();status.textContent='SKU lines saved.';}catch(error){showError(error.message);}finally{save.disabled=false;}};
     render();return editor;
   };
 })();

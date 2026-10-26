@@ -33,7 +33,12 @@ def order_line(data, existing=None):
     extra = {'hsn_code': 20, 'item_condition': 100, 'uom': 30}
     if not isinstance(data, dict):
         raise ValueError('Provide a SKU line object.')
-    values = validate_line({k: v for k, v in data.items() if k not in extra}, existing)
+    manual_entry = data.get('manual_entry', dict(existing).get('manual_entry', 0) if existing else 0)
+    if type(manual_entry) is bool:
+        manual_entry = int(manual_entry)
+    if type(manual_entry) is not int or manual_entry not in (0, 1):
+        raise ValueError('Invalid manual SKU entry flag.')
+    values = validate_line({k: v for k, v in data.items() if k not in extra and k != 'manual_entry'}, existing)
     old = dict(existing) if existing else {}
     for key, limit in extra.items():
         values[key] = text(data.get(key, old.get(key, 'PCs' if key == 'uom' else '')),
@@ -42,6 +47,7 @@ def order_line(data, existing=None):
         raise ValueError('Unit of measure is required.')
     if values['uom'] not in ('PCs','Lot','Kit','set') and (existing is None or 'uom' in data):
         raise ValueError('Choose PCs, Lot, Kit or set as the unit of measure.')
+    values['manual_entry'] = manual_entry
     return values
 
 
@@ -287,8 +293,11 @@ def insert_lines(connection, order_id, lines, actor):
             raise ValueError(f"SKU {line['sku']} is already in the draft. "
                              'Increase the quantity of the existing draft item instead.')
         existing_skus.add(key)
-    from backend.orders.catalog import validate_stock_batch
-    validate_stock_batch(((line['sku'], Decimal(line['quantity_milli'])/1000) for line in lines), connection)
+    checked_lines = [line for line in lines if not line.get('manual_entry')]
+    if checked_lines:
+        from backend.orders.catalog import validate_stock_batch
+        validate_stock_batch(((line['sku'], Decimal(line['quantity_milli'])/1000)
+                              for line in checked_lines), connection)
     for line in lines:
         columns = ', '.join(line)
         marks = ', '.join('?' for _ in line)
