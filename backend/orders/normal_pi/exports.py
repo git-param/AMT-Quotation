@@ -19,6 +19,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, KeepInFrame
 
 from backend.orders.normal_pi.layout import layout,terms
+from backend.orders.terms_config import RETURN_POLICY_LABEL, RETURN_POLICY_URL
 
 _font_lock = Lock()
 
@@ -132,6 +133,8 @@ def pdf(doc):
             return Paragraph(escape(symbol+' '+amount),style)
         if 'uom' in cell:text+=' '+cell['uom']
         content=escape(text).replace('\n','<br/>')
+        if kind in ('terms','final_term') and RETURN_POLICY_LABEL in text:
+            content=content.replace(RETURN_POLICY_LABEL, f'<link href="{RETURN_POLICY_URL}" color="#0563C1">{RETURN_POLICY_LABEL}</link>')
         if cell.get('party') and cell.get('field')=='delivery.consignee_text':
             content=content.replace('*required','<font color="#dc2626">*required</font>')
         if kind=='bank_title':content='<u>'+content+'</u>'
@@ -342,6 +345,9 @@ def xlsx(doc):
                         else:sheet.write_string(row_index,col,symbol+' '+cell['text'],fmt)
                     elif cell.get('party') and cell.get('field')=='delivery.consignee_text':
                         rich_required(sheet,row_index,col,value,fmt,required_format)
+                    elif cell['style'] in ('terms','final_term') and RETURN_POLICY_LABEL in value:
+                        link_fmt=book.add_format({**style_values,'font_color':'#0563C1','underline':0})
+                        sheet.write_url(row_index,col,RETURN_POLICY_URL,link_fmt,value)
                     else:sheet.write_string(row_index,col,value,fmt)
                     if chunk_index==0 and (cell.get('calculated') in ('goods_total','subtotal','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
                         formula_cells.append((row_index,col,fmt,cell['calculated'],cell['text']))

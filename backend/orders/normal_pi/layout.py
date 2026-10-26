@@ -6,7 +6,7 @@ is a layout definition only; it never opens a workbook or changes PI amounts.
 from decimal import Decimal
 import re
 from backend.orders.locations import party_parts, address_only, COUNTRIES
-from backend.orders.terms_config import TERMS_BY_CURRENCY
+from backend.orders.terms_config import TERMS_BY_CURRENCY, RETURN_POLICY_TEXT, RETURN_POLICY_LABEL
 
 WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
           15.7109375,8.7109375,8,16,8.7109375,8.140625]
@@ -14,7 +14,7 @@ ITEM_HEADING = 'Electronics and Electrical Spare Parts'
 SHIPPING_NOTICE = ('Please note that the shipment will be dispatched and the final shipping documents '
                    'will be prepared as per the Proforma Invoice. Kindly confirm on the same email '
                    'to avoid any changes after order processing.')
-LEGAL_NOTICE = ('This is a computer-generated Proforma Invoice and does not require a signature.\n'
+LEGAL_NOTICE = ('This is a computer-generated Proforma Invoice and does not require a digital signature.\n'
                 '© Aeliya Marine Tech Private Limited')
 
 
@@ -45,13 +45,18 @@ def rate_heading(lines):
 
 def terms(doc):
     if 'terms' in doc:
-        return doc['terms']
+        text = doc['terms']
+        if RETURN_POLICY_LABEL.casefold() not in text.casefold():
+            count = len(text.splitlines())
+            text = text.rstrip() + ('\n' if text.strip() else '') + f'{count + 1}. {RETURN_POLICY_TEXT}'
+        return text
     values = list(TERMS_BY_CURRENCY.get(doc['currency'], TERMS_BY_CURRENCY['USD']))
     for index,value in enumerate(values):
         match=re.match(r'^(\s*\d+[.)]\s*)?PAYMENT\b',value,re.I)
         if match:
             payment_terms=re.sub(r'\badvance\b','ADVANCE',doc['order']['payment_terms'],flags=re.I)
             values[index]=(match[1] or '')+'PAYMENT '+payment_terms
+    values.append(f'{len(values) + 1}. {RETURN_POLICY_TEXT}')
     return '\n'.join(values)
 
 

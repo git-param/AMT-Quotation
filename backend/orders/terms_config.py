@@ -4,6 +4,10 @@ Edit these lines to change the terms printed on newly generated PIs. A
 ``PAYMENT`` line is replaced with the payment terms saved on the order.
 """
 
+RETURN_POLICY_URL = 'https://aeliyamarinetech.com/pages/return-and-refund-policy'
+RETURN_POLICY_LABEL = 'RETURN AND REFUND POLICY'
+RETURN_POLICY_TEXT = "ALL RETURNS AND REFUNDS ARE SUBJECT TO THE COMPANY'S RETURN AND REFUND POLICY."
+
 USD_TERMS = (
     '1. SUBJECT TO BHAVNAGAR JURISDICTION',
     '2. PAYMENT 100% ADVANCE',

@@ -318,7 +318,38 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
             if (!cell.label && !amount) td.lastChild.classList.add("pi-unlabelled");
             if (cell.editor_rows) input.rows = 12;
             else if (cell.multiline) input.rows = cell.field.startsWith("delivery.") ? 5 : 2;
-            if (cell.field === 'terms') input.rows = Math.max(5, String(cell.value).split('\n').length);
+            if (cell.field === 'terms') {
+              input.rows = Math.max(5, String(cell.value).split('\n').length);
+              const view = node('div', undefined, 'pi-terms-view');
+              const label = 'RETURN AND REFUND POLICY';
+              const renderTerms = () => {
+                view.replaceChildren();
+                const value = input.value;
+                const index = value.indexOf(label);
+                if (index < 0) { view.textContent = value; return; }
+                view.append(document.createTextNode(value.slice(0, index)));
+                const link = node('a', label, 'pi-return-policy-link');
+                link.href = 'https://aeliyamarinetech.com/pages/return-and-refund-policy';
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                view.append(link, document.createTextNode(value.slice(index + label.length)));
+              };
+              renderTerms();
+              input.hidden = true;
+              input.parentNode.append(view);
+              view.addEventListener('click', event => {
+                if (event.target.closest('a') || issued) return;
+                view.hidden = true;
+                input.hidden = false;
+                fitText(input);
+                input.focus();
+              });
+              input.addEventListener('blur', () => {
+                renderTerms();
+                input.hidden = true;
+                view.hidden = false;
+              });
+            }
             if (cell.uom_field) {field(td, "UOM", cell.uom==='Set'?'set':cell.uom, cell.uom_field);td.classList.add("pi-quantity-cell");}
             else if(cell.uom){const wrap=td.lastChild;wrap.classList.add('pi-quantity-inline');wrap.append(node('span',cell.uom,'pi-quantity-uom'));}
             if (cell.discount_note) td.append(node('small',cell.discount_note));

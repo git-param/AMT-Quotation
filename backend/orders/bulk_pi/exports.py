@@ -19,6 +19,7 @@ from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, 
 
 from backend.orders.normal_pi.exports import section_borders, rich_required, fonts, _font_lock
 from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words, WIDTHS
+from backend.orders.terms_config import RETURN_POLICY_LABEL, RETURN_POLICY_URL
 
 
 def asset(doc,name):
@@ -92,6 +93,8 @@ def pdf(doc):
         if 'uom' in cell:text+=' '+cell['uom']
         if 'amount' in kind and not cell.get('free'):text=symbol+' '+text
         content=escape(text).replace('\n','<br/>')
+        if kind in ('terms','final_term') and RETURN_POLICY_LABEL in text:
+            content=content.replace(RETURN_POLICY_LABEL, f'<link href="{RETURN_POLICY_URL}" color="#0563C1">{RETURN_POLICY_LABEL}</link>')
         if cell.get('party') and cell.get('field')=='delivery.consignee_text':
             content=content.replace('*required','<font color="#dc2626">*required</font>')
         if kind=='bank_title':content='<u>'+content+'</u>'
@@ -304,6 +307,9 @@ def xlsx(doc):
                         else:sheet.write_string(row_index,col,symbol+' '+cell['text'],fmt)
                     elif cell.get('party') and cell.get('field')=='delivery.consignee_text':
                         rich_required(sheet,row_index,col,value,fmt,required_format)
+                    elif cell['style'] in ('terms','final_term') and RETURN_POLICY_LABEL in value:
+                        link_fmt=book.add_format({**style_values,'font_color':'#0563C1','underline':0})
+                        sheet.write_url(row_index,col,RETURN_POLICY_URL,link_fmt,value)
                     else:sheet.write_string(row_index,col,value,fmt)
                     if chunk_index==0 and (cell.get('calculated') in ('subtotal','goods_total','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
                         formula_cells.append((row_index,col,fmt,cell['calculated'],cell['text']))
