@@ -70,6 +70,11 @@ def persist_order_edits(connection, order_id, user, order, previous, doc):
         from backend.enquiries.lines import number
         from decimal import Decimal
         order_changes['shipping_minor'] = number(doc['totals']['shipping'],2,Decimal('999999999.99'))
+    if doc['totals'].get('bank_charges', '0.00') != previous['totals'].get('bank_charges', '0.00'):
+        from backend.enquiries.lines import number
+        from decimal import Decimal
+        order_changes['bank_charges_minor'] = number(doc['totals']['bank_charges'],2,Decimal('999999999.99'))
+    if ('shipping_minor' in order_changes or 'bank_charges_minor' in order_changes):
         if order['currency'] != doc['currency']:
             order_changes['currency'] = doc['currency']
             discount = doc['order'].get('discount')

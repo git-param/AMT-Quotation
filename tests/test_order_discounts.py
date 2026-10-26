@@ -48,6 +48,35 @@ class DiscountTests(unittest.TestCase):
             sheet = ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
             self.assertTrue(any('-3.70' in (node.text or '') for node in sheet.findall('.//{*}f')))
 
+    def test_replacing_single_and_multiple_sku_discount_uses_original_amount(self):
+        test_bulk_pi.BulkPiTests.items(self, 5)
+        lines = self.client.get(f'/api/orders/{self.order_id}').json['lines']
+        selected = [line['id'] for line in lines[:2]]
+        for scope, ids in [('single', selected[:1]), ('multiple', selected)]:
+            self.assertEqual(self.save(scope=scope, line_ids=ids, value='10').status_code, 200)
+            first = self.preview(bulk_description='Parts')['document']['totals']['lines']
+            self.assertEqual(self.save(scope=scope, line_ids=ids, value='20').status_code, 200)
+            second = self.preview(bulk_description='Parts')['document']['totals']['lines']
+            for before, after in zip(first, second):
+                self.assertEqual(after['gross_total'], before['gross_total'])
+                expected = (Decimal(after['gross_total']) * Decimal('.20')).quantize(Decimal('.01')) if after['id'] in ids else Decimal(0)
+                self.assertEqual(Decimal(after['discount_amount']), expected)
+
+    def test_bulk_pi_bank_charges_precede_shipping(self):
+        test_bulk_pi.BulkPiTests.items(self, 5)
+        saved = self.client.put(f'/api/orders/{self.order_id}', json={'bank_charges': '8.00'})
+        self.assertEqual(saved.status_code, 200, saved.json)
+        preview = self.preview(bulk_description='Parts')
+        doc = preview['document']
+        model = layout(doc)
+        annexure = next(section for section in model['sections'] if section['name'] == 'annexure')
+        labels = [cell['text'] for row in annexure['rows'] for cell in row]
+        self.assertLess(labels.index('Bank Charges'), labels.index('Shipping'))
+        issued = self.issue(preview)
+        self.assertEqual(issued.status_code, 201, issued.json)
+        with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
+            self.assertIn(b'Bank Charges', book.read('xl/sharedStrings.xml'))
+
     def test_total_visibility_and_removal(self):
         self.assertEqual(self.save(scope='total', type='amount', value='5').status_code, 200)
         doc = self.preview()['document']
@@ -98,7 +127,7 @@ class DiscountTests(unittest.TestCase):
         self.assertEqual(self.save().status_code, 403)
         self.assertEqual(self.client.delete(f'/api/orders/{self.order_id}/discount').status_code, 403)
         self.as_user('tl2')
-        self.assertEqual(self.save().status_code, 404)
+        self.assertEqual(self.save().status_code, 403)
 
     def test_currency_conversion_gst_and_fixed_discount_survive_edits(self):
         self.assertEqual(self.save(type='amount', value='2').status_code, 200)

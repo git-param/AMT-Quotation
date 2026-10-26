@@ -133,6 +133,7 @@ def prepare(state, user, currency, rate, bulk_description=None):
         except Exception as error:raise ValueError('The quotation exchange rate is unavailable. Try again shortly.') from error
     totals = calculate(state,currency,rate,tax)
     order = deepcopy(state['order'])
+    order['delivery_terms'] = 'DAP'
     order['payment_terms'] = order['payment_terms'] or company['payment_terms'][currency]
     destination = state['delivery'] or {}
     consignee = destination.get('consignee_text',party_block(destination.get('consignee'),destination.get('shipping_address')))
@@ -166,7 +167,7 @@ def prepare(state, user, currency, rate, bulk_description=None):
 
 def edit(document, edits):
     from backend.orders.invoices import calculate
-    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','terms','amount_in_words','consignee_gst_number','bulk_description','annexure_quantity'}:
+    if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','bank_charges','terms','amount_in_words','consignee_gst_number','bulk_description','annexure_quantity'}:
         raise ValueError('Invalid PI preview fields. Company details and invoice identity cannot be edited.')
     doc = deepcopy(document)
     if 'annexure_quantity' in edits:
@@ -230,10 +231,13 @@ def edit(document, edits):
         lines = result
     shipping = edits.get('shipping_charges',doc['totals']['shipping'])
     shipping_minor = number(shipping,2,Decimal('999999999.99'))
+    bank = edits.get('bank_charges',doc['totals'].get('bank_charges', '0.00'))
+    bank_minor = number(bank,2,Decimal('999999999.99'))
     # Editable prices are already in the explicitly selected PI currency. Never
     # convert an edited displayed rate a second time.
     state = {'order':{**doc['order'],'currency':doc['currency'],
-                      'shipping_charges':format(Decimal(shipping_minor)/100,'.2f')},
+                      'shipping_charges':format(Decimal(shipping_minor)/100,'.2f'),
+                      'bank_charges':format(Decimal(bank_minor)/100,'.2f')},
              'lines':[{**line,'currency':doc['currency']} for line in lines]}
     discount = state['order'].get('discount')
     if discount and discount['type'] == 'amount':
@@ -256,7 +260,7 @@ def edit(document, edits):
 
 def recalculate(document, edits):
     """Calculate numeric edits independently of incomplete party/commercial text."""
-    if not isinstance(edits,dict) or set(edits)-{'lines','shipping_charges'}:
+    if not isinstance(edits,dict) or set(edits)-{'lines','shipping_charges','bank_charges'}:
         raise ValueError('Provide item prices, quantities and shipping charges.')
     numeric={}
     if 'lines' in edits:
@@ -270,6 +274,7 @@ def recalculate(document, edits):
             values.append({key:line.get(key,original[key]) if key in ('quantity','unit_price','uom') else original[key] for key in LINE_FIELDS})
         numeric['lines']=values
     if 'shipping_charges' in edits:numeric['shipping_charges']=edits['shipping_charges']
+    if 'bank_charges' in edits:numeric['bank_charges']=edits['bank_charges']
     return edit(document,numeric)
 
 
@@ -290,6 +295,7 @@ def print_document(document, edits):
             numeric['lines'].append({key:line.get(key,original[key]) if key in ('quantity','unit_price') else original[key]
                 for key in LINE_FIELDS})
     if 'shipping_charges' in edits:numeric['shipping_charges']=edits['shipping_charges']
+    if 'bank_charges' in edits:numeric['bank_charges']=edits['bank_charges']
     try:
         doc = edit(doc,numeric)
     except ValueError:

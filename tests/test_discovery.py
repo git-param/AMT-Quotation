@@ -46,6 +46,17 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(self.client.get(f'/api/leads/{uid}').status_code, 200)
         self.assertEqual(self.client.put(f'/api/leads/{uid}', json={'notes': 'Denied'}).status_code, 403)
 
+    def test_client_name_suggestions_cross_owner_and_authentication(self):
+        self.as_user('exec1')
+        existing = self.client.post('/api/leads', json={'name': 'airworld.co'}).json['lead']['id']
+        self.as_user('exec2')
+        matches = self.client.get('/api/leads/suggestions?q=airworld.in')
+        self.assertEqual(matches.status_code, 200)
+        self.assertEqual(matches.json['clients'][0]['id'], existing)
+        self.assertEqual(self.client.get('/api/leads/suggestions?q=xyz').json['clients'], [])
+        self.as_user(None)
+        self.assertEqual(self.client.get('/api/leads/suggestions?q=airworld').status_code, 401)
+
     def test_pagination_sort_counts_and_creator_filters_are_scoped(self):
         self.as_user('exec1')
         for name in ('Zulu', 'Bravo', 'Alpha'):

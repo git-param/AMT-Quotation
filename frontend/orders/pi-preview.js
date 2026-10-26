@@ -25,7 +25,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     calculationTimer=setTimeout(async()=>{
       try{
         const data=collect();
-        const result=await api(state.base+'/'+state.preview_id+'/calculate',json('POST',{lines:data.lines,shipping_charges:data.shipping_charges}));
+        const result=await api(state.base+'/'+state.preview_id+'/calculate',json('POST',{lines:data.lines,shipping_charges:data.shipping_charges,bank_charges:data.bank_charges}));
         if(version!==calculationVersion||issued)return;
         state.document.totals=result.totals;
         for(const item of calculated){
@@ -122,7 +122,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         if(quantity>0&&price&&Number.isFinite(Number(input.value)))price.input.value=(Number(input.value)/quantity).toFixed(2);
       }
       if(path.endsWith('.uom'))updateRateHeading();
-      if(path==='shipping_charges'||/^lines\.\d+\.(quantity|unit_price|line_total|uom)$/.test(path))scheduleCalculation();
+      if(path==='shipping_charges'||path==='bank_charges'||/^lines\.\d+\.(quantity|unit_price|line_total|uom)$/.test(path))scheduleCalculation();
       contactWarnings();
     };
     wrap.append(input);
@@ -167,7 +167,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
   }
   function collect() {
     const doc = state.document;
-    const data = {date:doc.date,prepared_phone:doc.prepared_phone||'',order:{},delivery:{},shipping_charges:doc.totals.shipping,
+    const data = {date:doc.date,prepared_phone:doc.prepared_phone||'',order:{},delivery:{},shipping_charges:doc.totals.shipping,bank_charges:doc.totals.bank_charges||'0.00',
       lines:doc.totals.lines.map(line=>Object.fromEntries(["id","sku","description","hsn_code","item_condition","uom","quantity","unit_price"].map(key=>[key,line[key]])))};
     for(const item of inputs){if(item.path.endsWith('.line_total')||(item.path==='annexure_quantity'&&!item.modified&&!doc.annexure_quantity)||(item.path==='amount_in_words'&&!item.modified&&!doc.amount_in_words))continue;const keys=item.path.split('.');let target=data;for(const key of keys.slice(0,-1))target=target[key];target[keys.at(-1)]=valueOf(item);}
     if(String(data.shipping_charges).trim().toLowerCase()==='free')data.shipping_charges='0.00';
@@ -275,7 +275,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
             const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.free ? 'Free' : cell.value, cell.field, cell.multiline, cell.free ? 'text' : cell.type || "text");
             if(cell.calculated)calculated.push({path:cell.calculated,input,autoQuantity:cell.auto_quantity});
             if(cell.auto_quantity){input.maxLength=200;input.title='Edit the displayed total quantity. Clear to restore the automatic total.';}
-            if (cell.readonly) { input.readOnly = true; input.title = cell.field?.endsWith('.line_total')?'Calculated after discount. Edit quantity or unit price to change this amount.':'Shared HSN code managed in Configuration'; }
+            if (cell.readonly) { input.readOnly = true; input.title = cell.field==='order.delivery_terms'?'Delivery terms are fixed at DAP.':cell.field?.endsWith('.line_total')?'Calculated after discount. Edit quantity or unit price to change this amount.':'Shared HSN code managed in Configuration'; }
             if (!cell.label && !amount) td.lastChild.classList.add("pi-unlabelled");
             if (cell.editor_rows) input.rows = 12;
             else if (cell.multiline) input.rows = cell.field.startsWith("delivery.") ? 5 : 2;

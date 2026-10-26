@@ -309,3 +309,7 @@ textarea.cl-input { resize: vertical; min-height: 84px; }
 @media (prefers-reduced-motion: reduce) {
   .cl-page *, .cl-drawer, .cl-confirm, #message { animation: none !important; transition: none !important; }
 }
+.cl-suggestions { margin-top: .5rem; padding: .65rem; border: 1px solid #c8d5e1; border-radius: .5rem; background: #f4f8fc; }
+.cl-suggestions strong { display: block; margin-bottom: .35rem; }
+.cl-suggestion { display: block; width: 100%; padding: .4rem; border: 0; background: transparent; text-align: left; cursor: pointer; color: #174b70; }
+.cl-suggestion:hover, .cl-suggestion:focus-visible { background: #e1eef7; }

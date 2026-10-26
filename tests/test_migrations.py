@@ -204,10 +204,15 @@ class MigrationTests(unittest.TestCase):
             connection.execute("UPDATE sqlite_sequence SET seq=100 WHERE name='client_orders'")
             before = {table: connection.execute('SELECT * FROM '+table).fetchall() for table in tables}
             indexes = connection.execute("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").fetchall()
-        self.assertEqual(migrate_database(self.path), [28, 29, 30, 31, 32])
+        self.assertEqual(migrate_database(self.path), [28, 29, 30, 31, 32, 33])
         with test_connection(self.path) as connection:
             for table in tables:
-                self.assertEqual(connection.execute('SELECT * FROM '+table).fetchall(),before[table])
+                rows = connection.execute('SELECT * FROM '+table).fetchall()
+                if table == 'client_orders':
+                    self.assertEqual([row[:-1] for row in rows], before[table])
+                    self.assertTrue(all(row[-1] == 0 for row in rows))
+                else:
+                    self.assertEqual(rows, before[table])
             current_indexes = connection.execute("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").fetchall()
             self.assertTrue(set(indexes).issubset(set(current_indexes)))
             cursor=connection.execute("INSERT INTO client_orders(reference,client_id,order_date,currency,created_by,updated_by) VALUES('ORDER-2',1,'2026-10-17','AED',1,1)")

@@ -329,7 +329,7 @@ def xlsx(doc):
                             'left':0 if cell.get('open_left') else 2 if col==0 else 1,
                             'right':0 if cell.get('open_right') else 2 if end==10 else 1,
                             'valign':'vcenter' if single_item_cell else 'top'})
-                    number=(cell.get('numeric') or cell['field']=='shipping_charges' or quantity or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
+                    number=(cell.get('numeric') or cell['field'] in ('shipping_charges','bank_charges') or quantity or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
                     if cell['span']>1:sheet.merge_range(row_index,col,row_index,end,'',fmt)
                     if number:
                         decimal=Decimal(cell['text'])
@@ -384,8 +384,8 @@ def xlsx(doc):
         elif path in ('subtotal','goods_total'):
             formula='='+annexure_subtotal
             if path=='goods_total':formula+='+'+doc['totals'].get('summary_discount','0.00')
-        elif path=='tax':formula=f'=ROUND(({coordinates["subtotal"]}+N({coordinates["shipping_charges"]}))*{doc["totals"]["tax_rate"]},2)'
-        else:formula=f'=ROUND({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("tax","0")},2)'
+        elif path=='tax':formula=f'=ROUND(({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("bank_charges","0")})*{doc["totals"]["tax_rate"]},2)'
+        else:formula=f'=ROUND({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("bank_charges","0")}+{coordinates.get("tax","0")},2)'
         sheet.write_formula(row,col,formula,fmt,float(Decimal(cached)))
     book.set_calc_mode('auto')
     book.close();return clip_workbook_header(output.getvalue())
@@ -487,8 +487,8 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row):
                         sheet.write_formula(row,col,"='Proforma Invoice'!"+cover_coordinates['grand_total'],style,float(Decimal(value)))
                     else:
                         path=cell.get('calculated')
-                        if path in ('shipping','tax'):
-                            key='shipping_charges' if path=='shipping' else 'tax'
+                        if path in ('shipping','tax','bank_charges'):
+                            key='shipping_charges' if path=='shipping' else path
                             sheet.write_formula(row,col,"='Proforma Invoice'!"+cover_coordinates[key],style,float(Decimal(value)))
                         else:sheet.write_number(row,col,float(Decimal(value)),style)
                 else:

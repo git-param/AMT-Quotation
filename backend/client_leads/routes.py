@@ -1,6 +1,7 @@
 """Client lead creation with shared read access and scoped writes."""
 
 import json
+import re
 
 from flask import Blueprint, jsonify, request, send_file
 
@@ -8,13 +9,45 @@ from backend.common.auth import (
     authenticated_required, get_current_user, get_permissions,
 )
 from backend.client_leads.details import (
-    decode, duplicate_exists, record_addresses, validate_source,
+    decode, duplicate_exists, identities, similar_client_name, record_addresses, validate_source,
     validated_details,
 )
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
 
 bp = Blueprint('client_leads', __name__)
+
+
+@bp.route('/api/leads/suggestions')
+@authenticated_required
+def client_suggestions():
+    """Suggest existing clients with shared name or domain keywords."""
+    query = request.args.get('q', '').strip()
+    if len(query) > 150:
+        return jsonify(error='Search is limited to 150 characters.'), 400
+    tokens = [part for part in re.split(r'[^\w]+', query.casefold()) if len(part) >= 3]
+    if not tokens:
+        return jsonify(clients=[])
+    connection = get_db()
+    try:
+        rows = connection.execute(
+            'SELECT id, name, company, email, created_by FROM client_leads '
+            'WHERE deleted_at IS NULL ORDER BY id DESC'
+        ).fetchall()
+        ranked = []
+        for row in rows:
+            fields = (row['name'], row['company'], row['email'])
+            haystack = ' '.join(str(value or '').casefold() for value in fields)
+            score = sum(2 if token in str(row['name']).casefold() else 1
+                        for token in tokens if token in haystack)
+            duplicate = similar_client_name(query, row['name'])
+            if score or duplicate:
+                ranked.append((score + (10 if duplicate else 0),
+                               {**dict(row), 'is_duplicate': duplicate}))
+        ranked.sort(key=lambda item: (-item[0], item[1]['name'].casefold()))
+        return jsonify(clients=[row for _, row in ranked[:10]])
+    finally:
+        connection.close()
 
 
 def visibility(user):
@@ -169,9 +202,11 @@ def create_lead():
             validate_source(connection, values['enquiry_source_id'])
         except ValueError as error:
             return jsonify(error=str(error)), 400
-        if duplicate_exists(connection, values, user['id']):
+        duplicate = duplicate_exists(connection, values, user['id'])
+        if duplicate:
             return jsonify(
-                error='A matching client exists in this ownership.'
+                error='A similar client already exists. Open that client instead.',
+                client=duplicate,
             ), 409
         columns = ', '.join(values)
         placeholders = ', '.join('?' for _ in values)
@@ -214,10 +249,14 @@ def update_lead(lead_id):
                             visible[0]['enquiry_source_id'])
         except ValueError as error:
             return jsonify(error=str(error)), 400
-        if duplicate_exists(
-                connection, values, visible[0]['created_by'], lead_id):
+        candidate = decode(values)
+        unchanged_identity = identities(candidate) == identities(visible[0])
+        duplicate = None if unchanged_identity else duplicate_exists(
+            connection, values, visible[0]['created_by'], lead_id)
+        if duplicate:
             return jsonify(
-                error='A matching client exists in this ownership.'
+                error='A similar client already exists. Open that client instead.',
+                client=duplicate,
             ), 409
         predicate, parameters = edit_scope(user)
         assignments = ', '.join(field + ' = ?' for field in values)

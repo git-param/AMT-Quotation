@@ -1,6 +1,7 @@
 """CRM field validation and privacy-preserving duplicate detection."""
 
 import json
+from difflib import SequenceMatcher
 import re
 
 SCALARS = {'name': 150, 'company': 150, 'email': 254, 'phone': 40,
@@ -156,8 +157,25 @@ def identities(client):
     return key, emails - {''}, phones - {''}
 
 
+def normalized_client_name(value):
+    """Compare names across punctuation, web domains and common legal suffixes."""
+    value = value.casefold().strip()
+    value = re.sub(r'^https?://|^www\.', '', value)
+    value = re.sub(r'\.(?:com|co|in|net|org|io|ai|uk|us)(?:/.*)?$', '', value)
+    words = re.findall(r'[\w]+', value)
+    while words and words[-1] in {'ltd', 'limited', 'llc', 'inc', 'corp', 'corporation', 'pvt', 'private'}:
+        words.pop()
+    return ''.join(words)
+
+
+def similar_client_name(left, right):
+    left, right = normalized_client_name(left), normalized_client_name(right)
+    return bool(left and right and (left == right or
+        min(len(left), len(right)) >= 5 and SequenceMatcher(None, left, right).ratio() >= 0.88))
+
+
 def duplicate_exists(connection, values, owner, exclude_id=0):
-    """Detect duplicates within ownership without returning private records.
+    """Return an existing matching client across all owners.
 
     Call under BEGIN IMMEDIATE to serialize competing creates/edits. Existing
     duplicate legacy rows remain intact; inactive rows also reserve identity.
@@ -165,12 +183,12 @@ def duplicate_exists(connection, values, owner, exclude_id=0):
     candidate = decode(values)
     key, emails, phones = identities(candidate)
     rows = connection.execute(
-        'SELECT * FROM client_leads WHERE created_by = ? AND id != ?',
-        (owner, exclude_id),
+        'SELECT * FROM client_leads WHERE deleted_at IS NULL AND id != ?',
+        (exclude_id,),
     )
     for row in rows:
         other_key, other_emails, other_phones = identities(decode(row))
-        if (key == other_key
+        if (similar_client_name(candidate['name'], row['name']) or key == other_key
                 or emails & other_emails or phones & other_phones):
-            return True
-    return False
+            return {'id': row['id'], 'name': row['name'], 'company': row['company']}
+    return None

@@ -170,9 +170,10 @@ def calculate(state, currency, rate, tax_rate):
         lambda value: convert(value, order['currency']), currency)
     subtotal = sum((Decimal(line['line_total']) for line in lines), Decimal(0)) - summary_discount
     shipping = convert(order['shipping_charges'], order['currency'])
+    bank_charges = convert(order.get('bank_charges', '0'), order['currency'])
     # Total discounts reduce the goods subtotal before GST is calculated.
-    tax = money((subtotal + shipping) * tax_rate)
-    grand = money(subtotal + shipping + tax)
+    tax = money((subtotal + shipping + bank_charges) * tax_rate)
+    grand = money(subtotal + shipping + bank_charges + tax)
     return {'currency': currency, 'usd_inr_rate': str(rate) if conversion and not exchange_rates else None,
             'exchange_rates': {key:str(value) for key,value in exchange_rates.items()} if exchange_rates else None,
             'conversion_rule': ('USD-based rates: source amount / source rate * target rate; rounded HALF_UP to 2 decimals' if exchange_rates else '1 USD = rate INR; converted unit rates rounded HALF_UP '
@@ -182,6 +183,7 @@ def calculate(state, currency, rate, tax_rate):
             'discount_total': format(discount_total, '.2f'),
             'goods_total': format(subtotal + summary_discount, '.2f'),
             'shipping': format(shipping, '.2f'), 'tax_rate': str(tax_rate),
+            'bank_charges': format(bank_charges, '.2f'),
             'tax': format(tax, '.2f'), 'grand_total': format(grand, '.2f'),
             'amount_in_words': amount_words(grand, currency)}
 
@@ -403,6 +405,9 @@ def generate_invoice(order_id):
         state = details(connection, order)
         if state['order'].get('discount'):
             raise ValueError('Use Preview PI to generate a discounted invoice with PDF and Excel exports.')
+        if Decimal(state['order'].get('bank_charges', '0')):
+            raise ValueError('Use Preview PI to include bank charges in the invoice.')
+        state['order']['delivery_terms'] = 'DAP'
         if not state['lines'] or state['legacy_lines_requiring_review']:
             raise ValueError('Complete and review all order SKU lines before generating a PI.')
         if any(not line.get('hsn_code') or not line.get('item_condition') for line in state['lines']):

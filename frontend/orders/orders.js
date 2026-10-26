@@ -4,7 +4,7 @@ const clientScope = params.get('client_id');
 const enquiryScope = params.get('enquiry_id');
 const DEFAULT_BULK_DESCRIPTION = 'Electrical and Electronic Spare Parts\n\nA lot of Annexure-1';
 if(params.get('embedded')==='1')document.body.classList.add('embedded');
-const headerFields = ['order_date','po_reference','pi_reference','delivery_terms','delivery_time','dispatch_method','currency','destination','shipping_charges'];
+const headerFields = ['order_date','po_reference','pi_reference','delivery_terms','delivery_time','dispatch_method','currency','destination','shipping_charges','bank_charges'];
 const addressFields = ['line1','line2','city','state','postal_code','country'];
 let page=1, pages=0;
 let current=null, editing=null, editingLine=null, clientData=null;
@@ -107,7 +107,7 @@ function discountControls(){
   el('discountValueLabel').textContent=amount?`Discount (${current.order.currency}${total?'':' per SKU line'})`:'Discount (%)';
   el('discountValue').max=amount?'999999999.99':'100';
   el('discountSkus').hidden=['all','total'].includes(el('discountScope').value);
-  el('discountHint').textContent=total?'Deducted once from the goods subtotal, before shipping and GST.':amount?'The amount is in order currency and applies once per selected SKU line, before shipping and GST.':'Percentage applies to each selected SKU line, before shipping and GST.';
+  el('discountHint').textContent=total?'Deducted once from the goods subtotal, before shipping and GST.':amount?'The amount applies once to each selected SKU line’s original price, before shipping and GST.':'Percentage applies to each selected SKU line’s original price, before shipping and GST.';
   for(const input of discountChoices)input.type=el('discountScope').value==='single'?'radio':'checkbox';
   el('discountSkuLegend').textContent=el('discountScope').value==='single'?'Choose one item':'Choose items';
   updateDiscountSelection();
@@ -310,6 +310,7 @@ async function createOrder() {
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));
   el('order_date').value=`${parts.year}-${parts.month}-${parts.day}`;
   el('shipping_charges').value='0.00';
+  el('bank_charges').value='0.00';
   el('delivery_terms').value='DAP';el('delivery_time').value='4 to 6 business days';el('dispatch_method').value='DHL/Fedex/Aramex';
   el('pi_reference').value='';el('pi_reference').readOnly=false;
   const piDefaults=await api('/api/orders/pi-defaults');
@@ -405,7 +406,7 @@ async function showDetails(id) {
   section('Order and PO / PI references',[order.order_date,order.po_reference&&`PO: ${order.po_reference}`,order.pi_reference&&`PI: ${order.pi_reference}`,order.pi_date&&`PI date: ${order.pi_date}`].filter(Boolean).join('\n'));
   section('Payment and delivery terms',[order.payment_terms,order.delivery_terms,order.delivery_time,order.dispatch_method].filter(Boolean).join('\n'));
   el('ownershipHistory').textContent=`Client owner: ${order.owner_name} / Order created by ${order.creator_name} / ${new Date(order.created_at).toLocaleString()}`;
-  section('Destination / shipping',[order.destination,`${order.currency} ${order.shipping_charges}`].filter(Boolean).join(' / '));
+  section('Destination / charges',[order.destination,`Shipping: ${order.currency} ${order.shipping_charges}`,`Bank: ${order.currency} ${order.bank_charges}`].filter(Boolean).join(' / '));
   const destination=data.delivery||{};
   section('Consignee',destination.consignee_text??formatPartyBlock(destination.consignee,destination.shipping_address));
   section('Buyer Details',destination.buyer_text??(destination.buyer?.name?formatPartyBlock(destination.buyer,destination.billing_address):'Same as consignee'));

@@ -802,4 +802,8 @@ MIGRATIONS = (
         "INSERT INTO role_permissions(role_code,permission_code) VALUES "
         "('admin','devices.manage'),('manager','devices.manage')",
     )),
+    (33, 'order_bank_charges', (
+        'ALTER TABLE client_orders ADD COLUMN bank_charges_minor INTEGER NOT NULL DEFAULT 0 '
+        'CHECK (bank_charges_minor BETWEEN 0 AND 99999999999)',
+    )),
 )

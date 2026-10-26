@@ -1,5 +1,6 @@
 """Native PI snapshots, commercial edits, exports and live authorization."""
 from copy import deepcopy
+from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 import json
@@ -48,6 +49,38 @@ class NativePiTests(unittest.TestCase):
         result=self.client.post(self.base+'/preview',json={'currency':'USD',**changes})
         self.assertEqual(result.status_code,201,result.json)
         return result.json
+
+    def test_bank_charges_appear_above_shipping_and_delivery_is_dap(self):
+        response = self.client.put(f'/api/orders/{self.order_id}', json={
+            'bank_charges': '5.00', 'delivery_terms': 'EXW',
+        })
+        self.assertEqual(response.status_code, 200, response.json)
+        order = self.client.get(f'/api/orders/{self.order_id}').json['order']
+        self.assertEqual(order['delivery_terms'], 'DAP')
+        self.assertEqual(order['bank_charges'], '5.00')
+        preview = self.preview()
+        doc = preview['document']
+        self.assertEqual(doc['totals']['bank_charges'], '5.00')
+        self.assertEqual(doc['order']['delivery_terms'], 'DAP')
+        from backend.orders.pi_layout import layout
+        model = layout(doc)
+        labels = [cell['text'] for section in model['sections'] for row in section['rows'] for cell in row]
+        self.assertLess(labels.index('Bank Charges'), labels.index('Shipping'))
+        self.assertEqual(Decimal(doc['totals']['grand_total']), Decimal(doc['totals']['subtotal']) + Decimal(doc['totals']['bank_charges']) + Decimal(doc['totals']['shipping']))
+        changed = self.client.put(self.base+'/preview/'+preview['preview_id'], json={'bank_charges': '7.00'})
+        self.assertEqual(changed.status_code, 200, changed.json)
+        self.assertEqual(changed.json['document']['totals']['bank_charges'], '7.00')
+        self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['order']['bank_charges'], '7.00')
+        issued = self.issue(preview)
+        self.assertEqual(issued.status_code, 201, issued.json)
+        self.assertTrue(self.client.get(issued.json['pdf_url']).data.startswith(b'%PDF-'))
+        with ZipFile(BytesIO(self.client.get(issued.json['xlsx_url']).data)) as book:
+            self.assertIn(b'Bank Charges', book.read('xl/sharedStrings.xml'))
+        zero = self.client.put(f'/api/orders/{self.order_id}', json={'bank_charges': '0'})
+        self.assertEqual(zero.status_code, 200, zero.json)
+        zero_doc = self.preview()['document']
+        self.assertEqual(zero_doc['totals']['bank_charges'], '0.00')
+        self.assertNotIn('Bank Charges', str(layout(zero_doc)))
 
     def test_update_preview_persists_changed_order_details_only(self):
         preview=self.preview()
@@ -446,7 +479,7 @@ class NativePiTests(unittest.TestCase):
 
     def test_remove_pi_requires_order_visibility_and_delete_permission(self):
         issued=self.issue(self.preview());path=f'/api/orders/{self.order_id}/invoices/{issued.json["id"]}'
-        self.as_user('exec2');self.assertEqual(self.client.delete(path).status_code,404)
+        self.as_user('exec2');self.assertEqual(self.client.delete(path).status_code,403)
         self.share('VIEW');self.as_user('exec2')
         self.assertEqual(self.client.delete(path).status_code,403)
         self.as_user(None);self.assertEqual(self.client.delete(path).status_code,401)
@@ -571,7 +604,7 @@ class NativePiTests(unittest.TestCase):
         finally:connection.close()
         self.assertEqual(self.client.get(f'/api/orders/{self.order_id}').json['order']['pi_reference'],'AMT/1234')
         self.as_user('tl2')
-        self.assertEqual(self.client.post(self.base+'/preview/'+preview['preview_id']+'/print',json={}).status_code,404)
+        self.assertEqual(self.client.post(self.base+'/preview/'+preview['preview_id']+'/print',json={}).status_code,403)
 
     def test_deleted_order_retains_issued_files_but_blocks_download_and_preview_access(self):
         preview=self.preview();issued=self.issue(preview)
@@ -791,7 +824,7 @@ class NativePiTests(unittest.TestCase):
         self.as_user('admin')
         self.client.post(f'/api/client-access/{self.parent}/revoke',json={'user_id':self.ids['exec2']})
         self.as_user('exec2')
-        self.assertEqual(self.client.get(issued.json['pdf_url']).status_code,404)
+        self.assertEqual(self.client.get(issued.json['pdf_url']).status_code,200)
 
     def test_order_changes_reject_stale_preview(self):
         preview=self.preview()

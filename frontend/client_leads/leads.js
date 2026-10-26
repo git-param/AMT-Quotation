@@ -309,9 +309,39 @@ byId('pageSize').onchange = () => { currentPage = 1; load().catch(fail); };
 
 /* ───────────── create / edit drawer ───────────── */
 const editor = byId('leadEditor');
+let suggestionTimer = null;
+let suggestionVersion = 0;
+function clearSuggestions() {
+  clearTimeout(suggestionTimer);
+  suggestionVersion++;
+  byId('clientSuggestions').replaceChildren();
+  byId('clientSuggestions').hidden = true;
+}
+byId('name').addEventListener('input', () => {
+  clearSuggestions();
+  if (editingId !== null || readOnly || byId('name').value.trim().length < 3) return;
+  const version = suggestionVersion;
+  suggestionTimer = setTimeout(async () => {
+    try {
+      const {clients} = await api('/api/leads/suggestions?q=' + encodeURIComponent(byId('name').value.trim()));
+      if (version !== suggestionVersion || editingId !== null) return;
+      const panel = byId('clientSuggestions');
+      panel.replaceChildren();
+      if (!clients.length) return;
+      panel.append(h('strong', {text: 'Similar clients already exist'}));
+      for (const client of clients) {
+        panel.append(h('button', {type: 'button', class: 'cl-suggestion',
+          onclick: () => { closeForm({restore: false}); openDetails(client.id).catch(fail); }},
+          client.name + (client.company ? ` · ${client.company}` : '')));
+      }
+      panel.hidden = false;
+    } catch (error) { if (version === suggestionVersion) fail(error); }
+  }, 250);
+});
 function syncContactsHint() { byId('contactsHint').hidden = byId('contacts').children.length > 0; }
 function resetForm() {
   editingId = null; readOnly = false; formDirty = false;
+  clearSuggestions();
   byId('leadForm').reset();
   byId('contacts').replaceChildren();
   byId('leadForm').querySelectorAll('input, select, textarea, button').forEach(control => { control.disabled = false; });
@@ -336,6 +366,7 @@ function closeForm({ restore = true } = {}) {
   if (editor.open) editor.close();
 }
 editor.addEventListener('close', () => {
+  clearSuggestions();
   byId('addLead').setAttribute('aria-expanded', 'false');
   document.body.classList.remove('cl-modal-open');
   if (restoreFocus) (lastFocus && document.contains(lastFocus) ? lastFocus : byId('addLead')).focus();

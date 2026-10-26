@@ -78,7 +78,7 @@ def layout(doc):
         [c(5,2,'Purchase Order:'),editable(7,4,'',order['po_reference'],'order.po_reference',aria='Purchase Order')],
         [c(5,2,'Prepared By: '+doc['prepared_by']),editable(7,4,'Tel: ',doc.get('prepared_phone',''),'prepared_phone',type='tel',aria='Tel')],
         [editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_top=True)],
-        [editable(5,2,'Delivery Terms: ',order['delivery_terms'],'order.delivery_terms')]]
+        [editable(5,2,'Delivery Terms: ','DAP','order.delivery_terms',readonly=True)]]
     header=[[c(0,11,'PROFORMA INVOICE','title',line_bottom=True)]]
     for index in range(7):
         left=c(0,5,'SUPPLIER/SELLER','bold') if index==0 else c(0,5,seller[index-1] if index<=len(seller) else '')
@@ -138,7 +138,10 @@ def layout(doc):
     tax_label=f'GST {(Decimal(total["tax_rate"])*100).normalize():f}%'
     free=Decimal(total['shipping'])==0
     shipping=(editable(9,2,'',total['shipping'],'shipping_charges','amount',type='number',free=free,display_text='Free' if free else total['shipping']),'Shipping')
-    summaries=[(c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Sub Total'),shipping]
+    summaries=[(c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Sub Total')]
+    if Decimal(total.get('bank_charges', '0')):
+        summaries.append((editable(9,2,'',total['bank_charges'],'bank_charges','amount',type='number',calculated='bank_charges'),'Bank Charges'))
+    summaries.append(shipping)
     if Decimal(total.get('summary_discount', '0')):
         discount=(c(9,2,'-'+total['summary_discount'],'amount',numeric=True), 'Discount')
         if doc['currency']=='INR':
@@ -146,6 +149,8 @@ def layout(doc):
                        discount,
                        (c(9,2,total['subtotal'],'amount',numeric=True,calculated='subtotal'),'Net Subtotal'),
                        shipping]
+            if Decimal(total.get('bank_charges', '0')):
+                summaries.insert(-1,(editable(9,2,'',total['bank_charges'],'bank_charges','amount',type='number',calculated='bank_charges'),'Bank Charges'))
         else:
             summaries.insert(0, discount)
     if Decimal(total['tax_rate']):summaries.append((c(9,2,total['tax'],'amount',numeric=True,calculated='tax'),tax_label))

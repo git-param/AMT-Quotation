@@ -18,7 +18,7 @@ FIELDS = {'order_date': 10, 'pi_date': 10, 'po_reference': 100,
           'pi_reference': 100, 'payment_terms': 2000, 'delivery_terms': 500,
           'delivery_time': 200, 'dispatch_method': 200, 'notes': 5000,
           'status': 20, 'currency': 3, 'destination': 200,
-          'shipping_charges': 30}
+          'shipping_charges': 30, 'bank_charges': 30}
 
 
 def pi_line_requirements(lines):
@@ -80,9 +80,13 @@ def header(data, existing=None):
     old = dict(existing) if existing else {
         'delivery_terms':'DAP','delivery_time':'4 to 6 business days','dispatch_method':'DHL/Fedex/Aramex'}
     values = {key: text(data.get(key, old.get(key, '')), limit, key)
-              for key, limit in FIELDS.items() if key != 'shipping_charges'}
+              for key, limit in FIELDS.items() if key not in ('shipping_charges', 'bank_charges')}
+    values['delivery_terms'] = 'DAP'
     values['shipping_minor'] = number(data.get('shipping_charges', format(
         Decimal(old.get('shipping_minor', 0)) / 100, '.2f')), 2,
+        Decimal('999999999.99'))
+    values['bank_charges_minor'] = number(data.get('bank_charges', format(
+        Decimal(old.get('bank_charges_minor', 0)) / 100, '.2f')), 2,
         Decimal('999999999.99'))
     values['status'] = values['status'] or 'draft'
     if values['destination'].strip().upper()=='INDIA':values['currency']='INR'
@@ -212,6 +216,7 @@ def details(connection, order):
     result = dict(order)
     result['discount'] = json.loads(result.pop('discount_json', None) or 'null')
     result['shipping_charges'] = format(Decimal(result['shipping_minor']) / 100, '.2f')
+    result['bank_charges'] = format(Decimal(result['bank_charges_minor']) / 100, '.2f')
     invoices = [dict(row) for row in connection.execute(
         'SELECT id, reference, currency, created_at, workbook_format, '
         '(pdf IS NOT NULL) AS has_pdf FROM order_invoices '

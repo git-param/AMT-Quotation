@@ -100,6 +100,11 @@ def annexure_section(doc):
         discount_row[4] = cell(4, 'Discount', 'bold')
         discount_row[5] = cell(5, '-'+totals['summary_discount'], 'amount', accounting=True)
         rows.insert(len(rows)-2, discount_row)
+    if Decimal(totals.get('bank_charges', '0')):
+        bank_row = blanks()
+        bank_row[4] = cell(4, 'Bank Charges', 'bold')
+        bank_row[5] = cell(5, totals['bank_charges'], 'amount', accounting=True, calculated='bank_charges')
+        rows.insert(len(rows)-2, bank_row)
     # Retain these reserved rows even when charges apply; no extra borders.
     if Decimal(totals['shipping']):
         rows[-2][4] = cell(4, 'Shipping', 'bold')
@@ -125,6 +130,8 @@ def annexure_section(doc):
     rows.extend([final, blanks()[:4]])
     heights = [22.5,36]+[21.95]*len(doc['totals']['lines'])+[14.1,14.1,40.9,14.1,14.1,14.1]
     if Decimal(totals.get('summary_discount', '0')):
+        heights.insert(2+len(doc['totals']['lines']),14.1)
+    if Decimal(totals.get('bank_charges', '0')):
         heights.insert(2+len(doc['totals']['lines']),14.1)
     return dict(name='annexure', annexure=True, widths=ANNEXURE_WIDTHS,
                 rows=rows, row_heights=heights, summary_row=summary_row)

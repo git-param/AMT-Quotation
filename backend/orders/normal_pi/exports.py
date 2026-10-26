@@ -367,7 +367,7 @@ def xlsx(doc):
                     quantity=(cell.get('field') or '').endswith('.quantity')
                     if quantity:
                         fmt=book.add_format({**format_values[cell['style']],'num_format':'0 "'+cell.get('uom','PCs')+'"','top':1 if top else 0,'bottom':1 if bottom else 0,'left':left,'right':right})
-                    number=(cell.get('numeric') or cell['field']=='shipping_charges' or quantity or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
+                    number=(cell.get('numeric') or cell['field'] in ('shipping_charges','bank_charges') or quantity or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
                     if cell['span']>1:sheet.merge_range(row_index,col,row_index,end,'',fmt)
                     if number:
                         decimal=Decimal(cell['text'])
@@ -417,8 +417,8 @@ def xlsx(doc):
             refs=','.join(value for key,value in coordinates.items() if key.endswith('.line_total')) or '0'
             formula=f'=ROUND(SUM({refs}),2)'
             if path=='subtotal':formula+='-'+doc['totals'].get('summary_discount','0.00')
-        elif path=='tax':formula=f'=ROUND(({coordinates["subtotal"]}+N({coordinates["shipping_charges"]}))*{doc["totals"]["tax_rate"]},2)'
-        else:formula=f'=ROUND({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("tax","0")},2)'
+        elif path=='tax':formula=f'=ROUND(({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("bank_charges","0")})*{doc["totals"]["tax_rate"]},2)'
+        else:formula=f'=ROUND({coordinates["subtotal"]}+N({coordinates["shipping_charges"]})+{coordinates.get("bank_charges","0")}+{coordinates.get("tax","0")},2)'
         sheet.write_formula(row,col,formula,fmt,float(Decimal(cached)))
     book.set_calc_mode('auto')
     book.close();return clip_workbook_header(output.getvalue())
