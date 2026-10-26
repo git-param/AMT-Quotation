@@ -5,7 +5,7 @@ is a layout definition only; it never opens a workbook or changes PI amounts.
 """
 from decimal import Decimal
 import re
-from backend.orders.locations import party_parts, address_only
+from backend.orders.locations import party_parts, address_only, COUNTRIES
 
 WIDTHS = [5,15.85546875,19.5703125,11.7109375,14.42578125,
           15.7109375,8.7109375,8,16,8.7109375,8.140625]
@@ -59,15 +59,31 @@ def layout(doc):
     def editable(col,span,label,value,path,style='',**extra):
         return c(col,span,label+str(value),style,path,label,value,**extra)
     def party_cell(col,span,value,path,**extra):
+        buyer_country=''
         if path in ('delivery.buyer_text','delivery.notify_text'):
             normalize=lambda text:'\n'.join(line.strip() for line in text.splitlines() if line.strip())
             consignee=normalize(address_only(doc['delivery']['consignee_text']))
             if (consignee and normalize(value)==consignee) or value.strip()=='(Same as consignee)':
                 value='(Same as consignee)'
+        if path=='delivery.buyer_text' and value!='(Same as consignee)':
+            country_match=re.search(r'^\s*Country\s*:\s*(.+?)\s*$',value,re.I|re.M)
+            buyer_country=country_match[1] if country_match else next((line.strip() for line in value.splitlines()[1:]
+                if line.strip().upper() in COUNTRIES),'')
+            destination=(doc.get('order') or {}).get('destination','')
+            if buyer_country and buyer_country.strip().casefold()!=destination.strip().casefold():
+                value=re.sub(r'^\s*PIC\s*:\s*.*(?:\n|$)','',value,flags=re.I|re.M).strip()
+            if buyer_country:
+                value=re.sub(r'^\s*Country\s*:\s*.*(?:\n|$)','',value,flags=re.I|re.M).strip()
+                lines=value.splitlines()
+                if not any(line.strip().casefold()==buyer_country.strip().casefold() for line in lines[1:]):
+                    contact=next((i for i,line in enumerate(lines) if i and re.match(
+                        r'^\s*(?:Tel(?:/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:',line,re.I)),len(lines))
+                    lines.insert(contact,buyer_country.strip())
+                value='\n'.join(lines)
         primary,secondary=party_parts(value)
         display='\n\n'.join(part for part in (primary,secondary) if part)
         return c(col,span,display,field=path,value=value,
-                 multiline=True,party=True,**extra)
+                 multiline=True,party=True,**({'buyer_country':buyer_country} if path=='delivery.buyer_text' else {}),**extra)
     order,total=doc['order'],doc['totals']
     seller=list(doc['company']['seller'])
     date_parts=re.fullmatch(r'(\d{4})-(\d{2})-(\d{2})',doc['date'])
@@ -78,12 +94,12 @@ def layout(doc):
         [c(5,2,'Purchase Order:'),editable(7,4,'',order['po_reference'],'order.po_reference',aria='Purchase Order')],
         [c(5,2,'Prepared By: '+doc['prepared_by']),editable(7,4,'Tel: ',doc.get('prepared_phone',''),'prepared_phone',type='tel',aria='Tel')],
         [editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_top=True)],
-        [editable(5,2,'Delivery Terms: ','DAP','order.delivery_terms',readonly=True)]]
+        [editable(5,6,'Delivery Terms: DAP basis from ',order['destination'],'order.destination',aria='DAP basis country')]]
     header=[[c(0,11,'PROFORMA INVOICE','title',line_bottom=True)]]
     for index in range(7):
         left=c(0,5,'SUPPLIER/SELLER','bold') if index==0 else c(0,5,seller[index-1] if index<=len(seller) else '')
         if index<5:right=metadata[index]
-        elif index==5:right=[*metadata[5],editable(7,4,'Ship to: ',order['destination'],'order.destination',aria='Shipping destination')]
+        elif index==5:right=metadata[5]
         else:right=[editable(5,3,'Delivery Time: ',order['delivery_time'],'order.delivery_time'),
                     editable(8,3,'Dispatch By: ',order['dispatch_method'],'order.dispatch_method')]
         for offset,cell in enumerate(right):

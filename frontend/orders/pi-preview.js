@@ -47,8 +47,15 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     return n;
   };
   function valueOf(item) {
-    if(!item.primaryInput)return item.input.value;
-    return window.orderLocations.joinParty(item.primaryInput.value,item.input.value);
+    let value=item.primaryInput?window.orderLocations.joinParty(item.primaryInput.value,item.input.value):item.input.value;
+    if(item.path==='delivery.buyer_text'&&item.buyerCountry){
+      const country=item.buyerCountry.value.trim().toUpperCase();
+      const lines=value.split('\n').filter((line,index)=>!index||(!/^\s*Country\s*:/i.test(line)&&!window.orderLocations.isCountry(line.trim())));
+      const contact=lines.findIndex((line,index)=>index>0&&/^\s*(?:Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line));
+      if(country)lines.splice(contact<0?lines.length:contact,0,'Country: '+country);
+      value=lines.join('\n');
+    }
+    return value;
   }
   function contactWarnings(notify=false){
     const party=inputs.find(item=>item.path==='delivery.consignee_text');
@@ -130,7 +137,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     inputs.push({ input, path });
     return input;
   }
-  function partyField(parent, value, path) {
+  function partyField(parent, value, path, initialBuyerCountry='') {
     const group=node('div',undefined,'pi-party-editor');parent.append(group);
     if(path!=='delivery.consignee_text'){
       let buyerCountry;
@@ -140,22 +147,28 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
         buyerCountry=node('input');buyerCountry.type='text';buyerCountry.setAttribute('list','orderCountries');
         buyerCountry.setAttribute('aria-label','Buyer country');
         const explicit=value.match(/^\s*Country\s*:\s*(.*)$/im);
-        buyerCountry.value=explicit?.[1]?.trim()||value.split('\n').slice(1).map(line=>line.trim()).find(line=>window.orderLocations.isCountry(line))||'';
+        buyerCountry.value=initialBuyerCountry||explicit?.[1]?.trim()||value.split('\n').slice(1).map(line=>line.trim()).find(line=>window.orderLocations.isCountry(line))||'';
+        buyerCountry.dataset.previousCountry=buyerCountry.value||state.document.order.destination||'';
         countryWrap.append(buyerCountry);group.append(countryWrap);
       }
       const input=field(group,path==='delivery.buyer_text'?'Buyer details':'Notify details',value,path,true);
       if(buyerCountry){
         buyerCountry.onchange=()=>{
+          const previous=buyerCountry.dataset.previousCountry||state.document.order.destination||'';
           const country=buyerCountry.value.trim().toUpperCase();buyerCountry.value=country;
-          const lines=input.value.split('\n').filter((line,index)=>!index||(!/^\s*Country\s*:/i.test(line)&&!window.orderLocations.isCountry(line.trim())));
+          const recoded=window.orderLocations.phoneBlockForCountry(input.value,previous,country);
+          const lines=recoded.split('\n').filter((line,index)=>!index||(!/^\s*Country\s*:/i.test(line)&&!window.orderLocations.isCountry(line.trim())));
           const contact=lines.findIndex((line,index)=>index>0&&/^\s*(?:Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line));
-          if(country)lines.splice(contact<0?lines.length:contact,0,'Country: '+country);
+          if(country)lines.splice(contact<0?lines.length:contact,0,country);
           input.value=lines.join('\n');input.oninput();
+          buyerCountry.dataset.previousCountry=country;
         };
         input.addEventListener('input',()=>{
           const explicit=input.value.match(/^\s*Country\s*:\s*(.*)$/im);
           buyerCountry.value=explicit?.[1]?.trim()||input.value.split('\n').slice(1).map(line=>line.trim()).find(line=>window.orderLocations.isCountry(line))||'';
+          buyerCountry.dataset.previousCountry=buyerCountry.value||state.document.order.destination||'';
         });
+        if(inputs.at(-1)?.path==='delivery.buyer_text')inputs.at(-1).buyerCountry=buyerCountry;
       }
       fitText(input);return input;
     }
@@ -292,7 +305,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
           if (cell.editor_rows) td.rowSpan = cell.editor_rows;
           if (cell.party) {
             if(cell.bottom_contacts)td.classList.add('pi-consignee-cell');
-            partyField(td,cell.value,cell.field);
+            partyField(td,cell.value,cell.field,cell.buyer_country||'');
           } else if (cell.field) {
             const amount = cell.style.includes("amount") && !cell.free;
             const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.free ? 'Free' : cell.value, cell.field, cell.multiline, cell.free ? 'text' : cell.type || "text");

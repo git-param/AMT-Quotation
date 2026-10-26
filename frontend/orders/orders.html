@@ -105,14 +105,13 @@
                             <div class="form-field"><label for="bank_charges">Bank charges (order currency)</label><input id="bank_charges" type="number" min="0" step="0.01" value="0"></div>
                         </div>
                             <div class="order-parties order-party-texts composer-parties">
-                                <div class="shipping-match"><label for="shippingSame"><input id="shippingSame" type="checkbox" checked aria-controls="shippingContactFields"> Shipping address is the same as buyer address</label><small>Switch off to enter a separate delivery contact and address.</small></div>
+                                <div class="shipping-match"><label for="shippingSame"><input id="shippingSame" type="checkbox" checked aria-controls="shippingContactFields"> Shipping address is the same as buyer address</label><small>Switch off to enter a separate delivery contact and address. The shipping country comes from the destination above.</small></div>
                                 <fieldset>
                                     <legend>Consignee <span>Receives the shipment</span></legend>
                                     <div id="shippingContactFields" class="shipping-contact-fields" hidden>
                                         <div><label for="shippingName">Recipient name <span class="field-required">(required)</span></label><input id="shippingName" maxlength="200" autocomplete="name" placeholder="Person or company receiving the shipment"></div>
                                         <div><label for="shippingPhone">Phone <span class="field-required">(required)</span></label><input id="shippingPhone" type="tel" maxlength="200" autocomplete="tel" placeholder="Include the number; country code is added"></div>
                                         <div><label for="shippingEmail">Email <span class="field-required">(required)</span></label><input id="shippingEmail" type="email" maxlength="200" autocomplete="email" placeholder="recipient@example.com"></div>
-                                        <div><label for="shippingCountry">Country <span class="field-required">(required)</span></label><input id="shippingCountry" maxlength="200" list="orderCountries" autocomplete="country-name" placeholder="Choose a country"></div>
                                     </div>
                                     <textarea id="consignee_text" hidden></textarea>
                                     <div class="party-editor consignee-editor">

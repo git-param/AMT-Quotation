@@ -195,9 +195,11 @@ function buyerCountryFromText(value){
   return explicit?.[1]?.trim()||lines.slice(1).map(line=>line.trim()).find(line=>window.orderLocations.isCountry(line))||'';
 }
 el('buyerCountry').onchange=()=>{
+  const oldCountry=buyerCountryFromText(el('buyer_text').value)||el('destination').value;
   const country=el('buyerCountry').value.trim().toUpperCase();
   el('buyerCountry').value=country;
-  const lines=el('buyer_text').value.split('\n').filter((line,index)=>!index||(!/^\s*Country\s*:/i.test(line)&&!window.orderLocations.isCountry(line.trim())));
+  const recoded=window.orderLocations.phoneBlockForCountry(el('buyer_text').value,oldCountry,country);
+  const lines=recoded.split('\n').filter((line,index)=>!index||(!/^\s*Country\s*:/i.test(line)&&!window.orderLocations.isCountry(line.trim())));
   const contact=lines.findIndex((line,index)=>index>0&&/^\s*(?:Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line));
   if(country)lines.splice(contact<0?lines.length:contact,0,'Country: '+country);
   el('buyer_text').value=lines.join('\n');
@@ -208,21 +210,20 @@ function shippingDetailsFromBlock(value){
   const lines=value.split('\n');
   const read=label=>lines.slice(1).map(line=>line.match(label)).find(Boolean)?.[1]?.trim()||'';
   return {name:lines[0]?.trim()||'',phone:read(/^\s*(?:Tel\/Phone|Tel|Telephone|Phone)\s*:\s*(.*)$/i),
-    email:read(/^\s*E-?mail\s*:\s*(.*)$/i),country:read(/^\s*Country\s*:\s*(.*)$/i)||el('destination').value.trim(),
-    address:lines.slice(1).filter(line=>line.trim()&&!/^\s*(?:Country|Tel\/Phone|Tel|Telephone|Phone|PIC|E-?mail|GST(?:IN|\s*(?:No\.?|Number))?)\s*:/i.test(line)&&line.trim().toUpperCase()!==el('destination').value.trim().toUpperCase()).join('\n').trim()};
+    email:read(/^\s*E-?mail\s*:\s*(.*)$/i),
+    address:lines.slice(1).filter(line=>line.trim()&&!/^\s*(?:Country|Tel\/Phone|Tel|Telephone|Phone|PIC|E-?mail|GST(?:IN|\s*(?:No\.?|Number))?)\s*:/i.test(line)&&!window.orderLocations.isCountry(line.trim())&&line.trim().toUpperCase()!==el('destination').value.trim().toUpperCase()).join('\n').trim()};
 }
 function setShippingMode(same,focus=false){
   el('shippingSame').checked=same;
   el('shippingContactFields').hidden=same;
-  for(const key of ['Name','Phone','Email','Country'])el('shipping'+key).required=!same;
+  for(const key of ['Name','Phone','Email'])el('shipping'+key).required=!same;
   el('consigneeDetailsField').hidden=!same;
   el('consigneePrimaryLabel').textContent=same?'Company & delivery address':'Shipping address only';
   el('consignee_primary').placeholder=same?'Company or recipient details\nStreet address\nCity, state, postal code':'Street address\nCity, state, postal code';
   if(!same&&focus)el('shippingName').focus();
 }
 function composeSeparateConsignee(){
-  const country=el('shippingCountry').value.trim();
-  if(country){el('destination').value=country.toUpperCase();setIndiaCurrency();}
+  const country=el('destination').value.trim().toUpperCase();
   const name=el('shippingName').value.trim();
   const address=el('consignee_primary').value.split('\n');
   while(address.length&&name&&address[0].trim().toLocaleLowerCase()===name.toLocaleLowerCase())address.shift();
@@ -241,7 +242,7 @@ el('shippingSame').onchange=()=>{
     showPartyFields('consignee');el('buyer_same').checked=true;syncConsignee();
   }else{
     const details=shippingDetailsFromBlock(el('consignee_text').value);
-    for(const key of ['name','phone','email','country'])el('shipping'+key[0].toUpperCase()+key.slice(1)).value=key==='name'?'':details[key];
+    for(const key of ['name','phone','email'])el('shipping'+key[0].toUpperCase()+key.slice(1)).value=key==='name'?'':details[key];
     el('consignee_primary').value='';
     const client=clientData?.lead||{},contact=client.contact_persons?.[0]||{};
     const saved=clientAddress(client,'billing');
@@ -251,7 +252,7 @@ el('shippingSame').onchange=()=>{
   }
   updateComposer();
 };
-for(const key of ['Name','Phone','Email','Country'])el('shipping'+key).oninput=composeSeparateConsignee;
+for(const key of ['Name','Phone','Email'])el('shipping'+key).oninput=composeSeparateConsignee;
 function syncConsignee(){for(const prefix of ['buyer','notify'])if(el(prefix+'_same').checked){el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);showPartyFields(prefix);}updateComposer();}
 for(const prefix of ['consignee','buyer','notify']){
   const changed=()=>{
@@ -379,7 +380,7 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
   setShippingMode(!separate);
   if(separate){
     const details=shippingDetailsFromBlock(consignee);
-    for(const key of ['name','phone','email','country'])el('shipping'+key[0].toUpperCase()+key.slice(1)).value=details[key];
+    for(const key of ['name','phone','email'])el('shipping'+key[0].toUpperCase()+key.slice(1)).value=details[key];
     el('consignee_primary').value=details.address;
   }
   setIndiaCurrency();refreshConsigneeGst();

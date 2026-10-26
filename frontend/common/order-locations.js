@@ -17,6 +17,21 @@
       return 'Tel/Phone: ' + number;
     });
   }
+  function phoneBlockForCountry(value, previousCountry, country) {
+    const previous = callingCodes[previousCountry.trim().toUpperCase()];
+    const next = callingCodes[country.trim().toUpperCase()];
+    if (!next || previous === next) return phoneBlock(value, country);
+    return value.replace(/^\s*(?:Tel\/Phone|Tel|Telephone|Phone)\s*:[ \t]*(.*)$/gim, (_, raw) => {
+      let number=raw.trim();
+      if (!number || (previous && number.startsWith(previous) && !number.slice(previous.length).replace(/\D/g,''))) number=next;
+      else if (previous && number.startsWith(previous)) {
+        const national=number.slice(previous.length).trim();
+        number=next+(national?' '+national:'');
+      }
+      else if (!number.startsWith('+') && /^[0-9 ()-]+$/.test(number)) number=next+' '+number.replace(/\D/g,'');
+      return 'Tel/Phone: '+number;
+    });
+  }
   const gstLine = /^\s*GST(?:IN|\s*(?:No\.?|Number))?\s*:\s*(.*)$/i;
   const contactLine = /^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:/i;
   function addressOnly(value, country = '') {
@@ -79,6 +94,6 @@
     }
   }).catch(() => {});
   const ready = Promise.all([countriesReady, callingReady]);
-  window.orderLocations = {countryBlock, phoneBlock, gstNumber, withGst, partyParts, joinParty, addressOnly,
+  window.orderLocations = {countryBlock, phoneBlock, phoneBlockForCountry, gstNumber, withGst, partyParts, joinParty, addressOnly,
     isCountry:value=>countries.has(String(value||'').trim().toUpperCase()), ready};
 })();
