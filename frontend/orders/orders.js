@@ -165,6 +165,13 @@ async function deleteOrder(order){
   if(params.get('embedded')==='1')window.parent.postMessage({type:'amt-order-close'},location.origin);
 }
 function addressText(address){return addressFields.map(key=>address?.[key]).filter(Boolean).join('\n')||'Not provided';}
+function clientAddress(client,kind='shipping'){
+  const location=String(client?.location||'').trim();
+  if(location)return window.orderLocations.isCountry(location)?{country:location}:{line1:location};
+  const preferred=client?.[kind+'_address']||{};
+  const fallback=client?.[kind==='shipping'?'billing_address':'shipping_address']||{};
+  return preferred.line1?preferred:fallback;
+}
 function formatPartyBlock(party={},address={}){
   const lines=[party.name,...addressFields.filter(key=>key!=='country').map(key=>address?.[key])].filter(Boolean);
   if(address?.country)lines.push('Country: '+address.country);
@@ -173,15 +180,85 @@ function formatPartyBlock(party={},address={}){
   return lines.join('\n');
 }
 function showPartyFields(prefix){
-  if(prefix!=='consignee'){el(prefix+'_text').value=window.orderLocations.withGst(el(prefix+'_text').value,'');el(prefix+'_primary').value=el(prefix+'_text').value;return;}
+  if(prefix!=='consignee'){
+    el(prefix+'_text').value=window.orderLocations.withGst(el(prefix+'_text').value,'');
+    el(prefix+'_primary').value=el(prefix+'_text').value;
+    if(prefix==='buyer')el('buyerCountry').value=buyerCountryFromText(el('buyer_text').value);
+    return;
+  }
   const [primary,secondary]=window.orderLocations.partyParts(el(prefix+'_text').value,el('destination').value);
   el(prefix+'_primary').value=primary;el(prefix+'_details').value=secondary;
 }
+function buyerCountryFromText(value){
+  const lines=value.split('\n');
+  const explicit=lines.slice(1).map(line=>line.match(/^\s*Country\s*:\s*(.*)$/i)).find(Boolean);
+  return explicit?.[1]?.trim()||lines.slice(1).map(line=>line.trim()).find(line=>window.orderLocations.isCountry(line))||'';
+}
+el('buyerCountry').onchange=()=>{
+  const country=el('buyerCountry').value.trim().toUpperCase();
+  el('buyerCountry').value=country;
+  const lines=el('buyer_text').value.split('\n').filter((line,index)=>!index||(!/^\s*Country\s*:/i.test(line)&&!window.orderLocations.isCountry(line.trim())));
+  const contact=lines.findIndex((line,index)=>index>0&&/^\s*(?:Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line));
+  if(country)lines.splice(contact<0?lines.length:contact,0,'Country: '+country);
+  el('buyer_text').value=lines.join('\n');
+  el('buyer_same').checked=false;
+  showPartyFields('buyer');updateComposer();
+};
+function shippingDetailsFromBlock(value){
+  const lines=value.split('\n');
+  const read=label=>lines.slice(1).map(line=>line.match(label)).find(Boolean)?.[1]?.trim()||'';
+  return {name:lines[0]?.trim()||'',phone:read(/^\s*(?:Tel\/Phone|Tel|Telephone|Phone)\s*:\s*(.*)$/i),
+    email:read(/^\s*E-?mail\s*:\s*(.*)$/i),country:read(/^\s*Country\s*:\s*(.*)$/i)||el('destination').value.trim(),
+    address:lines.slice(1).filter(line=>line.trim()&&!/^\s*(?:Country|Tel\/Phone|Tel|Telephone|Phone|PIC|E-?mail|GST(?:IN|\s*(?:No\.?|Number))?)\s*:/i.test(line)&&line.trim().toUpperCase()!==el('destination').value.trim().toUpperCase()).join('\n').trim()};
+}
+function setShippingMode(same,focus=false){
+  el('shippingSame').checked=same;
+  el('shippingContactFields').hidden=same;
+  for(const key of ['Name','Phone','Email','Country'])el('shipping'+key).required=!same;
+  el('consigneeDetailsField').hidden=!same;
+  el('consigneePrimaryLabel').textContent=same?'Company & delivery address':'Shipping address only';
+  el('consignee_primary').placeholder=same?'Company or recipient details\nStreet address\nCity, state, postal code':'Street address\nCity, state, postal code';
+  if(!same&&focus)el('shippingName').focus();
+}
+function composeSeparateConsignee(){
+  const country=el('shippingCountry').value.trim();
+  if(country){el('destination').value=country.toUpperCase();setIndiaCurrency();}
+  const name=el('shippingName').value.trim();
+  const address=el('consignee_primary').value.split('\n');
+  while(address.length&&name&&address[0].trim().toLocaleLowerCase()===name.toLocaleLowerCase())address.shift();
+  const block=[name,address.join('\n').trim(),country?'Country: '+country:'',
+    'Tel/Phone: '+el('shippingPhone').value.trim(),'PIC: '+el('shippingName').value.trim(),'Email: '+el('shippingEmail').value.trim()].filter(Boolean).join('\n');
+  el('consignee_text').value=window.orderLocations.phoneBlock(block,country);
+  el('consignee_text').oninput();
+}
+el('shippingSame').onchange=()=>{
+  const same=el('shippingSame').checked;
+  setShippingMode(same,!same);
+  if(same){
+    const client=clientData?.lead||{},contact=client.contact_persons?.[0]||{};
+    const saved=clientAddress(client);
+    el('consignee_text').value=window.orderLocations.phoneBlock(formatPartyBlock({name:client.company||client.name,email:client.email||client.emails?.[0]||contact.email,phone:client.phone||client.phones?.[0]||contact.phone,pic:contact.name},saved),saved.country||el('destination').value);
+    showPartyFields('consignee');el('buyer_same').checked=true;syncConsignee();
+  }else{
+    const details=shippingDetailsFromBlock(el('consignee_text').value);
+    for(const key of ['name','phone','email','country'])el('shipping'+key[0].toUpperCase()+key.slice(1)).value=key==='name'?'':details[key];
+    el('consignee_primary').value='';
+    const client=clientData?.lead||{},contact=client.contact_persons?.[0]||{};
+    const saved=clientAddress(client,'billing');
+    el('buyer_text').value=window.orderLocations.phoneBlock(formatPartyBlock({name:client.company||client.name,email:client.email||client.emails?.[0]||contact.email,phone:client.phone||client.phones?.[0]||contact.phone,pic:contact.name},saved),saved.country||'');
+    el('buyer_same').checked=false;showPartyFields('buyer');openPartyEditor('buyer',true);
+    composeSeparateConsignee();
+  }
+  updateComposer();
+};
+for(const key of ['Name','Phone','Email','Country'])el('shipping'+key).oninput=composeSeparateConsignee;
 function syncConsignee(){for(const prefix of ['buyer','notify'])if(el(prefix+'_same').checked){el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);showPartyFields(prefix);}updateComposer();}
 for(const prefix of ['consignee','buyer','notify']){
   const changed=()=>{
+    if(prefix==='consignee'&&!el('shippingSame').checked){composeSeparateConsignee();return;}
     el(prefix+'_text').value=prefix==='consignee'?window.orderLocations.joinParty(el(prefix+'_primary').value,el(prefix+'_details').value):el(prefix+'_primary').value;
     el(prefix+'_text').oninput();
+    if(prefix==='buyer')el('buyerCountry').value=buyerCountryFromText(el('buyer_text').value);
   };
   el(prefix+'_primary').oninput=changed;if(prefix==='consignee')el(prefix+'_details').oninput=changed;
 }
@@ -278,7 +355,7 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
   await window.orderLocations.ready;
   const result=await api(`/api/leads/${clientId}`);if(version!==formVersion)return false;
   clientData=result;const client=result.lead;
-  const saved=client.shipping_address?.line1?client.shipping_address:client.billing_address||{};
+  const saved=clientAddress(client);
   const contact=client.contact_persons?.[0]||{};
   const base={name:client.company||client.name,email:client.email||client.emails?.[0]||contact.email,
     phone:client.phone||client.phones?.[0]||contact.phone,pic:contact.name};
@@ -298,6 +375,13 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
   }
   for(const prefix of ['consignee','buyer','notify'])showPartyFields(prefix);
   if(!delivery)el('destination').value=saved.country||'';
+  const separate=Boolean(delivery&&delivery.buyer_text&&delivery.buyer_text!==window.orderLocations.addressOnly(consignee,el('destination').value));
+  setShippingMode(!separate);
+  if(separate){
+    const details=shippingDetailsFromBlock(consignee);
+    for(const key of ['name','phone','email','country'])el('shipping'+key[0].toUpperCase()+key.slice(1)).value=details[key];
+    el('consignee_primary').value=details.address;
+  }
   setIndiaCurrency();refreshConsigneeGst();
   return true;
 }
@@ -340,6 +424,7 @@ el('orderForm').onsubmit=async event=>{
   try {
     if(!clientData)throw new Error('Choose a client before saving.');
     el('destination').value=el('destination').value.trim().toUpperCase();setIndiaCurrency();
+    if(!el('shippingSame').checked)composeSeparateConsignee();
     el('consignee_text').value=window.orderLocations.countryBlock(el('consignee_text').value,el('destination').value);
     el('consignee_text').value=window.orderLocations.withGst(el('consignee_text').value,window.orderLocations.gstNumber(el('consignee_text').value));
     syncConsignee();

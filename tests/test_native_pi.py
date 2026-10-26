@@ -687,6 +687,29 @@ class NativePiTests(unittest.TestCase):
         self.assertIn('Separate buyer',cells['delivery.buyer_text']['text'])
         self.assertEqual(cells['delivery.notify_text']['text'],'(Same as consignee)')
 
+    def test_pi_keeps_buyer_location_and_removes_repeated_consignee_name(self):
+        response=self.client.put(f'/api/orders/{self.order_id}',json={
+            'destination':'AFGHANISTAN','delivery':{
+                'consignee_text':'Recipient\nRecipient\nWarehouse road\nCountry: AFGHANISTAN\nTel: +93785678901\nPIC: Recipient\nEmail: recipient@example.com',
+                'buyer_text':'Radwell International\nCAMERON\nTel: +237678901234\nEmail: buyer@example.com',
+                'notify_text':'Recipient\nWarehouse road'}})
+        self.assertEqual(response.status_code,200,response.json)
+        preview=self.preview()
+        doc=preview['document']
+        self.assertIn('Recipient\nWarehouse road',doc['delivery']['consignee_text'])
+        self.assertNotIn('Recipient\nRecipient',doc['delivery']['consignee_text'])
+        self.assertIn('CAMERON',doc['delivery']['buyer_text'])
+        self.assertNotIn('AFGHANISTAN',doc['delivery']['buyer_text'])
+        parties=next(section for section in preview['layout']['sections'] if section['name']=='parties')
+        buyer=next(cell for row in parties['rows'] for cell in row if cell.get('field')=='delivery.buyer_text')
+        self.assertIn('CAMERON',buyer['text'])
+        updated=self.client.put(self.base+'/preview/'+preview['preview_id'],json={'delivery':{
+            'buyer_text':'Radwell International\nCountry: CAMEROON\nTel: +237678901234\nEmail: buyer@example.com'}})
+        self.assertEqual(updated.status_code,200,updated.json)
+        self.assertEqual(updated.json['document']['order']['destination'],'AFGHANISTAN')
+        self.assertIn('Country: CAMEROON',updated.json['document']['delivery']['buyer_text'])
+        self.assertIn('AFGHANISTAN',updated.json['document']['delivery']['consignee_text'])
+
     def test_party_address_and_contacts_have_export_spacing(self):
         preview=self.preview()
         parties=next(section for section in preview['layout']['sections'] if section['name']=='parties')

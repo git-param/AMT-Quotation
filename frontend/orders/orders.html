@@ -92,7 +92,7 @@
                         <div class="fields composer-fields composer-fields--primary">
                             <div class="form-field"><label for="pi_reference">Proforma Invoice No.</label><input id="pi_reference" type="text" maxlength="100" placeholder="Enter the PI number"></div>
                             <div class="form-field"><label for="po_reference">Purchase Order No.</label><input id="po_reference" type="text" placeholder="e.g. PO-2026-001"></div>
-                            <div class="form-field"><label for="destination">Location / country</label><input id="destination" maxlength="200" list="orderCountries" autocomplete="off" placeholder="Type a country name"><datalist id="orderCountries"></datalist></div>
+                            <div class="form-field"><label for="destination">Shipping destination / consignee country</label><input id="destination" maxlength="200" list="orderCountries" autocomplete="off" placeholder="Country where goods will be delivered"><datalist id="orderCountries"></datalist></div>
                             <div class="form-field"><label for="currency">Deal currency</label><select id="currency" aria-describedby="currencyHelp"><option>USD</option><option>INR</option><option value="AED">AED (UAE dirham)</option><option value="GBP">GBP (British pound)</option><option value="EUR">EUR (Euro)</option></select></div>
                             <div class="form-field"><label for="order_date">Order date <span class="field-required">(required)</span></label><input id="order_date" type="date" required></div>
                         </div>
@@ -105,12 +105,19 @@
                             <div class="form-field"><label for="bank_charges">Bank charges (order currency)</label><input id="bank_charges" type="number" min="0" step="0.01" value="0"></div>
                         </div>
                             <div class="order-parties order-party-texts composer-parties">
+                                <div class="shipping-match"><label for="shippingSame"><input id="shippingSame" type="checkbox" checked aria-controls="shippingContactFields"> Shipping address is the same as buyer address</label><small>Switch off to enter a separate delivery contact and address.</small></div>
                                 <fieldset>
                                     <legend>Consignee <span>Receives the shipment</span></legend>
+                                    <div id="shippingContactFields" class="shipping-contact-fields" hidden>
+                                        <div><label for="shippingName">Recipient name <span class="field-required">(required)</span></label><input id="shippingName" maxlength="200" autocomplete="name" placeholder="Person or company receiving the shipment"></div>
+                                        <div><label for="shippingPhone">Phone <span class="field-required">(required)</span></label><input id="shippingPhone" type="tel" maxlength="200" autocomplete="tel" placeholder="Include the number; country code is added"></div>
+                                        <div><label for="shippingEmail">Email <span class="field-required">(required)</span></label><input id="shippingEmail" type="email" maxlength="200" autocomplete="email" placeholder="recipient@example.com"></div>
+                                        <div><label for="shippingCountry">Country <span class="field-required">(required)</span></label><input id="shippingCountry" maxlength="200" list="orderCountries" autocomplete="country-name" placeholder="Choose a country"></div>
+                                    </div>
                                     <textarea id="consignee_text" hidden></textarea>
                                     <div class="party-editor consignee-editor">
-                                        <div><label for="consignee_primary">Company &amp; delivery address</label><textarea id="consignee_primary" rows="4" maxlength="3800" placeholder="Company or recipient details&#10;Street address&#10;City, state, postal code"></textarea></div>
-                                        <div><label for="consignee_details">Country &amp; contact details</label><textarea id="consignee_details" rows="5" maxlength="3800" placeholder="Country:&#10;Tel:&#10;PIC:&#10;Email:"></textarea></div>
+                                        <div><label id="consigneePrimaryLabel" for="consignee_primary">Company &amp; delivery address</label><textarea id="consignee_primary" rows="4" maxlength="3800" placeholder="Company or recipient details&#10;Street address&#10;City, state, postal code"></textarea></div>
+                                        <div id="consigneeDetailsField"><label for="consignee_details">Country &amp; contact details</label><textarea id="consignee_details" rows="5" maxlength="3800" placeholder="Country:&#10;Tel:&#10;PIC:&#10;Email:"></textarea></div>
                                         <div id="consigneeGstField" class="form-field" hidden><label for="consigneeGst">GST No.</label><input id="consigneeGst" maxlength="200" autocomplete="off" placeholder="Consignee GST number"></div>
                                     </div>
                                 </fieldset>
@@ -118,7 +125,7 @@
                                     <legend>Buyer <span>Purchases the goods</span></legend>
                                     <div class="party-choice"><label class="same-party"><input id="buyer_same" type="checkbox" checked aria-controls="buyerEditor"> Same as consignee</label><button id="buyerToggle" class="party-toggle" type="button" aria-controls="buyerEditor" aria-expanded="false">Review / edit</button></div>
                                     <p id="buyerSummary" class="party-summary"></p><textarea id="buyer_text" hidden></textarea>
-                                    <div id="buyerEditor" class="party-editor" hidden><label for="buyer_primary">Buyer company &amp; address</label><textarea id="buyer_primary" rows="4" maxlength="3800" placeholder="Buyer company and billing address" aria-describedby="buyerHelp"></textarea><small id="buyerHelp">Editing these details makes this a separate buyer.</small></div>
+                                    <div id="buyerEditor" class="party-editor" hidden><div id="buyerCountryField" class="form-field"><label for="buyerCountry">Buyer country</label><input id="buyerCountry" maxlength="200" list="orderCountries" autocomplete="country-name" placeholder="Country where the buyer is located"><small>This does not change the shipping destination.</small></div><label for="buyer_primary">Buyer name, address &amp; contact</label><textarea id="buyer_primary" rows="4" maxlength="3800" placeholder="Buyer company, address and contact details" aria-describedby="buyerHelp"></textarea><small id="buyerHelp">These buyer details are saved separately from the shipment recipient.</small></div>
                                 </fieldset>
                                 <fieldset class="secondary-party">
                                     <legend>Notify party <span>Receives shipment notifications</span></legend>

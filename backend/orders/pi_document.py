@@ -76,6 +76,20 @@ def required_consignee_contacts(value, country=''):
     return '\n'.join(lines)
 
 
+def without_repeated_consignee_name(value):
+    """Remove a recipient name mistakenly repeated as the first address line."""
+    lines = value.splitlines()
+    if not lines:
+        return value
+    first = lines[0].strip().casefold()
+    index = 1
+    while index < len(lines) and not lines[index].strip():
+        index += 1
+    if first and index < len(lines) and lines[index].strip().casefold() == first:
+        del lines[index]
+    return '\n'.join(lines)
+
+
 def sync_locations(doc):
     """The selected order country owns both highlighted PI locations."""
     source_delivery = doc['source_state'].get('delivery') or {}
@@ -89,7 +103,7 @@ def sync_locations(doc):
     previous = [(source_delivery.get('shipping_address') or {}).get('country'),
                 doc['source_state']['order'].get('destination')]
     doc['delivery']['consignee_text'] = re.sub(r'^(\s*)(?:Tel|Telephone|Phone)\s*:', r'\1Tel/Phone:',
-        country_block(doc['delivery']['consignee_text'], country, previous), flags=re.I|re.M)
+        country_block(without_repeated_consignee_name(doc['delivery']['consignee_text']), country, previous), flags=re.I|re.M)
     number_value=gst_number(doc['delivery']['consignee_text']) if country == 'INDIA' else ''
     doc['delivery']['consignee_text']=required_consignee_contacts(
         with_gst(doc['delivery']['consignee_text'],number_value), country)

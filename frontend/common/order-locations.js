@@ -79,5 +79,6 @@
     }
   }).catch(() => {});
   const ready = Promise.all([countriesReady, callingReady]);
-  window.orderLocations = {countryBlock, phoneBlock, gstNumber, withGst, partyParts, joinParty, addressOnly, ready};
+  window.orderLocations = {countryBlock, phoneBlock, gstNumber, withGst, partyParts, joinParty, addressOnly,
+    isCountry:value=>countries.has(String(value||'').trim().toUpperCase()), ready};
 })();

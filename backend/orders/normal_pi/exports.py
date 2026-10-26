@@ -5,8 +5,6 @@ from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 from threading import Lock
-import xml.etree.ElementTree as ET
-from zipfile import ZipFile
 from xml.sax.saxutils import escape
 
 from PIL import Image as PILImage
@@ -46,35 +44,8 @@ def asset(doc,name):
 
 
 def clip_workbook_header(raw):
-    """Crop only the drawing viewport, retaining the original embedded image.
-
-    Excel honors image cropping in DrawingML. This matches the PDF/browser
-    viewport without shrinking the logo or changing the source PNG.
-    """
-    drawing='{http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing}'
-    art='{http://schemas.openxmlformats.org/drawingml/2006/main}'
-    output=BytesIO()
-    with ZipFile(BytesIO(raw)) as source,ZipFile(output,'w') as target:
-        for entry in source.infolist():
-            data=source.read(entry.filename)
-            if entry.filename.startswith('xl/drawings/drawing') and entry.filename.endswith('.xml'):
-                root=ET.fromstring(data)
-                for anchor in root:
-                    pic=anchor.find(drawing+'pic')
-                    name=pic.find(drawing+'nvPicPr/'+drawing+'cNvPr') if pic is not None else None
-                    if name is None or name.get('descr')!='header.png':continue
-                    extent=pic.find(drawing+'spPr/'+art+'xfrm/'+art+'ext')
-                    full_height=int(extent.get('cy'));visible=125*9525
-                    fill=pic.find(drawing+'blipFill')
-                    fill.insert(1,ET.Element(art+'srcRect',b=str(round((1-visible/full_height)*100000))))
-                    extent.set('cy',str(visible))
-                    endpoint=anchor.find(drawing+'to')
-                    endpoint.find(drawing+'row').text='3'
-                    endpoint.find(drawing+'rowOff').text=str(29*9525)
-                data=ET.tostring(root,encoding='utf-8',xml_declaration=True)
-            target.writestr(entry,data)
-    return output.getvalue()
-
+    """Keep the complete header artwork in the workbook."""
+    return raw
 
 def fonts():
     for regular,bold in ((Path('C:/Windows/Fonts/cambria.ttc'),Path('C:/Windows/Fonts/cambriab.ttf')),
@@ -127,11 +98,9 @@ def pdf(doc):
         with PILImage.open(data) as im:h=w*im.height/im.width
         data.seek(0);return Image(data,width=w,height=h)
     header=image('header.png',usable)
-    header_height=min(header.drawHeight,70)
+    header_height=header.drawHeight
     def first_page(canvas,document):
         canvas.saveState()
-        clip=canvas.beginPath();clip.rect(margin,height-margin-header_height,usable,header_height)
-        canvas.clipPath(clip,stroke=0)
         header.drawOn(canvas,margin,height-margin-header.drawHeight)
         canvas.restoreState()
         canvas.saveState();canvas.setLineWidth(1.2)
@@ -323,13 +292,13 @@ def xlsx(doc):
     border_top=book.add_format({'top':2,'top_color':'#000000'})
     border_corner_left=book.add_format({'left':2,'top':2,'border_color':'#000000'})
     border_corner_right=book.add_format({'right':2,'top':2,'border_color':'#000000'})
-    for row in range(4):
+    for row in range(7):
         sheet.set_row(row,24)
         sheet.write_blank(row,0,None,border_corner_left if row==0 else border_left)
         sheet.write_blank(row,10,None,border_corner_right if row==0 else border_right)
     for col in range(1,10):sheet.write_blank(0,col,None,border_top)
     image('header.png',0,0,950,125)
-    row_index=4
+    row_index=7
     coordinates={};formula_cells=[]
     import textwrap
     for section in model['sections']:

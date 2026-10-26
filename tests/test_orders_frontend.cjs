@@ -56,6 +56,7 @@ function setup(search = '?client_id=9') {
       if(denied)return {ok:false,status:403,json:async()=>({error:'Client access is read-only.'})};
       let response;
       if(url==='/static/common/countries.json')response=JSON.parse(fs.readFileSync(path.join(__dirname,'../frontend/common/countries.json'),'utf8'));
+      else if(url==='/static/common/calling-codes.json')response=JSON.parse(fs.readFileSync(path.join(__dirname,'../frontend/common/calling-codes.json'),'utf8'));
       else if(url.startsWith('/api/orders/deletions?'))response={deletions:[{reference:'ORD-000007',actor_name:'Owner',deleted_at:'2026-10-15T12:00:00Z'}]};
       else if(url==='/api/orders/pi-defaults')response=piDefaults;
       else if(url.startsWith('/api/orders?'))response=listing;
@@ -77,7 +78,7 @@ function setup(search = '?client_id=9') {
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/common/sku-feedback.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/common/order-locations.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/orders/orders.js'),'utf8'),context);
-  return {context,element,requests,data,listing,piDefaults,deny(){denied=true;}};
+  return {context,element,requests,data,listing,piDefaults,client,deny(){denied=true;}};
 }
 const settle = () => new Promise(resolve=>setImmediate(resolve));
 
@@ -142,6 +143,30 @@ test('buyer and notify stay editable and can independently follow or diverge fro
   assert.equal(fixture.element('notify_text').value,fixture.context.window.orderLocations.addressOnly(fixture.element('consignee_text').value));
   fixture.element('buyer_same').checked=true;fixture.element('buyer_same').onchange();
   assert.equal(fixture.element('buyer_text').value,fixture.context.window.orderLocations.addressOnly(fixture.element('consignee_text').value));
+});
+
+test('separate shipping contact saves a distinct consignee and the client as buyer',async()=>{
+  const fixture=setup();fixture.client.location='CAMERON';await settle();await fixture.context.createOrder();
+  fixture.element('shippingSame').checked=false;fixture.element('shippingSame').onchange();
+  assert.equal(fixture.element('shippingContactFields').hidden,false);
+  fixture.element('shippingName').value='Receiving Manager';fixture.element('shippingName').oninput();
+  fixture.element('consignee_primary').value='Receiving Manager\nWarehouse Road, Mumbai';fixture.element('consignee_primary').oninput();
+  fixture.element('shippingCountry').value='AFGHANISTAN';fixture.element('shippingCountry').oninput();
+  fixture.element('shippingPhone').value='9876543210';fixture.element('shippingPhone').oninput();
+  fixture.element('shippingEmail').value='receiving@example.com';fixture.element('shippingEmail').oninput();
+  fixture.element('buyerCountry').value='CAMEROON';fixture.element('buyerCountry').onchange();
+  assert.equal(fixture.element('destination').value,'AFGHANISTAN');
+  await fixture.element('orderForm').onsubmit({preventDefault(){}});
+  const saved=JSON.parse(fixture.requests.find(item=>item.url==='/api/orders'&&item.options.method==='POST').options.body);
+  assert.match(saved.delivery.consignee_text,/Receiving Manager\nWarehouse Road, Mumbai/);
+  assert.doesNotMatch(saved.delivery.consignee_text,/Receiving Manager\nReceiving Manager/);
+  assert.match(saved.delivery.consignee_text,/Tel\/Phone: \+93 9876543210/);
+  assert.match(saved.delivery.consignee_text,/Email: receiving@example.com/);
+  assert.match(saved.delivery.buyer_text,/Company\nCAMERON/);
+  assert.match(saved.delivery.buyer_text,/Country: CAMEROON/);
+  assert.doesNotMatch(saved.delivery.buyer_text,/AFGHANISTAN/);
+  assert.match(saved.delivery.buyer_text,/Email: pic@example.com/);
+  assert.notEqual(saved.delivery.buyer_text,saved.delivery.consignee_text);
 });
 
 test('country suggestions sync the consignee and set INR and show consignee GST only for India',async()=>{

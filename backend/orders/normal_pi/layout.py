@@ -83,7 +83,7 @@ def layout(doc):
     for index in range(7):
         left=c(0,5,'SUPPLIER/SELLER','bold') if index==0 else c(0,5,seller[index-1] if index<=len(seller) else '')
         if index<5:right=metadata[index]
-        elif index==5:right=[*metadata[5],editable(7,4,'',order['destination'],'order.destination',aria='Destination')]
+        elif index==5:right=[*metadata[5],editable(7,4,'Ship to: ',order['destination'],'order.destination',aria='Shipping destination')]
         else:right=[editable(5,3,'Delivery Time: ',order['delivery_time'],'order.delivery_time'),
                     editable(8,3,'Dispatch By: ',order['dispatch_method'],'order.dispatch_method')]
         for offset,cell in enumerate(right):
@@ -171,7 +171,7 @@ def layout(doc):
     clauses=[[c(0,11,'Terms & Conditions:-','bold')]]
     term_text = terms(doc)
     for index,value in enumerate(term_text.splitlines() or ['']):
-        final=bool(re.match(r'^\s*\d+[.)]\s*THE FINAL TAX (?:INVOICE|INVOCIE)',value,re.I))
+        final=bool(re.match(r'^\s*\d+[.)]\s*THE FINAL TAX (?:INVOICE|INVOICE)',value,re.I))
         clauses.append([c(0,11,value,'final_term' if final else 'terms',
             field='terms' if index==0 else None, value=term_text if index==0 else None,
             multiline=True, aria='Terms and conditions', preview_hidden=index>0)])

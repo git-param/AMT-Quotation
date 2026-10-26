@@ -133,7 +133,30 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
   function partyField(parent, value, path) {
     const group=node('div',undefined,'pi-party-editor');parent.append(group);
     if(path!=='delivery.consignee_text'){
+      let buyerCountry;
+      if(path==='delivery.buyer_text'){
+        const countryWrap=node('label',undefined,'pi-field pi-buyer-country');
+        countryWrap.append(node('span','Buyer country'));
+        buyerCountry=node('input');buyerCountry.type='text';buyerCountry.setAttribute('list','orderCountries');
+        buyerCountry.setAttribute('aria-label','Buyer country');
+        const explicit=value.match(/^\s*Country\s*:\s*(.*)$/im);
+        buyerCountry.value=explicit?.[1]?.trim()||value.split('\n').slice(1).map(line=>line.trim()).find(line=>window.orderLocations.isCountry(line))||'';
+        countryWrap.append(buyerCountry);group.append(countryWrap);
+      }
       const input=field(group,path==='delivery.buyer_text'?'Buyer details':'Notify details',value,path,true);
+      if(buyerCountry){
+        buyerCountry.onchange=()=>{
+          const country=buyerCountry.value.trim().toUpperCase();buyerCountry.value=country;
+          const lines=input.value.split('\n').filter((line,index)=>!index||(!/^\s*Country\s*:/i.test(line)&&!window.orderLocations.isCountry(line.trim())));
+          const contact=lines.findIndex((line,index)=>index>0&&/^\s*(?:Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line));
+          if(country)lines.splice(contact<0?lines.length:contact,0,'Country: '+country);
+          input.value=lines.join('\n');input.oninput();
+        };
+        input.addEventListener('input',()=>{
+          const explicit=input.value.match(/^\s*Country\s*:\s*(.*)$/im);
+          buyerCountry.value=explicit?.[1]?.trim()||input.value.split('\n').slice(1).map(line=>line.trim()).find(line=>window.orderLocations.isCountry(line))||'';
+        });
+      }
       fitText(input);return input;
     }
     const [primary,secondary]=window.orderLocations.partyParts(value,state.document.order.destination);
