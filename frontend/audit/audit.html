@@ -10,28 +10,70 @@
   <script src="/static/audit/audit.js" defer></script>
 </head>
 <body>
-  <header class="hdr"><div><div class="hdr-logo">Audit Logs</div><div class="hdr-sub">Account, lookup and business activity</div></div><nav><a class="back-link" href="/">Quotation Tool</a><a class="back-link" href="/logout">Sign Out</a></nav></header>
+  <header class="hdr">
+    <div>
+      <div class="hdr-logo">Audit Logs</div>
+      <div class="hdr-sub">Account, lookup and business activity</div>
+    </div>
+    <nav aria-label="Page navigation">
+      <a class="back-link" href="/">Quotation Tool</a>
+      <a class="back-link" href="/logout">Sign Out</a>
+    </nav>
+  </header>
+
   <main class="audit-page">
-    <section class="audit-card">
-      <div class="audit-heading"><div><h1>Activity history</h1><p>Sign-ins, SKU lookups, PI searches, and changes to clients, orders and users.</p></div><button id="refreshAudit" type="button">Refresh</button></div>
-      <form id="auditFilters" class="audit-filters">
+    <section class="audit-card" aria-labelledby="auditTitle">
+      <div class="audit-heading">
+        <div>
+          <h1 id="auditTitle">Activity history</h1>
+          <p>Sign-ins, SKU lookups, PI searches, and changes to clients, orders and users.</p>
+        </div>
+        <button id="refreshAudit" type="button">Refresh</button>
+      </div>
+
+      <form id="auditFilters" class="audit-filters" aria-label="Filter activity">
         <label>Action<select id="filterAction"><option value="">All actions</option></select></label>
         <label>User<select id="filterUser"><option value="">All users</option></select></label>
         <label>Role<select id="filterRole"><option value="">All roles</option></select></label>
-        <label>IP address<input id="filterIp" type="search" placeholder="Filter IP"></label>
+        <label>IP address<input id="filterIp" type="search" placeholder="Filter IP" autocomplete="off"></label>
         <label>From<input id="filterFrom" type="date"></label>
         <label>To<input id="filterTo" type="date"></label>
-        <label class="audit-search">Search<input id="filterQuery" type="search" placeholder="Action, user, entity or details"></label>
-        <div class="audit-filter-actions"><button type="submit" class="primary">Apply filters</button><button id="clearFilters" type="button">Clear</button></div>
+        <label class="audit-search">Search<input id="filterQuery" type="search" placeholder="Action, user, entity or details" autocomplete="off"></label>
+        <div class="audit-filter-actions">
+          <button type="submit" class="primary">Apply filters</button>
+          <button id="clearFilters" type="button">Clear</button>
+        </div>
       </form>
+
       <p id="auditStatus" role="status" aria-live="polite"></p>
-      <div class="audit-table-wrap">
+
+      <div class="audit-table-wrap" tabindex="0" role="region" aria-label="Activity log table, scrollable">
         <table>
-          <thead><tr><th>Action</th><th>User</th><th>Role</th><th>Date</th><th>Time</th><th>IP address</th><th>Details</th></tr></thead>
+          <thead><tr><th scope="col">Action</th><th scope="col">User</th><th scope="col">Role</th><th scope="col">Date</th><th scope="col">Time</th><th scope="col">IP address</th><th scope="col">Details</th></tr></thead>
           <tbody id="auditRows"><tr><td colspan="7">Loading activity…</td></tr></tbody>
         </table>
       </div>
-      <footer class="audit-pagination"><span id="auditCount"></span><div><button id="auditPrev" type="button">Previous</button><span id="auditPage"></span><button id="auditNext" type="button">Next</button></div></footer>
+
+      <footer class="audit-pagination">
+        <span id="auditCount"></span>
+        <div>
+          <button id="auditPrev" type="button">Previous</button>
+          <span id="auditPage"></span>
+          <button id="auditNext" type="button">Next</button>
+        </div>
+      </footer>
+    </section>
+
+    <section class="audit-card audit-cleanup" aria-labelledby="cleanupTitle">
+      <h2 id="cleanupTitle">Delete older audit logs</h2>
+      <p>Choose a cutoff date. Logs strictly older than that date will be deleted; logs on the selected date will remain.</p>
+      <div class="cleanup-controls">
+        <label for="cleanupBefore">Delete logs before</label>
+        <input id="cleanupBefore" type="date" required>
+        <button id="previewCleanup" type="button">Review matching logs</button>
+      </div>
+      <p id="cleanupStatus" role="status" aria-live="polite"></p>
+      <button id="confirmCleanup" class="danger" type="button" hidden disabled>Delete reviewed logs</button>
     </section>
   </main>
 </body>

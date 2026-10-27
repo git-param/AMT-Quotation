@@ -844,4 +844,9 @@ MIGRATIONS = (
         "'copy',c.copy_type,json_object('copy_type',c.copy_type,'sku_count',c.sku_count),c.ts "
         "FROM copy_logs c LEFT JOIN users u ON u.username=c.user_name",
     )),
+    (38, 'audit_log_retention_permission', (
+        "INSERT INTO permissions(code,description) VALUES('audit.delete','Delete older audit logs')",
+        "INSERT INTO role_permissions(role_code,permission_code) "
+        "SELECT code,'audit.delete' FROM roles WHERE code IN ('admin','manager')",
+    )),
 )

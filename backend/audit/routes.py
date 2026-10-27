@@ -92,6 +92,13 @@ def _cleanup_date():
         date.fromisoformat(value)
     except ValueError:
         return None
+    connection = get_db()
+    try:
+        today = connection.execute("SELECT date('now','localtime')").fetchone()[0]
+    finally:
+        connection.close()
+    if value > today:
+        return None
     return value
 
 

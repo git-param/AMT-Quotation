@@ -30,7 +30,7 @@
         <div class="tl-intro">
             <div><span class="tl-eyebrow">Team workspace</span>
                 <h1>A clear view of your team's work</h1>
-                <p>Track client creation, generated PIs and the SKUs your team searches.</p>
+                <p>Track client creation, generated PIs and the SKUs your team searches. Dates and times are in IST; filters apply to both sections below.</p>
             </div><span id="tlScope" class="tl-scope">Loading team...</span>
         </div>
 
@@ -49,81 +49,82 @@
             <div class="tl-field"><label for="tlTo">To date</label><input id="tlTo" type="date"></div>
             <button id="tlApply" class="tl-primary" type="submit">Apply filters</button>
             <button id="tlClear" type="button">Clear</button>
-            <p>Dates and times are in IST. Filters apply to both sections below.</p>
         </form>
 
-        <div class="tl-stats" aria-label="Team totals">
+        <div class="tl-stats" role="group" aria-label="Team totals">
             <article>
-                <div class="tl-stat-top"><span>Clients created</span><i class="tl-ico ic-blue" aria-hidden="true">🧑‍💼</i></div>
-                <strong id="tlClients">—</strong><small>Current client records</small>
+                <i class="tl-ico ic-blue" aria-hidden="true">🧑‍💼</i>
+                <div class="tl-stat-body"><span>Clients created</span><strong id="tlClients">—</strong><small>Current client records</small></div>
             </article>
             <article>
-                <div class="tl-stat-top"><span>PIs generated</span><i class="tl-ico ic-green" aria-hidden="true">🧾</i></div>
-                <strong id="tlPis">—</strong><small>Saved, available invoices</small>
+                <i class="tl-ico ic-green" aria-hidden="true">🧾</i>
+                <div class="tl-stat-body"><span>PIs generated</span><strong id="tlPis">—</strong><small>Saved, available invoices</small></div>
             </article>
             <article>
-                <div class="tl-stat-top"><span>Lookup requests</span><i class="tl-ico ic-violet" aria-hidden="true">🔍</i></div>
-                <strong id="tlRequests">—</strong><small>Quotation and item searches</small>
+                <i class="tl-ico ic-violet" aria-hidden="true">🔍</i>
+                <div class="tl-stat-body"><span>Lookup requests</span><strong id="tlRequests">—</strong><small>Quotation and item searches</small></div>
             </article>
             <article>
-                <div class="tl-stat-top"><span>Unique SKUs searched</span><i class="tl-ico ic-amber" aria-hidden="true">📦</i></div>
-                <strong id="tlSkus">—</strong><small>Across the selected users and dates</small>
+                <i class="tl-ico ic-amber" aria-hidden="true">📦</i>
+                <div class="tl-stat-body"><span>Unique SKUs searched</span><strong id="tlSkus">—</strong><small>Across the selected users and dates</small></div>
             </article>
         </div>
 
-        <section class="tl-panel">
-            <div class="tl-section-heading">
-                <div><span class="tl-eyebrow">Production</span>
-                    <h2>User performance</h2>
-                    <p>Client counts are attributed to their creator; PIs to the user who generated them.</p>
-                </div><span id="tlTeamCount" class="tl-meta" role="status"></span>
-            </div>
-            <div class="tl-table-wrap" id="tlTeamResults" aria-busy="true">
-                <table>
-                    <caption class="tl-sr-only">Clients and PIs created by each user</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">User</th>
-                            <th scope="col">Role</th>
-                            <th scope="col">Clients created</th>
-                            <th scope="col">PIs generated</th>
-                            <th scope="col">Invoice details</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tlTeamRows"></tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="tl-panel">
-            <div class="tl-section-heading">
-                <div><span class="tl-eyebrow">Activity</span>
-                    <h2>SKU lookup history</h2>
-                    <p>See how many searches each user made for a SKU. Repeated SKUs in one request count once.</p>
+        <div class="tl-work">
+            <section class="tl-panel" aria-labelledby="tlTeamTitle">
+                <div class="tl-section-heading">
+                    <div><span class="tl-eyebrow">Production</span>
+                        <h2 id="tlTeamTitle">User performance</h2>
+                        <p>Client counts are attributed to their creator; PIs to the user who generated them.</p>
+                    </div><span id="tlTeamCount" class="tl-meta" role="status"></span>
                 </div>
-                <form id="tlSkuFilter" class="tl-inline-search" role="search"><input id="tlSkuSearch" type="search"
-                        maxlength="100" aria-label="Filter lookup history by SKU" placeholder="Find a SKU..."><button
-                        type="submit">Search SKU</button></form>
-            </div>
-            <div class="tl-table-wrap" id="tlLookupResults" aria-busy="true">
-                <table>
-                    <caption class="tl-sr-only">SKU search frequency per user</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">User</th>
-                            <th scope="col">SKU</th>
-                            <th scope="col">Times searched</th>
-                            <th scope="col">Last lookup (IST)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tlLookupRows"></tbody>
-                </table>
-            </div>
-            <div class="tl-paging"><span id="tlLookupCount" role="status"></span>
-                <div><button id="tlLookupPrevious" type="button" disabled>Previous</button><span id="tlLookupPage">Page
-                        1 of 1</span><button id="tlLookupNext" type="button" disabled>Next</button></div>
-            </div>
-        </section>
+                <div class="tl-table-wrap" id="tlTeamResults" aria-busy="true" tabindex="0" role="region" aria-label="User performance table, scrollable">
+                    <table>
+                        <caption class="tl-sr-only">Clients and PIs created by each user</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">User</th>
+                                <th scope="col">Role</th>
+                                <th scope="col">Clients created</th>
+                                <th scope="col">PIs generated</th>
+                                <th scope="col">Invoice details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tlTeamRows"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="tl-panel" aria-labelledby="tlLookupTitle">
+                <div class="tl-section-heading">
+                    <div><span class="tl-eyebrow">Activity</span>
+                        <h2 id="tlLookupTitle">SKU lookup history</h2>
+                        <p>See how many searches each user made for a SKU. Repeated SKUs in one request count once.</p>
+                    </div>
+                    <form id="tlSkuFilter" class="tl-inline-search" role="search"><input id="tlSkuSearch" type="search"
+                            maxlength="100" aria-label="Filter lookup history by SKU" placeholder="Find a SKU..."><button
+                            type="submit">Search SKU</button></form>
+                </div>
+                <div class="tl-table-wrap" id="tlLookupResults" aria-busy="true" tabindex="0" role="region" aria-label="SKU lookup history table, scrollable">
+                    <table>
+                        <caption class="tl-sr-only">SKU search frequency per user</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">User</th>
+                                <th scope="col">SKU</th>
+                                <th scope="col">Times searched</th>
+                                <th scope="col">Last lookup (IST)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tlLookupRows"></tbody>
+                    </table>
+                </div>
+                <div class="tl-paging"><span id="tlLookupCount" role="status"></span>
+                    <div><button id="tlLookupPrevious" type="button" disabled>Previous</button><span id="tlLookupPage">Page
+                            1 of 1</span><button id="tlLookupNext" type="button" disabled>Next</button></div>
+                </div>
+            </section>
+        </div>
 
         <section id="tlCleanup" class="tl-cleanup" hidden>
             <div><span class="tl-eyebrow">Admin controls</span>

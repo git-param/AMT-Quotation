@@ -66,5 +66,33 @@
   byId('refreshAudit').onclick=load;
   byId('auditPrev').onclick=()=>{if(page>1){page--;load();}};
   byId('auditNext').onclick=()=>{if(page<pages){page++;load();}};
+  const cleanupDate=byId('cleanupBefore'),cleanupStatus=byId('cleanupStatus'),cleanupButton=byId('confirmCleanup');
+  let cleanupPreview=null;
+  function resetCleanup(){cleanupPreview=null;cleanupButton.hidden=true;cleanupButton.disabled=true;cleanupStatus.textContent='';}
+  cleanupDate.onchange=resetCleanup;
+  byId('previewCleanup').onclick=async()=>{
+    resetCleanup();
+    if(!cleanupDate.value){cleanupStatus.textContent='Select a cutoff date first.';return;}
+    cleanupStatus.textContent='Checking matching logs…';
+    try{
+      const response=await fetch('/api/audit-logs/cleanup?before='+encodeURIComponent(cleanupDate.value));
+      const data=await response.json();if(!response.ok)throw new Error(data.error||'Unable to review logs.');
+      cleanupPreview={before:data.before,matching:data.matching};
+      cleanupStatus.textContent=`${data.matching} log${data.matching===1?'':'s'} dated before ${data.before} will be deleted. Logs on ${data.before} will remain.`;
+      cleanupButton.hidden=false;cleanupButton.disabled=false;
+    }catch(error){cleanupStatus.textContent=error.message;}
+  };
+  cleanupButton.onclick=async()=>{
+    if(!cleanupPreview||cleanupPreview.before!==cleanupDate.value)return;
+    cleanupButton.disabled=true;
+    try{
+      const response=await fetch('/api/audit-logs/cleanup?before='+encodeURIComponent(cleanupPreview.before),{
+        method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({expected_count:cleanupPreview.matching})
+      });
+      const data=await response.json();if(!response.ok)throw new Error(data.error||'Unable to delete logs.');
+      cleanupStatus.textContent=`Deleted ${data.deleted} older log${data.deleted===1?'':'s'}. The cleanup action was recorded.`;
+      cleanupPreview=null;cleanupButton.hidden=true;page=1;await load();
+    }catch(error){cleanupStatus.textContent=error.message;cleanupButton.disabled=false;}
+  };
   load();
 })();
