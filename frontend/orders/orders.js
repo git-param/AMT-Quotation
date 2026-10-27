@@ -107,7 +107,7 @@ function discountControls(){
   el('discountValueLabel').textContent=amount?`Discount (${current.order.currency}${total?'':' per SKU line'})`:'Discount (%)';
   el('discountValue').max=amount?'999999999.99':'100';
   el('discountSkus').hidden=['all','total'].includes(el('discountScope').value);
-  el('discountHint').textContent=total?'Deducted once from the goods subtotal, before shipping and GST.':amount?'The amount applies once to each selected SKU line’s original price, before shipping and GST.':'Percentage applies to each selected SKU line’s original price, before shipping and GST.';
+  el('discountHint').textContent=total?'Deducted once from the goods subtotal, before shipping and GST.':amount?'The fixed amount applies once to each selected SKU line and cannot exceed its original catalog rate.':'Percentage applies to each selected SKU line’s original catalog rate (before any catalog sale price), before shipping and GST.';
   for(const input of discountChoices)input.type=el('discountScope').value==='single'?'radio':'checkbox';
   el('discountSkuLegend').textContent=el('discountScope').value==='single'?'Choose one item':'Choose items';
   updateDiscountSelection();
@@ -501,10 +501,18 @@ async function showDetails(id) {
     if(line.source_enquiry_line_id){const source=document.createElement('small');source.textContent=`Imported enquiry item #${line.source_enquiry_line_id}`;product.append(source);}
     const quantity=cell(row,'');quantity.setAttribute('data-label','Quantity');
     const badge=document.createElement('span');badge.className='order-item-quantity';badge.textContent=line.quantity+' '+(line.uom||'PCs');quantity.append(badge);
-    for(const [label,value]of [['Unit price',line.unit_price],['Amount',line.line_total]]){
+    const lineDiscount=order.discount;
+    const discountApplies=lineDiscount&&(lineDiscount.scope==='all'||lineDiscount.scope==='total'||lineDiscount.line_ids?.includes(line.id));
+    const discountBase=discountApplies&&line.catalog_original_price!=null;
+    const shownUnitPrice=discountBase?line.catalog_original_price:line.unit_price;
+    const shownAmount=discountBase?(Math.round(Number(line.catalog_original_price)*Number(line.quantity)*100)/100):Number(line.line_total);
+    for(const [label,value,secondary]of [
+      ['Unit price',shownUnitPrice,discountBase&&Number(line.catalog_sale_price??line.unit_price)!==Number(line.catalog_original_price)?`Agreed price: ${line.currency} ${formattedAmount(line.catalog_sale_price??line.unit_price)}`:''],
+      ['Amount',shownAmount,discountBase&&Number(line.catalog_sale_price??line.unit_price)!==Number(line.catalog_original_price)?`Agreed amount: ${line.currency} ${formattedAmount(Number(line.catalog_sale_price??line.unit_price)*Number(line.quantity))}`:'']]){
       const td=cell(row,'');td.setAttribute('data-label',label);td.className='order-item-money';
       const code=document.createElement('span');code.className='order-item-currency';code.textContent=line.currency+' ';
       const number=document.createElement('strong');number.textContent=formattedAmount(value);td.append(code,number);
+      if(secondary){const note=document.createElement('small');note.textContent=secondary;td.append(note);}
     }
     const inputs={id:line.id,originalHsn:line.hsn_code||'',originalCondition:line.item_condition||''};
     for(const [key,label,limit,slot]of [['hsn_code','HSN code',20,'hsn'],['item_condition','Item condition',100,'condition']]){

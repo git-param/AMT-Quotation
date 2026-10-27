@@ -454,6 +454,54 @@ def save_discount(order_id):
         data = request.get_json(silent=True) if request.method == 'PUT' else None
         if request.method == 'PUT' and data is None:
             raise ValueError('Provide discount details.')
+        if request.method == 'PUT' and data:
+            # Older orders have no catalog snapshot. Capture one for these
+            # lines when their first customer discount is saved.
+            missing = [line for line in state['lines']
+                       if line.get('catalog_original_price') is None
+                       and not line.get('manual_entry')]
+            if missing:
+                from backend.quotation_tool.shopify import fetch_skus_batch, get_inr_rate
+                from backend.common.currencies import configured_rates
+                try:
+                    products = fetch_skus_batch([line['sku'] for line in missing])
+                except Exception:
+                    products = {}
+                factors = {'USD': Decimal('1'), **{
+                    code: Decimal(str(value)) for code, value in
+                    configured_rates(connection).items() if value is not None}}
+                if 'INR' not in factors:
+                    quoted = get_inr_rate()
+                    if quoted is not None:
+                        factors['INR'] = Decimal(str(quoted))
+                for line in missing:
+                    product = products.get(line['sku'].strip().upper()) or {}
+                    original, sale = product.get('price'), product.get('sale_price')
+                    factor = factors.get(line['currency'])
+                    if original is None or factor is None:
+                        continue
+                    try:
+                        original = Decimal(str(original))
+                        sale = Decimal(str(sale)) if sale is not None else None
+                        if not original.is_finite() or original < 0:
+                            continue
+                        from decimal import ROUND_HALF_UP
+                        original = (original * factor).quantize(Decimal('.01'), rounding=ROUND_HALF_UP)
+                        sale = ((sale * factor).quantize(Decimal('.01'), rounding=ROUND_HALF_UP)
+                                if sale is not None and sale.is_finite() and sale >= 0
+                                else None)
+                        from backend.enquiries.lines import number
+                        original_minor = number(format(original, '.2f'), 2, Decimal('999999999.99'))
+                        sale_minor = (number(format(sale, '.2f'), 2, Decimal('999999999.99'))
+                                      if sale is not None else None)
+                        connection.execute(
+                            'UPDATE order_sku_lines SET catalog_original_price_minor=?, '
+                            'catalog_sale_price_minor=? WHERE id=? AND order_id=?',
+                            (original_minor, sale_minor, line['id'], order_id))
+                        line['catalog_original_price'] = format(original, '.2f')
+                        line['catalog_sale_price'] = format(sale, '.2f') if sale is not None else None
+                    except (ValueError, ArithmeticError):
+                        continue
         discount = validate(data, state['lines'])
         state['order']['discount'] = discount
         if discount:

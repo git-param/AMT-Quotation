@@ -72,6 +72,12 @@ def serialize(row):
         quantity, '.0f' if quantity == quantity.to_integral_value() else '.3f'
     )
     result['unit_price'] = format(price, '.2f')
+    for field in ('catalog_original_price', 'catalog_sale_price'):
+        minor_key = field + '_minor'
+        if minor_key in result:
+            minor = result.pop(minor_key)
+            result[field] = (format(Decimal(minor) / 100, '.2f')
+                             if minor is not None else None)
     result['line_total'] = format((quantity * price).quantize(
         Decimal('0.01'), rounding=ROUND_HALF_UP), '.2f')
     return result

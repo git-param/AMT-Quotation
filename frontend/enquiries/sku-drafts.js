@@ -267,7 +267,11 @@
           renderEditor();
           throw new Error('Complete each selected item with a positive whole-number quantity and a valid price (up to 2 decimals).');
         }
-        return selected.map(row=>Object.fromEntries(['sku','description','quantity','unit_price','currency',...(commercial?['hsn_code','item_condition','uom','manual_entry']:[])].map(key=>[key,key==='manual_entry'?row[key]===true:row[key]||(key==='uom'?'PCs':'')])));
+        return selected.map(row=>{
+          const values=Object.fromEntries(['sku','description','quantity','unit_price','currency',...(commercial?['hsn_code','item_condition','uom','manual_entry']:[])].map(key=>[key,key==='manual_entry'?row[key]===true:row[key]||(key==='uom'?'PCs':'')]));
+          if(commercial){const amounts=row.catalog_prices?.[row.currency]||{};values.catalog_original_price=amounts.price??null;values.catalog_sale_price=amounts.sale_price??null;}
+          return values;
+        });
       },
       currencyChanged() { rows.forEach(row=>{row.currency=currency();row.unit_price='';});render();status.textContent='Currency changed. Fetch again or enter unit prices in the chosen currency.'; },
       reset() { revision++;rows=[];unresolved=[];activeRow=0;input.value='';status.textContent='';renderLookupNotice();render(); }

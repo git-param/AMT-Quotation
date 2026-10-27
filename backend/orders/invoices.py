@@ -160,11 +160,20 @@ def calculate(state, currency, rate, tax_rate):
 
     lines = []
     for line in state['lines']:
-        price = convert(line['unit_price'], line['currency'])
+        # When a customer discount is entered, calculate it from the original
+        # catalog rate captured at lookup. Keep the agreed sale rate for orders
+        # without an additional customer discount.
+        source_price = line['unit_price']
+        discount = order.get('discount') or {}
+        uses_original = (discount.get('scope') in ('all', 'total')
+                         or line['id'] in discount.get('line_ids', []))
+        if uses_original and line.get('catalog_original_price') is not None:
+            source_price = line['catalog_original_price']
+        price = convert(source_price, line['currency'])
         # Round converted unit price first, then extend by whole-unit quantity.
         total = money(price * Decimal(line['quantity']))
         lines.append({**line, 'source_currency': line['currency'],
-                      'source_unit_price': line['unit_price'], 'currency': currency,
+                      'source_unit_price': source_price, 'currency': currency,
                       'unit_price': format(price, '.2f'), 'line_total': format(total, '.2f')})
     from backend.orders.discounts import apply
     lines, summary_discount, discount_total = apply(lines, order.get('discount'),

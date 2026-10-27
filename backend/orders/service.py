@@ -30,7 +30,8 @@ def pi_line_requirements(lines):
 
 def order_line(data, existing=None):
     """Extend established decimal line validation with commercial fields."""
-    extra = {'hsn_code': 20, 'item_condition': 100, 'uom': 30}
+    extra = {'hsn_code': 20, 'item_condition': 100, 'uom': 30,
+             'catalog_original_price': 30, 'catalog_sale_price': 30}
     if not isinstance(data, dict):
         raise ValueError('Provide a SKU line object.')
     manual_entry = data.get('manual_entry', dict(existing).get('manual_entry', 0) if existing else 0)
@@ -39,8 +40,13 @@ def order_line(data, existing=None):
     if type(manual_entry) is not int or manual_entry not in (0, 1):
         raise ValueError('Invalid manual SKU entry flag.')
     values = validate_line({k: v for k, v in data.items() if k not in extra and k != 'manual_entry'}, existing)
-    old = dict(existing) if existing else {}
+    old = serialize(existing) if existing else {}
     for key, limit in extra.items():
+        if key.startswith('catalog_'):
+            raw = data.get(key, old.get(key))
+            values[key + '_minor'] = (None if raw in (None, '') else
+                number(raw, 2, Decimal('999999999.99')))
+            continue
         values[key] = text(data.get(key, old.get(key, 'PCs' if key == 'uom' else '')),
                            limit, key)
     if not values['uom']:
@@ -201,6 +207,7 @@ def details(connection, order):
     """Calculate totals and return independent line and delivery versions."""
     from backend.settings import shared_hsn
     hsn = shared_hsn(connection)
+    discount_snapshot = json.loads(order['discount_json'] or 'null')
     lines = []
     totals = {}
     for row in connection.execute(
@@ -213,8 +220,15 @@ def details(connection, order):
         line['source_snapshot'] = json.loads(source) if source else None
         lines.append(line)
         code = line['currency']
-        totals[code] = (totals.get(code, Decimal(0))
-                        + Decimal(line['line_total']))
+        subtotal_price = line['unit_price']
+        uses_original = (discount_snapshot and
+                         (discount_snapshot.get('scope') in ('all', 'total')
+                          or line['id'] in discount_snapshot.get('line_ids', [])))
+        if uses_original and line.get('catalog_original_price') is not None:
+            subtotal_price = line['catalog_original_price']
+        subtotal = (Decimal(subtotal_price) * Decimal(line['quantity'])).quantize(
+            Decimal('0.01'))
+        totals[code] = totals.get(code, Decimal(0)) + subtotal
     versions = [delivery_version(row) for row in connection.execute(
         'SELECT * FROM order_delivery_versions WHERE order_id = ? '
         'ORDER BY id DESC', (order['id'],),

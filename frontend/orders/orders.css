@@ -2603,6 +2603,13 @@ body.embedded #orderForm .consignee-editor textarea {
   color: #475569;
   font-weight: 500;
 }
+  .order-item-money small {
+    display: block;
+    margin-top: 3px;
+    color: #64748b;
+    font-size: 10px;
+    white-space: normal;
+  }
 .order-item-money[data-label="Amount"] strong {
   color: #172c49;
   font-weight: 700;

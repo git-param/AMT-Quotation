@@ -810,4 +810,10 @@ MIGRATIONS = (
         'ALTER TABLE order_sku_lines ADD COLUMN manual_entry INTEGER NOT NULL DEFAULT 0 '
         'CHECK (manual_entry IN (0,1))',
     )),
+    (35, 'order_catalog_price_snapshots', (
+        'ALTER TABLE order_sku_lines ADD COLUMN catalog_original_price_minor INTEGER '
+        'CHECK (catalog_original_price_minor BETWEEN 0 AND 99999999999)',
+        'ALTER TABLE order_sku_lines ADD COLUMN catalog_sale_price_minor INTEGER '
+        'CHECK (catalog_sale_price_minor BETWEEN 0 AND 99999999999)',
+    )),
 )

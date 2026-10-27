@@ -119,9 +119,15 @@ def persist_order_edits(connection, order_id, user, order, previous, doc):
                                      (line['id'],order_id)).fetchone()
             if not row:
                 raise PreviewConflict('An order item changed after this preview was opened. Open a new PI preview.')
-            values = order_line({**{key:line[key] for key in changed},
+            line_data = {key:line[key] for key in changed}
+            if 'unit_price' in changed and previous['order'].get('discount'):
+                # The PI rate is the discount base while a discount is active.
+                # Preserve the user's explicit PI rate edit as the new base.
+                line_data['catalog_original_price'] = line['unit_price']
+            values = order_line({**line_data,
                 **({'currency':doc['currency']} if 'unit_price' in changed else {})},row)
-            columns = {'quantity':'quantity_milli','unit_price':'unit_price_minor'}
+            columns = {'quantity':'quantity_milli','unit_price':'unit_price_minor',
+                       'catalog_original_price':'catalog_original_price_minor'}
             updates = {columns.get(key,key):values[columns.get(key,key)] for key in changed}
             if 'unit_price' in changed:
                 updates['currency'] = values['currency']
