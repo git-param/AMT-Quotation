@@ -11,6 +11,7 @@ from backend.common.auth import authenticated_required, get_current_user
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
 from backend.settings import user_pi_defaults
+from backend.security.audit import record_action
 from backend.enquiries.lines import serialize
 from backend.enquiries.routes import editable_client, read_enquiry
 from backend.orders.service import (
@@ -176,9 +177,10 @@ def delete_order(order_id):
         connection.execute("UPDATE client_orders SET deleted_by=?,deleted_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
             (user['id'],user['id'],order_id))
         deleted_at=connection.execute('SELECT deleted_at FROM client_orders WHERE id=?',(order_id,)).fetchone()[0]
-        connection.execute('INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
-            "VALUES(?,?,'order_delete','order',?,?)",(user['id'],user['username'],str(order_id),json.dumps({
-                'reference':order['reference'],'client_id':order['client_id'],'deleted_at':deleted_at,'snapshot':snapshot})))
+        record_action('order_delete', 'order', order_id,
+                      {'reference': order['reference'], 'client_id': order['client_id'],
+                       'deleted_at': deleted_at, 'snapshot': snapshot},
+                      actor=user, connection=connection)
         connection.commit()
         return jsonify(message='Order deleted. History and deletion log retained.')
     finally:connection.rollback();connection.close()
@@ -619,10 +621,9 @@ def review_legacy_line(order_id, source_id):
         connection.execute('INSERT INTO order_legacy_line_reviews '
             '(order_id, source_line_id, replacement_line_id, reviewed_by) VALUES (?, ?, ?, ?)',
             (order_id, source_id, data['replacement_line_id'], user['id']))
-        connection.execute('INSERT INTO audit_logs (actor_user_id, actor_name, action, '
-            'entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-            (user['id'], user['username'], 'legacy_quantity_review', 'order', str(order_id),
-             json.dumps({'source_line_id': source_id, **data})))
+        record_action('legacy_quantity_review', 'order', order_id,
+                      {'source_line_id': source_id, **data}, actor=user,
+                      connection=connection)
         record_revision(connection, order_id, user, 'edit')
         result = details(connection, read_order(connection, user, order_id))
         connection.commit()

@@ -10,6 +10,7 @@ from backend.security.events import record
 from backend.security.limiter import hit
 from backend.security.request import client_ip
 from backend.security.pricing_access import access_decision
+from backend.security.audit import audit_request
 
 
 UNSAFE = {'POST', 'PUT', 'PATCH', 'DELETE'}
@@ -116,3 +117,5 @@ def init_security(app):
         elif request.path == '/logout':
             response.delete_cookie('amt_csrf_v2', path='/')
         return response
+
+    app.after_request(audit_request)

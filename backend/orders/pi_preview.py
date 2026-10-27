@@ -17,6 +17,7 @@ from backend.orders import pi_exports
 from backend.orders.pi_layout import layout
 from backend.orders.filenames import invoice_filename
 from backend.settings import allocate_pi_reference
+from backend.security.audit import record_action
 from backend.scalability.pi_render import files as render_invoice_files
 
 
@@ -360,9 +361,11 @@ def issue_preview(order_id):
             connection.execute("UPDATE client_orders SET pi_reference=?,pi_date=?,status='completed',updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
                 (doc['reference'],doc['date'],user['id'],order_id))
             record_revision(connection,order_id,user,'edit')
-            connection.execute('INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)',
-                (user['id'],user['username'],'pi_generate','order',str(order_id),json.dumps({'invoice_id':invoice_id,
-                 'reference':doc['reference'],'currency':doc['currency'],'preview_id':row['id'],'formats':['xlsx','pdf']})))
+            record_action('pi_generate', 'order', order_id,
+                          {'invoice_id': invoice_id, 'reference': doc['reference'],
+                           'currency': doc['currency'], 'preview_id': row['id'],
+                           'formats': ['xlsx', 'pdf']}, actor=user,
+                          connection=connection)
         connection.commit()
         return issued_response(connection,order_id,invoice_id,doc)
     except ValueError as error:return validation_error(error)

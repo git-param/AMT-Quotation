@@ -1,5 +1,6 @@
 import threading
 import os
+import json
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash
@@ -47,6 +48,17 @@ def log_search(user_name, user_ip, skus, found, not_found):
                 'INSERT INTO search_logs (user_name,user_ip,skus,found_count,not_found,ts) VALUES (?,?,?,?,?,?)',
                 (user_name, user_ip, ','.join(skus), found, not_found, timestamp)
             )
+            actor = con.execute('SELECT id,role FROM users WHERE username=?',
+                                (user_name,)).fetchone()
+            con.execute(
+                'INSERT INTO audit_logs(actor_user_id,actor_name,actor_role,ip_address,'
+                'action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?,?,?)',
+                (actor['id'] if actor else None, user_name or 'Unknown',
+                 actor['role'] if actor else ('api' if (user_name or '').startswith('API') else ''),
+                 user_ip or '', 'sku_lookup',
+                 'sku_lookup', '', json.dumps({'sku_count': len(skus),
+                    'found': found, 'not_found': not_found})),
+            )
             con.commit()
         except Exception:
             pass
@@ -62,6 +74,17 @@ def log_copy(user_name, user_ip, copy_type, sku_count):
             con.execute(
                 'INSERT INTO copy_logs (user_name,user_ip,copy_type,sku_count) VALUES (?,?,?,?)',
                 (user_name, user_ip, copy_type, sku_count)
+            )
+            actor = con.execute('SELECT id,role FROM users WHERE username=?',
+                                (user_name,)).fetchone()
+            con.execute(
+                'INSERT INTO audit_logs(actor_user_id,actor_name,actor_role,ip_address,'
+                'action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?,?,?)',
+                (actor['id'] if actor else None, user_name or 'Unknown',
+                 actor['role'] if actor else ('api' if (user_name or '').startswith('API') else ''),
+                 user_ip or '', 'sku_copy',
+                 'copy', copy_type or '', json.dumps({'copy_type': copy_type,
+                    'sku_count': sku_count})),
             )
             con.commit()
             con.close()

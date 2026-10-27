@@ -12,6 +12,7 @@ from backend.common.auth import authenticated_required, get_current_user, login_
 from backend.common.skus import MAX_SKU_LOOKUP_LIMIT, sku_lookup_limit
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
+from backend.security.audit import record_action
 
 bp = Blueprint('settings', __name__)
 
@@ -38,11 +39,9 @@ def save_sku_lookup_limit():
                 "INSERT INTO app_settings(key,value) VALUES('sku_lookup_limit',?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(value),)
             )
-            connection.execute(
-                "INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) "
-                "VALUES(?,?,'sku_lookup_limit_update','app_settings','sku_lookup_limit',?)",
-                (user['id'], user['username'], json.dumps({'before': before, 'after': value})),
-            )
+            record_action('sku_lookup_limit_update', 'app_settings', 'sku_lookup_limit',
+                          {'before': before, 'after': value}, actor=user,
+                          connection=connection)
         return jsonify(max_sku_lookup=value)
     finally:
         connection.close()
@@ -80,8 +79,9 @@ def save_currency_rates():
         with connection:
             before = configured_rates(connection)
             connection.execute("INSERT INTO app_settings(key,value) VALUES('currency_rates',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (json.dumps(rates),))
-            connection.execute("INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) VALUES(?,?,'currency_rates_update','app_settings','currency_rates',?)",
-                (user['id'],user['username'],json.dumps({'before':before,'after':rates})))
+            record_action('currency_rates_update', 'app_settings', 'currency_rates',
+                          {'before': before, 'after': rates}, actor=user,
+                          connection=connection)
         return jsonify(currency_rate_payload(connection))
     finally:
         connection.close()
@@ -100,8 +100,9 @@ def save_currency_rate_schedule():
         before = rate_status(connection)['refresh_hours']
         with connection:
             connection.execute("INSERT INTO app_settings(key,value) VALUES('currency_rate_refresh_hours',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(hours),))
-            connection.execute("INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) VALUES(?,?,'currency_rate_schedule_update','app_settings','currency_rate_refresh_hours',?)",
-                               (user['id'],user['username'],json.dumps({'before':before,'after':hours})))
+            record_action('currency_rate_schedule_update', 'app_settings',
+                          'currency_rate_refresh_hours', {'before': before, 'after': hours},
+                          actor=user, connection=connection)
         wake_scheduler()
         return jsonify(currency_rate_payload(connection))
     finally:
@@ -199,12 +200,9 @@ def pi_number_counter():
                     'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
                     (PI_NUMBER_SETTING, str(value)),
                 )
-                connection.execute(
-                    'INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
-                    "VALUES(?,?,'pi_number_counter_update','app_settings',?,?)",
-                    (user['id'], user['username'], PI_NUMBER_SETTING,
-                     json.dumps({'before': before, 'after': value})),
-                )
+                record_action('pi_number_counter_update', 'app_settings', PI_NUMBER_SETTING,
+                              {'before': before, 'after': value}, actor=user,
+                              connection=connection)
         return jsonify(last_used=pi_number_last_used(connection))
     finally:
         connection.close()
@@ -238,11 +236,9 @@ def add_department():
     try:
         with connection:
             cursor = connection.execute('INSERT INTO departments(name, pi_prefix) VALUES (?, ?)', (name, prefix))
-            connection.execute(
-                'INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
-                "VALUES(?,?,'department_create','departments',?,?)",
-                (user['id'], user['username'], str(cursor.lastrowid), json.dumps({'name': name, 'pi_prefix': prefix})),
-            )
+            record_action('department_create', 'departments', cursor.lastrowid,
+                          {'name': name, 'pi_prefix': prefix}, actor=user,
+                          connection=connection)
         return jsonify(department_configuration(connection)), 201
     except sqlite3.IntegrityError:
         return jsonify(error='This department already exists.'), 409
@@ -268,11 +264,9 @@ def update_department_prefix(department_id):
             if not previous:
                 return jsonify(error='Department not found.'), 404
             connection.execute('UPDATE departments SET pi_prefix = ? WHERE id = ?', (prefix, department_id))
-            connection.execute(
-                'INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
-                "VALUES(?,?,'department_prefix_update','departments',?,?)",
-                (user['id'], user['username'], str(department_id), json.dumps({'before': previous['pi_prefix'], 'after': prefix})),
-            )
+            record_action('department_prefix_update', 'departments', department_id,
+                          {'before': previous['pi_prefix'], 'after': prefix},
+                          actor=user, connection=connection)
         return jsonify(department_configuration(connection))
     finally:
         connection.close()
@@ -311,10 +305,9 @@ def settings():
             with connection:
                 previous = shared_hsn(connection)
                 connection.execute("UPDATE app_settings SET value=? WHERE key='hsn_code'", (value.strip(),))
-                connection.execute(
-                    'INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
-                    "VALUES(?,?,'settings_update','app_settings','hsn_code',?)",
-                    (user['id'], user['username'], json.dumps({'before': previous, 'after': value.strip()})))
+                record_action('settings_update', 'app_settings', 'hsn_code',
+                              {'before': previous, 'after': value.strip()},
+                              actor=user, connection=connection)
         return jsonify(hsn_code=shared_hsn(connection))
     except ValueError as error:
         return jsonify(error=str(error)), 400

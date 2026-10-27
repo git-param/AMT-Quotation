@@ -8,6 +8,7 @@ from backend.common.auth import get_current_user, get_permissions, manager_requi
 from backend.client_leads.discovery import integer
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
+from backend.security.audit import record_action
 from backend.manager_dashboard.routes import bp
 from backend.orders.service import order_query
 
@@ -207,9 +208,10 @@ def cleanup_lookups():
             if data['expected_count']!=count:
                 return jsonify(error='The matching record count changed. Review the cleanup again.'),409
             connection.execute('DELETE FROM search_logs WHERE ts<?',(cutoff,))
-            connection.execute('INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
-                "VALUES(?,?,'lookup_history_cleanup','search_logs','all',?)",
-                (user['id'],user['username'],json.dumps({'before':before.isoformat(),'deleted_records':count,'timezone':'Asia/Kolkata'})))
+            record_action('lookup_history_cleanup', 'search_logs', 'all',
+                          {'before': before.isoformat(), 'deleted_records': count,
+                           'timezone': 'Asia/Kolkata'}, actor=user,
+                          connection=connection)
             connection.commit()
         return jsonify(count=count,before=before.isoformat())
     except ValueError as error:return jsonify(error=str(error)),400

@@ -22,6 +22,7 @@ from flask import jsonify, request, send_file
 from backend.common.auth import authenticated_required, get_current_user
 from backend.database import get_db
 from backend.settings import allocate_pi_reference
+from backend.security.audit import record_action
 from backend.enquiries.lines import number
 from backend.common.currencies import CURRENCIES, UNITS
 from backend.orders.routes import bp
@@ -462,11 +463,11 @@ def generate_invoice(order_id):
             "updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?",
             (reference, issued, user['id'], order_id))
         record_revision(connection, order_id, user, 'edit')
-        connection.execute('INSERT INTO audit_logs (actor_user_id, actor_name, action, '
-            'entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-            (user['id'], user['username'], 'pi_generate', 'order', str(order_id),
-             json.dumps({'invoice_id': cursor.lastrowid, 'reference': reference,
-                         'currency': data['currency'], 'usd_inr_rate': totals['usd_inr_rate']})))
+        record_action('pi_generate', 'order', order_id,
+                      {'invoice_id': cursor.lastrowid, 'reference': reference,
+                       'currency': data['currency'],
+                       'usd_inr_rate': totals['usd_inr_rate']}, actor=user,
+                      connection=connection)
         connection.commit()
         return jsonify(id=cursor.lastrowid, reference=reference, totals=totals,
                        download_url=f'/api/orders/{order_id}/invoices/{cursor.lastrowid}/download'), 201
@@ -494,9 +495,10 @@ def remove_invoice(order_id, invoice_id):
         connection.execute("UPDATE order_invoices SET deleted_by=?,deleted_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
             (user['id'],invoice_id))
         record_revision(connection,order_id,user,'edit')
-        connection.execute('INSERT INTO audit_logs(actor_user_id,actor_name,action,entity_type,entity_id,details) '
-            "VALUES(?,?,'pi_remove','order',?,?)",(user['id'],user['username'],str(order_id),
-                json.dumps({'invoice_id':invoice_id,'reference':invoice['reference'],'currency':invoice['currency']})))
+        record_action('pi_remove', 'order', order_id,
+                      {'invoice_id': invoice_id, 'reference': invoice['reference'],
+                       'currency': invoice['currency']}, actor=user,
+                      connection=connection)
         connection.commit()
         return jsonify(message='PI removed.')
     finally:connection.rollback();connection.close()

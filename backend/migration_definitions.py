@@ -816,4 +816,32 @@ MIGRATIONS = (
         'ALTER TABLE order_sku_lines ADD COLUMN catalog_sale_price_minor INTEGER '
         'CHECK (catalog_sale_price_minor BETWEEN 0 AND 99999999999)',
     )),
+    (36, 'unified_audit_log', (
+        "ALTER TABLE audit_logs ADD COLUMN actor_role TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE audit_logs ADD COLUMN ip_address TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE security_events ADD COLUMN role TEXT NOT NULL DEFAULT ''",
+        "CREATE INDEX idx_audit_logs_action_time ON audit_logs(action,created_at)",
+        "INSERT INTO permissions(code,description) VALUES('audit.view','View audit activity')",
+        "INSERT INTO role_permissions(role_code,permission_code) "
+        "SELECT code,'audit.view' FROM roles WHERE code IN ('admin','manager')",
+    )),
+    (37, 'unified_audit_history_backfill', (
+        "UPDATE audit_logs SET actor_role=COALESCE((SELECT role FROM users "
+        "WHERE users.id=audit_logs.actor_user_id),'') WHERE actor_role=''",
+        "INSERT INTO audit_logs(actor_user_id,actor_name,actor_role,ip_address,action,entity_type,entity_id,details,created_at) "
+        "SELECT s.user_id,s.username,COALESCE(NULLIF(s.role,''),u.role,''),s.ip_address,"
+        "s.event_type,'security',CAST(s.user_id AS TEXT),s.details,s.created_at "
+        "FROM security_events s LEFT JOIN users u ON u.id=s.user_id",
+        "INSERT INTO audit_logs(actor_user_id,actor_name,actor_role,ip_address,action,entity_type,entity_id,details,created_at) "
+        "SELECT u.id,s.user_name,CASE WHEN s.user_name LIKE 'API%' THEN 'api' "
+        "ELSE COALESCE(u.role,'') END,COALESCE(s.user_ip,''),'sku_lookup',"
+        "'sku_lookup','',json_object('found',s.found_count,'not_found',s.not_found,"
+        "'sku_count',s.found_count+s.not_found),s.ts FROM search_logs s "
+        "LEFT JOIN users u ON u.username=s.user_name",
+        "INSERT INTO audit_logs(actor_user_id,actor_name,actor_role,ip_address,action,entity_type,entity_id,details,created_at) "
+        "SELECT u.id,c.user_name,CASE WHEN c.user_name LIKE 'API%' THEN 'api' "
+        "ELSE COALESCE(u.role,'') END,COALESCE(c.user_ip,''),'sku_copy',"
+        "'copy',c.copy_type,json_object('copy_type',c.copy_type,'sku_count',c.sku_count),c.ts "
+        "FROM copy_logs c LEFT JOIN users u ON u.username=c.user_name",
+    )),
 )

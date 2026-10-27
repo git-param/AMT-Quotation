@@ -30,6 +30,7 @@
     ['Enquiry Sources','/sources','M3 5h18v14H3z m0 0 9 8 9-8','sources.manage'],
     ['Dashboard','/manager','M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z','management.view'],
     ['Configuration','/configuration','M4 6h16 M4 12h16 M4 18h16 M8 3v6 M16 9v6 M10 15v6','settings.manage'],
+    ['Audit Logs','/audit-logs','M4 4h16v16H4z M8 8h8 M8 12h8 M8 16h5','audit.view'],
     ['Sign Out','/logout','M10 3H4v18h6 M13 7l5 5-5 5 M8 12h13'],
   ];
   const sidebar=document.createElement('aside');sidebar.id='appSidebar';sidebar.className='app-sidebar';sidebar.setAttribute('aria-label','Application navigation');
