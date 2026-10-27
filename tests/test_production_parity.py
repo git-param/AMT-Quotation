@@ -79,19 +79,23 @@ class ProductionParityTests(unittest.TestCase):
                 'json': lambda self: {'data': {'productVariants': {'edges': [
                     {'node': {'sku': 'BATCH-1', 'price': '95',
                               'compareAtPrice': '100', 'inventoryQuantity': 2,
-                              'product': {'title': 'Pump', 'onlineStoreUrl': 'https://example.com'}}},
+                              'product': {'title': 'Pump', 'onlineStoreUrl': 'https://example.com',
+                                          'tags': ['Condition: Used']}}},
                     {'node': {'sku': 'BATCH-2', 'price': '25',
                               'compareAtPrice': None, 'inventoryQuantity': 1,
-                              'product': {'title': 'Motor', 'onlineStoreUrl': ''}}},
+                              'product': {'title': 'Motor', 'onlineStoreUrl': '', 'tags': []}}},
                 ]}}},
             })()
         _sku_cache.clear()
         with patch('backend.quotation_tool.shopify._get_token', return_value='test'), \
+                patch('backend.quotation_tool.shopify._storefront_condition',
+                      return_value='Used'), \
                 patch('backend.quotation_tool.shopify.requests.post', side_effect=post) as request:
             rows = fetch_skus_batch(['BATCH-1', 'BATCH-2'])
         self.assertEqual(request.call_count, 1)
         self.assertEqual(rows['BATCH-1']['price'], 100)
         self.assertEqual(rows['BATCH-1']['sale_price'], 95)
+        self.assertEqual(rows['BATCH-1']['condition'], 'Used/Second Hand')
         self.assertIsNone(rows['BATCH-2']['sale_price'])
 
     def test_letter_api_returns_html_text_and_rows(self):

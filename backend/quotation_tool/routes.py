@@ -72,6 +72,10 @@ def _lookup_rows(skus_raw):
             d = found_map.get(sku.upper())
             if d is None:
                 d = fetch_sku(sku)
+            elif d.get('found') and not d.get('condition'):
+                refreshed = fetch_sku(sku, refresh=True)
+                if refreshed.get('found'):
+                    d = refreshed
             results.append({'sku_input': sku, **d})
         except Exception as e:
             results.append({'sku_input': sku, 'found': False, 'error': str(e)[:120]})
@@ -169,5 +173,4 @@ def api_clear_cache():
     with _token_lock:
         _token_cache.update(token=None, expires=0)
     return jsonify({'ok': True})
-
 

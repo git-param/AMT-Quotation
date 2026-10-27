@@ -3,6 +3,7 @@ import json
 import requests
 import threading
 import time
+from bs4 import BeautifulSoup
 
 import os
 from dotenv import load_dotenv
@@ -37,6 +38,28 @@ def _cond_suffix(c):
     if c == 'new':  return '/Surplus'
     if c == 'used': return '/Second Hand'
     return ''
+
+
+def _storefront_condition(url):
+    """Read the condition displayed by the storefront theme when Admin omits it."""
+    if not url:
+        return ''
+    try:
+        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+        if response.status_code != 200:
+            return ''
+        label = BeautifulSoup(response.text, 'html.parser').select_one(
+            '.amt-pdp-condition-label'
+        )
+        if not label:
+            return ''
+        value = label.parent.select_one('.amt-pdp-condition-value')
+        if value:
+            return value.get_text(' ', strip=True)
+        text = label.get_text(' ', strip=True)
+        return text.split(':', 1)[1].strip() if ':' in text else ''
+    except requests.RequestException:
+        return ''
 
 def _get_token():
     _require_credentials()
@@ -121,14 +144,15 @@ def fetch_sku(sku_raw, *, refresh=False):
             return ''
 
         cond_al = [_mf_alias(ns, k) for ns in CONDITION_NS for k in CONDITION_KEYS]
-        cond    = pick(cond_al)
+        url     = product.get('onlineStoreUrl', '')
+        cond    = pick(cond_al) or _storefront_condition(url)
 
         result = {
             'found':     True,
             'sku':       node.get('sku', sku),
             'title':     product.get('title', ''),
             'condition': (cond + _cond_suffix(cond)) if cond else '',
-            'url':       product.get('onlineStoreUrl', ''),
+            'url':       url,
             'qty':       node.get('inventoryQuantity', ''),
             'price':     float(node['compareAtPrice']) if (node.get('compareAtPrice') and node.get('price') and float(node['compareAtPrice']) > float(node['price'])) else (float(node['price']) if node.get('price') else None),
             'sale_price': float(node['price']) if (node.get('compareAtPrice') and node.get('price') and float(node['compareAtPrice']) > float(node['price'])) else None,
@@ -169,7 +193,7 @@ def fetch_skus_batch(skus, chunk=40):
         search = ' OR '.join('sku:"' + sku.replace('\\', '\\\\').replace('"', '\\"') + '"' for sku in part)
         query = ('{ productVariants(first:' + str(len(part) * 2) + ', query:' + json.dumps(search) +
                  ') { edges { node { sku price compareAtPrice inventoryQuantity ' + meta +
-                 ' product { title onlineStoreUrl ' + meta + ' } } } } }')
+                 ' product { title onlineStoreUrl ' + meta + ' } } } }')
         response = None
         for attempt in range(3):
             try:
@@ -198,6 +222,9 @@ def fetch_skus_batch(skus, chunk=40):
                             condition = next((value for alias in seen if
                                               (value := ((node.get(alias) or {}).get('value') or
                                                          (product.get(alias) or {}).get('value')))), '')
+                            url = product.get('onlineStoreUrl', '')
+                            if not condition:
+                                condition = _storefront_condition(url)
                             price = float(node['price']) if node.get('price') else None
                             compare = float(node['compareAtPrice']) if node.get('compareAtPrice') else None
                             discount = compare is not None and price is not None and compare > price
@@ -205,7 +232,7 @@ def fetch_skus_batch(skus, chunk=40):
                                 'found': True, 'sku': node.get('sku', key),
                                 'title': product.get('title', ''),
                                 'condition': condition + _cond_suffix(condition) if condition else '',
-                                'url': product.get('onlineStoreUrl', ''),
+                                'url': url,
                                 'qty': node.get('inventoryQuantity', ''),
                                 'price': compare if discount else price,
                                 'sale_price': price if discount else None,
@@ -247,4 +274,3 @@ def get_inr_rate():
     return float(value) if value is not None else None
 
 # ── Routes ────────────────────────────────────────────────────────────────────
-
