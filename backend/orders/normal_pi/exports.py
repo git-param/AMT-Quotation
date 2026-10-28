@@ -42,6 +42,23 @@ class FullWidthKeepInFrame(KeepInFrame):
             canv.restoreState()
 
 
+def merge_export_words(model):
+    """Combine the wording label and value while keeping adjacent totals fixed."""
+    for section in model['sections']:
+        for row in section['rows']:
+            for index,cell in enumerate(row):
+                if cell.get('calculated') in ('amount_in_words','annexure_amount_in_words') and index:
+                    label=row[index-1]
+                    combined={**cell,'col':label['col'],
+                              'span':cell['col']+cell['span']-label['col'],
+                              'text':'Amount in words: '+cell['text']}
+                    combined['display_text']=combined['text']
+                    combined.pop('nowrap',None)
+                    row[index-1:index+1]=[combined]
+                    break
+    return model
+
+
 def asset(doc,name):
     return BytesIO(base64.b64decode(doc['assets'][name]))
 
@@ -118,6 +135,16 @@ class OfficeAddressTable(Table):
                 self.canv.drawPath(path,stroke=0,fill=1)
         finally:
             self.canv.restoreState()
+
+
+def legal_notice_pdf(text, usable, style):
+    """Center the notice within the invoice width, including inside KeepInFrame."""
+    table=Table([[Paragraph(escape(text).replace('\n','<br/>'),style)]],
+                colWidths=[usable],hAlign='LEFT')
+    table.setStyle(TableStyle([
+        ('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),
+        ('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
+    return table
 
 
 def office_address_font():
@@ -285,7 +312,7 @@ def rich_required(sheet,row,col,value,cell_format,required_format):
 def pdf(doc):
     regular,bold=fonts()
     output=BytesIO();width,height=A4;margin=12*mm;usable=width-2*margin
-    model=layout(doc);weights=model['widths'];columns=[usable*w/sum(weights) for w in weights]
+    model=merge_export_words(layout(doc));weights=model['widths'];columns=[usable*w/sum(weights) for w in weights]
     def image(name,w):
         data=asset(doc,name)
         with PILImage.open(data) as im:h=w*im.height/im.width
@@ -408,7 +435,7 @@ def pdf(doc):
     story.append(Spacer(1, 8))
     legal_style=ParagraphStyle('legal_notice',fontName=regular,fontSize=8,leading=10,
         alignment=1,textColor=colors.HexColor('#333333'))
-    story.append(Paragraph(escape(model['legal_notice']).replace('\n','<br/>'),legal_style))
+    story.append(legal_notice_pdf(model['legal_notice'],usable,legal_style))
     if item_table:
         table_index,rows,heights,table_style=item_table
         first_frame_height=height-2*margin-header_height-2
@@ -442,8 +469,9 @@ def pdf(doc):
 def xlsx(doc):
     output=BytesIO();book=xlsxwriter.Workbook(output,{'in_memory':True,'strings_to_formulas':False,'strings_to_urls':False})
     sheet=book.add_worksheet('Proforma Invoice');sheet.hide_gridlines(2)
+    sheet.ignore_errors({'number_stored_as_text':'A1:K1048576'})
     sheet.set_paper(9);sheet.set_portrait();sheet.fit_to_pages(1,1 if len(doc['totals']['lines'])<=4 else 0);sheet.set_margins(.47,.47,.47,.47)
-    model=layout(doc)
+    model=merge_export_words(layout(doc))
     for index,width in enumerate(model['widths']):sheet.set_column(index,index,width)
     formats={};format_values={}
     symbol=currency_symbol(doc['currency'])
@@ -487,7 +515,7 @@ def xlsx(doc):
             for cell in row:
                 value=cell.get('display_text',cell['text'])
                 if 'uom' in cell:value+=' '+cell['uom']
-                chars=max(4,int(sum(model['widths'][cell['col']:cell['col']+cell['span']])*.9))
+                chars=max(4,int(sum(model['widths'][cell['col']:cell['col']+cell['span']])*1.1))
                 wrapped=[part for line in value.split('\n') for part in
                          (([line] if cell.get('aria')=='Proforma Invoice Date' or
                            value=='Proforma Invoice Date:' else textwrap.wrap(line,chars)) or [''])]
@@ -507,7 +535,7 @@ def xlsx(doc):
                     center_cell=bool(cell.get('center') or cell.get('free'))
                     key=(cell['style'],top,bottom,left,right,cell.get('bottom_aligned',False),center_money,center_cell)
                     if key not in formats:
-                        style_values={**format_values[cell['style']],'top':1 if top else 0,'bottom':1 if bottom else 0,
+                        style_values={**format_values[cell['style']],'top':(2 if section['name']=='header' and index==0 else 1) if top else 0,'bottom':1 if bottom else 0,
                             'left':left,'right':right}
                         if center_money:
                             style_values.update(align='center',num_format='"'+symbol+'" #,##0.00')
@@ -519,7 +547,7 @@ def xlsx(doc):
                     if chunk_index==0 and path:coordinates[path]=xl_rowcol_to_cell(row_index,col)
                     quantity=(cell.get('field') or '').endswith('.quantity')
                     if quantity:
-                        fmt=book.add_format({**format_values[cell['style']],'num_format':'0 "'+cell.get('uom','PCs')+'"','top':1 if top else 0,'bottom':1 if bottom else 0,'left':left,'right':right})
+                        fmt=book.add_format({**format_values[cell['style']],'num_format':'0 "'+cell.get('uom','PCs')+'"','top':(2 if section['name']=='header' and index==0 else 1) if top else 0,'bottom':1 if bottom else 0,'left':left,'right':right})
                     number=(cell.get('numeric') or cell['field'] in ('shipping_charges','bank_charges') or quantity or (cell['field'] or '').endswith('.unit_price')) and chunk_index==0 and not cell.get('free')
                     if cell['span']>1:sheet.merge_range(row_index,col,row_index,end,'',fmt)
                     if number:
@@ -531,31 +559,32 @@ def xlsx(doc):
                     elif cell['style'] in ('terms','final_term') and RETURN_POLICY_LABEL in value:
                         link_fmt=book.add_format({**style_values,'font_color':'#0563C1','underline':0})
                         sheet.write_url(row_index,col,RETURN_POLICY_URL,link_fmt,value)
+                    elif section['name']=='items' and col==0 and value.isdecimal():sheet.write_number(row_index,col,int(value),fmt)
                     else:sheet.write_string(row_index,col,value,fmt)
                     if chunk_index==0 and (cell.get('calculated') in ('goods_total','subtotal','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
                         formula_cells.append((row_index,col,fmt,cell['calculated'],cell['text']))
-                    height=max(height,len(lines)*(13 if cell['style'] in ('terms','final_term') else 16))
+                    height=max(height,len(lines)*(13 if cell['style'] in ('terms','final_term') else 16)+3)
                     if cell.get('header_metadata'):height=max(height,len(lines)*16+2)
                 if section['name']=='parties' and index==1:height=max(height,45)
                 if section['name']=='parties' and index==3:height=max(height,40)
                 if section['name']=='items' and index>0:
                     height=max(height,(22 if index==1 else 63 if index==2 else 18) if len(doc['totals']['lines'])==1 else 36 if len(doc['totals']['lines'])<=4 else 18)
-                if section['name']=='header' and index==0:height=max(height,30)
+                if section['name']=='title':height=max(height,32)
                 sheet.set_row(row_index,min(409,height));row_index+=1
     footer_start=row_index
     image('payment_options.jpg',footer_start,0,440,90);image('signature.png',footer_start,5,440,90)
     for offset in range(4):
-        row=footer_start+offset;top=offset==0;bottom_edge=False
-        left=book.add_format({'left':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
-        right=book.add_format({'right':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
-        edge=book.add_format({'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
+        row=footer_start+offset;top=offset==0;bottom_edge=(1 if model['shipping_notice'] else 2) if offset==3 else 0
+        left=book.add_format({'left':2,'top':1 if top else 0,'bottom':bottom_edge,'border_color':'#000000'})
+        right=book.add_format({'right':2,'top':1 if top else 0,'bottom':bottom_edge,'border_color':'#000000'})
+        edge=book.add_format({'top':1 if top else 0,'bottom':bottom_edge,'border_color':'#000000'})
         sheet.set_row(row,20)
         for col in range(11):sheet.write_blank(row,col,None,left if col==0 else right if col==10 else edge)
     row_index=footer_start+4
     if model['shipping_notice']:
         notice_format=book.add_format({'font_name':'Cambria','font_size':10,'bold':True,
             'font_color':'#FF0000','bg_color':'#FFFF00','text_wrap':True,'valign':'vcenter',
-            'left':2,'right':2,'top':1,'bottom':0,'border_color':'#000000'})
+            'left':2,'right':2,'top':1,'bottom':2,'border_color':'#000000'})
         sheet.merge_range(row_index,0,row_index,10,model['shipping_notice'],notice_format);sheet.set_row(row_index,36);row_index+=1
     address_row=row_index
     row_height=office_address_image(address_row)

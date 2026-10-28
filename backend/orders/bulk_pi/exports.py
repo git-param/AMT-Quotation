@@ -15,9 +15,10 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, PageBreak, NextPageTemplate
 
-from backend.orders.normal_pi.exports import section_borders, rich_required, fonts, _font_lock, office_address_pdf, office_address_png, FullWidthKeepInFrame
+from backend.orders.normal_pi.exports import section_borders, rich_required, fonts, _font_lock, office_address_pdf, office_address_png, FullWidthKeepInFrame, legal_notice_pdf, merge_export_words
 from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words, WIDTHS
 from backend.orders.terms_config import RETURN_POLICY_LABEL, RETURN_POLICY_URL
 
@@ -33,7 +34,7 @@ def clip_workbook_header(raw):
 def pdf(doc):
     regular,bold=fonts()
     output=BytesIO();width,height=A4;margin=12*mm;usable=width-2*margin
-    model=layout(doc);weights=model['widths'];columns=[usable*w/sum(weights) for w in weights]
+    model=merge_export_words(layout(doc));weights=model['widths'];columns=[usable*w/sum(weights) for w in weights]
     def image(name,w):
         data=asset(doc,name)
         with PILImage.open(data) as im:h=w*im.height/im.width
@@ -44,7 +45,28 @@ def pdf(doc):
         canvas.saveState()
         header.drawOn(canvas,margin,height-margin-header.drawHeight)
         canvas.restoreState()
-    bottom=margin
+    bottom=margin+16
+    class FinalPageNoticeCanvas(Canvas):
+        def __init__(self,*args,**kwargs):
+            super().__init__(*args,**kwargs)
+            self.saved_pages=[]
+
+        def showPage(self):
+            self.saved_pages.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            pages=self.saved_pages
+            for index,state in enumerate(pages):
+                self.__dict__.update(state)
+                if index==len(pages)-1:
+                    style=ParagraphStyle('final_legal_notice',fontName=regular,fontSize=8,
+                                         leading=10,alignment=1,textColor=colors.HexColor('#333333'))
+                    notice=legal_notice_pdf(model['legal_notice'],usable,style)
+                    notice.wrap(usable,100)
+                    notice.drawOn(self,margin,margin)
+                super().showPage()
+            super().save()
     document=BaseDocTemplate(output,pagesize=A4,
         title='Proforma Invoice '+doc['reference'],author=doc['company']['seller'][0])
     def frame(top,name):
@@ -187,10 +209,7 @@ def pdf(doc):
     story.append(Spacer(1, 6))
     story.append(office_address_pdf(model['office_addresses'], usable))
     story.append(Spacer(1, 8))
-    legal_style=ParagraphStyle('legal_notice',fontName=regular,fontSize=8,leading=10,
-        alignment=1,textColor=colors.HexColor('#333333'))
-    story.append(Paragraph(escape(model['legal_notice']).replace('\n','<br/>'),legal_style))
-    first_frame_height=height-2*margin-header_height-2
+    first_frame_height=height-2*margin-header_height-18
     cover_height=sum(flowable.wrap(usable,first_frame_height)[1] for flowable in story)
     if cover_height > first_frame_height-8:
         story=[FullWidthKeepInFrame(usable,first_frame_height-4,story,mode='shrink',hAlign='LEFT',vAlign='TOP')]
@@ -207,16 +226,16 @@ def pdf(doc):
         ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),
         ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
     story.append(annexure_footer)
-    story.append(Paragraph(escape(model['legal_notice']).replace('\n','<br/>'),legal_style))
-    document.build(story)
+    document.build(story,canvasmaker=FinalPageNoticeCanvas)
     return output.getvalue()
 
 
 def xlsx(doc):
     output=BytesIO();book=xlsxwriter.Workbook(output,{'in_memory':True,'strings_to_formulas':False,'strings_to_urls':False})
     sheet=book.add_worksheet('Proforma Invoice');sheet.hide_gridlines(2)
+    sheet.ignore_errors({'number_stored_as_text':'A1:K1048576'})
     sheet.set_paper(9);sheet.set_portrait();sheet.fit_to_pages(1,1);sheet.set_margins(.47,.47,.47,.47)
-    model=layout(doc)
+    model=merge_export_words(layout(doc))
     for index,width in enumerate(model['widths']):sheet.set_column(index,index,width)
     formats={};format_values={}
     symbol=currency_symbol(doc['currency'])
@@ -261,7 +280,7 @@ def xlsx(doc):
             for cell in row:
                 value=cell.get('display_text',cell['text'])
                 if 'uom' in cell:value+=' '+cell['uom']
-                chars=max(4,int(sum(model['widths'][cell['col']:cell['col']+cell['span']])*.9))
+                chars=max(4,int(sum(model['widths'][cell['col']:cell['col']+cell['span']])*1.1))
                 wrapped=[part for line in value.split('\n') for part in (textwrap.wrap(line,chars) or [''])]
                 chunks.append([wrapped[offset:offset+20] for offset in range(0,len(wrapped),20)])
             for chunk_index in range(max(map(len,chunks))):
@@ -278,7 +297,7 @@ def xlsx(doc):
                     center_cell=bool(cell.get('center') or cell.get('free'))
                     key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False),single_item_cell,center_money,center_cell)
                     if key not in formats:
-                        style_values={**format_values[cell['style']],'top':1 if top else 0,'bottom':1 if bottom else 0,
+                        style_values={**format_values[cell['style']],'top':(2 if section['name']=='header' and index==0 else 1) if top else 0,'bottom':1 if bottom else 0,
                             'left':0 if section['name']=='title' or cell.get('open_left') else 2 if col==0 else 1,
                             'right':0 if section['name']=='title' or cell.get('open_right') else 2 if end==10 else 1,
                             'valign':'bottom' if cell.get('bottom_aligned') else 'vcenter' if single_item_cell else 'top'}
@@ -292,7 +311,7 @@ def xlsx(doc):
                     quantity=(cell.get('field') or '').endswith('.quantity')
                     if quantity:
                         fmt=book.add_format({**format_values[cell['style']],'num_format':'0 "'+cell.get('uom','PCs')+'"',
-                            'top':1 if top else 0,'bottom':1 if bottom else 0,
+                            'top':(2 if section['name']=='header' and index==0 else 1) if top else 0,'bottom':1 if bottom else 0,
                             'left':0 if cell.get('open_left') else 2 if col==0 else 1,
                             'right':0 if cell.get('open_right') else 2 if end==10 else 1,
                             'valign':'vcenter' if single_item_cell else 'top'})
@@ -307,30 +326,31 @@ def xlsx(doc):
                     elif cell['style'] in ('terms','final_term') and RETURN_POLICY_LABEL in value:
                         link_fmt=book.add_format({**style_values,'font_color':'#0563C1','underline':0})
                         sheet.write_url(row_index,col,RETURN_POLICY_URL,link_fmt,value)
+                    elif section['name']=='items' and col==0 and value.isdecimal():sheet.write_number(row_index,col,int(value),fmt)
                     else:sheet.write_string(row_index,col,value,fmt)
                     if chunk_index==0 and (cell.get('calculated') in ('subtotal','goods_total','tax','grand_total') or (cell.get('calculated') or '').endswith('.line_total')):
                         formula_cells.append((row_index,col,fmt,cell['calculated'],cell['text']))
-                    height=max(height,len(lines)*(13 if cell['style'] in ('terms','final_term') else 16))
+                    height=max(height,len(lines)*(13 if cell['style'] in ('terms','final_term') else 16)+3)
                     if cell.get('header_metadata'):height=max(height,len(lines)*16+2)
                 if section['name']=='parties' and index==1:height=max(height,45)
                 if section['name']=='parties' and index==3:height=max(height,40)
                 if section['name']=='items' and index>0 and len(section['rows'])==2:height=max(height,85)
-                if section['name']=='header' and index==0:height=max(height,30)
+                if section['name']=='title':height=max(height,32)
                 sheet.set_row(row_index,min(409,height));row_index+=1
     footer_start=row_index
     image('payment_options.jpg',footer_start,0,440,90);image('signature.png',footer_start,5,440,90)
     for offset in range(4):
-        row=footer_start+offset;top=offset==0;bottom_edge=False
-        left=book.add_format({'left':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
-        right=book.add_format({'right':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
-        edge=book.add_format({'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
+        row=footer_start+offset;top=offset==0;bottom_edge=(1 if model['shipping_notice'] else 2) if offset==3 else 0
+        left=book.add_format({'left':2,'top':1 if top else 0,'bottom':bottom_edge,'border_color':'#000000'})
+        right=book.add_format({'right':2,'top':1 if top else 0,'bottom':bottom_edge,'border_color':'#000000'})
+        edge=book.add_format({'top':1 if top else 0,'bottom':bottom_edge,'border_color':'#000000'})
         sheet.set_row(row,20)
         for col in range(11):sheet.write_blank(row,col,None,left if col==0 else right if col==10 else edge)
     row_index=footer_start+4
     if model['shipping_notice']:
         notice_format=book.add_format({'font_name':'Cambria','font_size':11,'bold':True,
             'font_color':'#FF0000','bg_color':'#FFFF00','text_wrap':True,'valign':'vcenter',
-            'left':2,'right':2,'top':1,'bottom':0,'border_color':'#000000'})
+            'left':2,'right':2,'top':1,'bottom':2,'border_color':'#000000'})
         sheet.merge_range(row_index,0,row_index,10,model['shipping_notice'],notice_format)
         sheet.set_row(row_index,36);row_index+=1
     address_row=row_index
@@ -367,6 +387,7 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row, legal_notice)
     """Append the six-column annexure below the cover on the same sheet."""
     import textwrap
     model = annexure_section(doc)
+    merge_export_words({'sections':[model]})
     # Merge existing cover columns to retain both grids' column boundaries.
     columns = [0, 1, 5, 6, 8, 9, 11]
     base = {'font_name':'Times New Roman','font_size':12,'border':1,
@@ -429,7 +450,7 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row, legal_notice)
         for chunk_index,chunk in enumerate(chunks):
             for cell in source:
                 logical_col=cell['col'];col=columns[logical_col]
-                end_col=columns[logical_col+1]-1
+                end_col=columns[logical_col+cell.get('span',1)]-1
                 value=cell['text'];style=fmt(cell)
                 if cell.get('rowspan',1)>1 or end_col>col:
                     sheet.merge_range(row,col,row+cell.get('rowspan',1)-1,end_col,'',style)
