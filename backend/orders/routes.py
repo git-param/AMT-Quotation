@@ -228,6 +228,9 @@ def save_order(order_id=None):
         if old:
             values = header({key: value for key, value in data.items()
                              if key != 'delivery'}, old)
+            if (values['pi_reference'] != old['pi_reference']
+                    and user['role'] not in ('admin', 'manager', 'sales_tl')):
+                return jsonify(error='Only managers and Sales TLs can edit the PI number.'), 403
             client_id = old['client_id']
         else:
             enquiry_id = data.get('enquiry_id')
@@ -259,6 +262,9 @@ def save_order(order_id=None):
             values = header({key: value for key, value in data.items()
                              if key not in ('client_id', 'enquiry_id', 'delivery', 'lines',
                                             'source_line_ids')})
+            if ('pi_reference' in data and values['pi_reference']
+                    and user['role'] not in ('admin', 'manager', 'sales_tl')):
+                return jsonify(error='Only managers and Sales TLs can set the PI number.'), 403
             if 'pi_reference' not in data:
                 prefix = user_pi_defaults(connection, user['id'])['pi_prefix']
                 if prefix:

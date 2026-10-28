@@ -41,6 +41,21 @@ def authorized(connection,order_id):
     return user,order,None
 
 
+def can_edit_pi_reference(user):
+    return user['role'] in ('admin','manager','sales_tl')
+
+
+def preview_layout(document,user):
+    model=layout(document)
+    allowed=can_edit_pi_reference(user)
+    for section in model['sections']:
+        for row in section['rows']:
+            for cell in row:
+                if cell.get('field')=='order.pi_reference':
+                    cell['readonly']=not allowed
+    return model
+
+
 def preview_row(connection,order_id,preview_id,user):
     return connection.execute('SELECT p.* FROM invoice_previews p LEFT JOIN order_invoices i ON i.id=p.issued_invoice_id '
         'WHERE p.id=? AND p.order_id=? AND p.created_by=? AND (p.issued_invoice_id IS NULL OR i.deleted_at IS NULL)',
@@ -175,9 +190,9 @@ def save_preview(order_id,preview_id=None):
             previous_doc=json.loads(original_document_json)
             for_generation=request.args.get('for_generation')=='1'
             if for_generation:
-                doc=print_document(previous_doc,data)
+                doc=print_document(previous_doc,data,allow_pi_reference=can_edit_pi_reference(user))
                 validate_ready(doc)
-            else:doc=edit(previous_doc,data)
+            else:doc=edit(previous_doc,data,allow_pi_reference=can_edit_pi_reference(user))
             if doc['reference']!=order['pi_reference']:
                 if order['updated_at']!=doc['source_updated_at']:
                     return jsonify(error='The order changed after this preview was opened. Open a new PI preview.'),409
@@ -240,7 +255,7 @@ def save_preview(order_id,preview_id=None):
             connection.execute('INSERT INTO invoice_previews(id,order_id,created_by,document_json) VALUES(?,?,?,?)',
                                (preview_id,order_id,user['id'],json.dumps(doc)))
         connection.commit()
-        return jsonify(preview_id=preview_id,document=doc,layout=layout(doc),
+        return jsonify(preview_id=preview_id,document=doc,layout=preview_layout(doc,user),
             missing_fields=missing, pdf_url=f'/api/orders/{order_id}/invoices/preview/{preview_id}/pdf'),200 if request.method=='PUT' else 201
     except PreviewConflict as error:
         return jsonify(error=str(error)),409
@@ -282,7 +297,7 @@ def print_preview(order_id,preview_id):
         if not row:return jsonify(error='PI preview not found.'),404
         data=request.get_json(silent=True)
         if not isinstance(data,dict):return jsonify(error='Provide PI preview fields.'),400
-        doc=print_document(json.loads(row['document_json']),data)
+        doc=print_document(json.loads(row['document_json']),data,allow_pi_reference=can_edit_pi_reference(user))
     except ValueError as error:return validation_error(error)
     finally:connection.close()
     try:

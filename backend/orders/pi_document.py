@@ -179,7 +179,7 @@ def prepare(state, user, currency, rate, bulk_description=None):
         'source_updated_at':state['order']['updated_at']})
 
 
-def edit(document, edits):
+def edit(document, edits, *, allow_pi_reference=False):
     from backend.orders.invoices import calculate
     if not isinstance(edits,dict) or set(edits)-{'date','prepared_phone','order','delivery','lines','shipping_charges','bank_charges','terms','amount_in_words','consignee_gst_number','bulk_description','annexure_quantity'}:
         raise ValueError('Invalid PI preview fields. Company details and invoice identity cannot be edited.')
@@ -212,8 +212,8 @@ def edit(document, edits):
         if not isinstance(edits['order'],dict) or set(edits['order'])-ORDER_FIELDS:
             raise ValueError('Invalid PI commercial fields.')
         validated = header(edits['order'],doc['order'])
-        if validated['pi_reference'] != doc['order']['pi_reference']:
-            raise ValueError('PI numbers are assigned automatically from the configured sequence.')
+        if validated['pi_reference'] != doc['order']['pi_reference'] and not allow_pi_reference:
+            raise ValueError('Only managers and Sales TLs can edit the PI number.')
         for key in ORDER_FIELDS:
             doc['order'][key] = validated[key]
         if not doc['order']['pi_reference']:
@@ -294,7 +294,7 @@ def recalculate(document, edits):
     return edit(document,numeric)
 
 
-def print_document(document, edits):
+def print_document(document, edits, *, allow_pi_reference=False):
     """Render in-progress text without saving or applying issuance validation."""
     doc = deepcopy(document)
     if 'annexure_quantity' in edits:
@@ -320,8 +320,9 @@ def print_document(document, edits):
     for key in ('date','prepared_phone','terms','bulk_description','amount_in_words'):
         if isinstance(edits.get(key),str):doc[key]=edits[key][:20000]
     if isinstance(edits.get('order'),dict):
-        if edits['order'].get('pi_reference',doc['order']['pi_reference']) != doc['order']['pi_reference']:
-            raise ValueError('PI numbers are assigned automatically from the configured sequence.')
+        if (edits['order'].get('pi_reference',doc['order']['pi_reference']) != doc['order']['pi_reference']
+                and not allow_pi_reference):
+            raise ValueError('Only managers and Sales TLs can edit the PI number.')
         for key in ORDER_FIELDS:
             if isinstance(edits['order'].get(key),str):doc['order'][key]=edits['order'][key][:5000]
         doc['reference']=doc['order']['pi_reference']

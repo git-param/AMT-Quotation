@@ -5,25 +5,23 @@ Edit these lines to change the terms printed on newly generated PIs. A
 """
 
 RETURN_POLICY_URL = 'https://aeliyamarinetech.com/pages/return-and-refund-policy'
-RETURN_POLICY_LABEL = 'RETURN AND REFUND POLICY'
-RETURN_POLICY_TEXT = "ALL RETURNS AND REFUNDS ARE SUBJECT TO THE COMPANY'S RETURN AND REFUND POLICY."
+RETURN_POLICY_LABEL = 'Return And Refund Policy'
+RETURN_POLICY_TEXT = "All Returns And Refunds Are Subject To The Company's Return And Refund Policy."
 
 USD_TERMS = (
-    '1. SUBJECT TO BHAVNAGAR JURISDICTION',
-    '2. PAYMENT 100% ADVANCE',
-    '3. LOCAL TAXES AND CUSTOM DUTY AT DESTINATION NOT INCLUDED [IMPORTER COUNTRY]',
-    '4. SHIPMENT: DISPATCH WITHIN 24 HOURS OF PAYMENT CONFIRMATION',
-    '5. OFFER SUBJECT TO REMAIN UNSOLD AGAINST ORDER CONFIRMATION',
-    '6. WARRANTY: 30 DAYS TECHNICAL WARRANTY IF THE PRODUCT IS FOUND TO BE NOT WORKING OR ANY OTHER TECHNICAL ISSUE ARISES THEN WE WILL REFUND OR REPLACE IT WITHIN 30 DAYS',
+    '1. Subject To Bhavnagar Jurisdiction',
+    '2. Local Taxes And Custom Duty At Destination Not Included [Importer Country]',
+    '3. Shipment: Dispatch Within 24 Hours Of Payment Confirmation',
+    '4. Offer Subject To Remain Unsold Against Order Confirmation',
+    '5. Warranty: 30-Day Technical Warranty: Full Refund Or Replacement If The Product Is Non-Functional Or Technically Defective.',
 )
 
 INR_TERMS = (
-    '1. SUBJECT TO BHAVNAGAR JURISDICTION',
-    '2. PAYMENT 100% ADVANCE',
-    '3. SHIPMENT: DISPATCH WITHIN 24 HOURS OF PAYMENT CONFIRMATION',
-    '4. OFFER SUBJECT TO REMAIN UNSOLD AGAINST ORDER CONFIRMATION',
-    '5. WARRANTY: 30 DAYS TECHNICAL WARRANTY IF THE PRODUCT IS FOUND TO BE NOT WORKING OR ANY OTHER TECHNICAL ISSUE ARISES THEN WE WILL REFUND OR REPLACE IT WITHIN 30 DAYS',
-    '6. THE FINAL TAX INVOCIE WILL BE BASED ON WEIGHT (UOM). ABOVE MENTIONED QUANTITY IN PROFORMA INVOICE IS FOR REFERENCE ONLY.',
+    '1. Subject To Bhavnagar Jurisdiction',
+    '2. Shipment: Dispatch Within 24 Hours Of Payment Confirmation',
+    '3. Offer Subject To Remain Unsold Against Order Confirmation',
+    '4. Warranty: 30-Day Technical Warranty: Full Refund Or Replacement If The Product Is Non-Functional Or Technically Defective.',
+    '5. The Final Tax Invoice Will Be Based On Weight (UOM). Above Mentioned Quantity In Proforma Invoice Is For Reference Only.',
 )
 
 TERMS_BY_CURRENCY = {

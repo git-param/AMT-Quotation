@@ -13,6 +13,19 @@ formula/tax rows in the workbook are not application rules or runtime inputs.
   summary and complete Annexure-1 independently.
 - `pi_layout.py` and `pi_exports.py` are stable dispatch interfaces;
   `pi_grid_exports.py` retains the old imports for compatibility.
+- `frontend/orders/pi-preview.js` renders the shared editable preview and print
+  view; `frontend/orders/orders.css` owns the preview page framing.
+
+The branding image sits above the invoice grid and stays outside its border.
+The centered `PROFORMA INVOICE` heading is also outside the grid border.
+The payment/signature area remains framed; the address/location artwork and
+computer-generated notice follow it below the frame. These boundaries are kept
+consistent in the shared preview, normal PDF/XLSX exports, and bulk cover and
+annexure exports.
+
+The PI reference is editable by Admin/Manager and Sales TL accounts. Sales
+Executives see it read-only, and the order and preview APIs enforce the same
+role boundary.
 
 A newly prepared snapshot records `pi_format`: normal for zero to four order
 products, bulk for more than four. Legacy previews without this marker continue

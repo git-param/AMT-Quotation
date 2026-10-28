@@ -103,7 +103,7 @@ def layout(doc):
         [c(5,2,'Prepared By: '+doc['prepared_by']),editable(7,4,'Tel: ',doc.get('prepared_phone',''),'prepared_phone',type='tel',aria='Tel')],
         [editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_top=True)],
         [editable(5,6,'Delivery Terms: DAP basis from ',order['destination'],'order.destination',aria='DAP basis country')]]
-    header=[[c(0,11,'PROFORMA INVOICE','title',line_bottom=True)]]
+    header=[]
     for index in range(7):
         left=c(0,5,'SUPPLIER/SELLER','bold') if index==0 else c(0,5,seller[index-1] if index<=len(seller) else '')
         if index<5:right=metadata[index]
@@ -201,6 +201,7 @@ def layout(doc):
             multiline=True, aria='Terms and conditions', preview_hidden=index>0)])
     return {'widths':WIDTHS,'currency':doc['currency'],'shipping_notice':shipping_notice(doc),
         'legal_notice':LEGAL_NOTICE,'sections':[
+        {'name':'title','rows':[[c(0,11,'PROFORMA INVOICE','title')]]},
         {'name':'header','rows':header},{'name':'parties','rows':parties},
         {'name':'items','rows':items},{'name':'bank','rows':bank_rows},
         {'name':'terms','rows':clauses}]}

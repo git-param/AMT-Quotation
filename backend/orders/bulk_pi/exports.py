@@ -44,11 +44,6 @@ def pdf(doc):
         canvas.saveState()
         header.drawOn(canvas,margin,height-margin-header.drawHeight)
         canvas.restoreState()
-        canvas.saveState();canvas.setLineWidth(1.2)
-        top=height-margin;bottom=top-header_height-2
-        canvas.line(margin,top,width-margin,top)
-        canvas.line(margin,top,margin,bottom);canvas.line(width-margin,top,width-margin,bottom)
-        canvas.restoreState()
     bottom=margin
     document=BaseDocTemplate(output,pagesize=A4,
         title='Proforma Invoice '+doc['reference'],author=doc['company']['seller'][0])
@@ -137,12 +132,12 @@ def pdf(doc):
                         total_commands.extend([('BOX',(col,index),(col+span-1,end_row),.6,colors.black),
                                                ('VALIGN',(col,index),(col+span-1,end_row),'MIDDLE')])
                     if cell.get('bottom_aligned'):commands.append(('VALIGN',(col,index),(col+span-1,index),'BOTTOM'))
-                    if not cell.get('open_left'):commands.append(('LINEBEFORE',(col,index),(col,index),1.2 if col==0 else .6,colors.black))
-                    if not cell.get('open_right'):commands.append(('LINEAFTER',(col+span-1,index),(col+span-1,index),1.2 if col+span==len(section_columns) else .6,colors.black))
+                    if section['name']!='title' and not cell.get('open_left'):commands.append(('LINEBEFORE',(col,index),(col,index),1.2 if col==0 else .6,colors.black))
+                    if section['name']!='title' and not cell.get('open_right'):commands.append(('LINEAFTER',(col+span-1,index),(col+span-1,index),1.2 if col+span==len(section_columns) else .6,colors.black))
                     if kind=='warning':commands.append(('BACKGROUND',(col,index),(col+span-1,index),colors.yellow))
                     if kind=='final_term':commands.append(('BACKGROUND',(col,index),(col+span-1,index),colors.HexColor('#FFF2CC')))
-                    if cell.get('line_top'):commands.append(('LINEABOVE',(col,index),(col+span-1,index),.6,colors.black))
-                    if cell.get('line_bottom'):commands.append(('LINEBELOW',(col,index),(col+span-1,index),.6,colors.black))
+                    if section['name']!='title' and cell.get('line_top'):commands.append(('LINEABOVE',(col,index),(col+span-1,index),.6,colors.black))
+                    if section['name']!='title' and cell.get('line_bottom'):commands.append(('LINEBELOW',(col,index),(col+span-1,index),.6,colors.black))
                     _,h=content.wrap(sum(section_columns[col:col+span])-6,10000)
                     min_height=max(min_height,h+3)
                     if cell.get('header_metadata'):min_height=max(min_height,h+3)
@@ -174,13 +169,11 @@ def pdf(doc):
         footer_rows.append([Paragraph(escape(model['shipping_notice']),ParagraphStyle(
             'shipping_notice',fontName=bold,fontSize=10,leading=13,
             textColor=colors.red)),''])
-    address_row=len(footer_rows)
-    footer_rows.append([image('address.png',usable-12),''])
     footer_block=Table(footer_rows,colWidths=[usable*.5]*2,splitByRow=0)
     footer_block.setStyle(TableStyle([
         *([('SPAN',(0,1),(1,1)),('BACKGROUND',(0,1),(-1,1),colors.yellow)]
           if model['shipping_notice'] else []),
-        ('SPAN',(0,address_row),(1,address_row)),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
         ('LEFTPADDING',(0,0),(-1,-1),6),
         ('RIGHTPADDING',(0,0),(-1,-1),6),
         ('TOPPADDING',(0,0),(-1,-1),5),
@@ -189,19 +182,16 @@ def pdf(doc):
         ('LINEAFTER',(-1,0),(-1,-1),1.2,colors.black),
         ('LINEABOVE',(0,0),(-1,0),.6,colors.black),
         ('LINEBELOW',(0,-1),(-1,-1),1.2,colors.black),
-        ('LINEABOVE',(0,address_row),(-1,address_row),.6,colors.black),
         *([('LINEABOVE',(0,1),(-1,1),.6,colors.black)] if model['shipping_notice'] else [])]))
     story.append(footer_block)
+    story.append(image('address.png',usable-12))
     story.extend([NextPageTemplate('Annexure'), PageBreak()])
     append_sections([section for section in model['sections'] if section.get('annexure')])
     legal_style=ParagraphStyle('legal_notice',fontName=regular,fontSize=8,leading=10,
         alignment=1,textColor=colors.HexColor('#333333'))
-    annexure_footer=Table([
-        [image('payment_options.jpg',usable*.46),image('signature.png',usable*.44)],
-        [Paragraph(escape(model['legal_notice']).replace('\n','<br/>'),legal_style),'']],
-                         colWidths=[usable*.5]*2,splitByRow=0)
+    annexure_footer=Table([[image('payment_options.jpg',usable*.46),image('signature.png',usable*.44)]],
+                          colWidths=[usable*.5]*2,splitByRow=0)
     annexure_footer.setStyle(TableStyle([
-        ('SPAN',(0,1),(1,1)),('LINEABOVE',(0,1),(-1,1),.4,colors.black),
         ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
         ('LINEBEFORE',(0,0),(0,-1),1.2,colors.black),
         ('LINEAFTER',(-1,0),(-1,-1),1.2,colors.black),
@@ -210,6 +200,7 @@ def pdf(doc):
         ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),
         ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
     story.append(annexure_footer)
+    story.append(Paragraph(escape(model['legal_notice']).replace('\n','<br/>'),legal_style))
     document.build(story)
     return output.getvalue()
 
@@ -242,16 +233,8 @@ def xlsx(doc):
             scale=w/im.width if name=='header.png' else min(w/im.width,h/im.height)
             dpi=im.info.get('dpi',(96,96))
         data.seek(0);sheet.insert_image(row,col,name,{'image_data':data,'x_scale':scale*dpi[0]/96,'y_scale':scale*dpi[1]/96,'object_position':1})
-    border_left=book.add_format({'left':2,'left_color':'#000000'})
-    border_right=book.add_format({'right':2,'right_color':'#000000'})
-    border_top=book.add_format({'top':2,'top_color':'#000000'})
-    border_corner_left=book.add_format({'left':2,'top':2,'border_color':'#000000'})
-    border_corner_right=book.add_format({'right':2,'top':2,'border_color':'#000000'})
     for row in range(7):
         sheet.set_row(row,24)
-        sheet.write_blank(row,0,None,border_corner_left if row==0 else border_left)
-        sheet.write_blank(row,10,None,border_corner_right if row==0 else border_right)
-    for col in range(1,10):sheet.write_blank(0,col,None,border_top)
     image('header.png',0,0,950,125)
     row_index=7
     coordinates={};formula_cells=[]
@@ -272,18 +255,18 @@ def xlsx(doc):
                 for cell,parts in zip(row,chunks):
                     lines=parts[chunk_index] if chunk_index<len(parts) else ['']
                     value='\n'.join(lines);col=cell['col'];end=col+cell['span']-1
-                    top=((index==0 and chunk_index==0 and section['name']!='header' and not (section['name']=='bank' and col>=8)) or (section['name']=='bank' and index==len(section['rows'])-1 and chunk_index==0)
-                         or (cell.get('line_top') and chunk_index==0))
-                    bottom=((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1 and not (section['name']=='items' and col>=8)) or cell['style']=='head'
-                            or (cell.get('line_bottom') and chunk_index==len(parts)-1))
+                    top=(section['name']!='title' and ((index==0 and chunk_index==0 and not (section['name']=='bank' and col>=8)) or (section['name']=='bank' and index==len(section['rows'])-1 and chunk_index==0)
+                         or (cell.get('line_top') and chunk_index==0)))
+                    bottom=(section['name']!='title' and ((index==len(section['rows'])-1 and chunk_index==max(map(len,chunks))-1 and not (section['name']=='items' and col>=8)) or cell['style']=='head'
+                            or (cell.get('line_bottom') and chunk_index==len(parts)-1)))
                     single_item_cell=section['name']=='items' and index>0 and len(section['rows'])==2
                     center_money='amount' in cell['style']
                     center_cell=bool(cell.get('center') or cell.get('free'))
                     key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False),single_item_cell,center_money,center_cell)
                     if key not in formats:
                         style_values={**format_values[cell['style']],'top':1 if top else 0,'bottom':1 if bottom else 0,
-                            'left':0 if cell.get('open_left') else 2 if col==0 else 1,
-                            'right':0 if cell.get('open_right') else 2 if end==10 else 1,
+                            'left':0 if section['name']=='title' or cell.get('open_left') else 2 if col==0 else 1,
+                            'right':0 if section['name']=='title' or cell.get('open_right') else 2 if end==10 else 1,
                             'valign':'bottom' if cell.get('bottom_aligned') else 'vcenter' if single_item_cell else 'top'}
                         if center_money:
                             style_values.update(align='center',num_format='"'+symbol+'" #,##0.00')
@@ -320,26 +303,24 @@ def xlsx(doc):
                 if section['name']=='items' and index>0 and len(section['rows'])==2:height=max(height,85)
                 if section['name']=='header' and index==0:height=max(height,30)
                 sheet.set_row(row_index,min(409,height));row_index+=1
-    image('payment_options.jpg',row_index,0,440,90);image('signature.png',row_index,5,440,90)
-    for part in range(2):
-        for offset in range(4):
-            top=offset==0;bottom_edge=offset==3
-            lower=2 if part==1 else 1
-            left=book.add_format({'left':2,'top':1 if top else 0,'bottom':lower if bottom_edge else 0,'border_color':'#000000'})
-            right=book.add_format({'right':2,'top':1 if top else 0,'bottom':lower if bottom_edge else 0,'border_color':'#000000'})
-            edge=book.add_format({'top':1 if top else 0,'bottom':lower if bottom_edge else 0,'border_color':'#000000'})
-            sheet.set_row(row_index,20 if part==0 else 18)
-            for col in range(11):sheet.write_blank(row_index,col,None,left if col==0 else right if col==10 else edge)
-            row_index+=1
-        if part==0:
-            if model['shipping_notice']:
-                notice_format=book.add_format({'font_name':'Cambria','font_size':11,'bold':True,
-                'font_color':'#FF0000','bg_color':'#FFFF00','text_wrap':True,
-                'valign':'vcenter','left':2,'right':2,'top':1,'bottom':1,'border_color':'#000000'})
-                sheet.merge_range(row_index,0,row_index,10,model['shipping_notice'],notice_format)
-                sheet.set_row(row_index,36)
-                row_index+=1
-            image('address.png',row_index,0,950,92)
+    footer_start=row_index
+    image('payment_options.jpg',footer_start,0,440,90);image('signature.png',footer_start,5,440,90)
+    for offset in range(4):
+        row=footer_start+offset;top=offset==0;bottom_edge=offset==3 and not model['shipping_notice']
+        left=book.add_format({'left':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
+        right=book.add_format({'right':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
+        edge=book.add_format({'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
+        sheet.set_row(row,20)
+        for col in range(11):sheet.write_blank(row,col,None,left if col==0 else right if col==10 else edge)
+    row_index=footer_start+4
+    if model['shipping_notice']:
+        notice_format=book.add_format({'font_name':'Cambria','font_size':11,'bold':True,
+            'font_color':'#FF0000','bg_color':'#FFFF00','text_wrap':True,'valign':'vcenter',
+            'left':2,'right':2,'top':1,'bottom':2,'border_color':'#000000'})
+        sheet.merge_range(row_index,0,row_index,10,model['shipping_notice'],notice_format)
+        sheet.set_row(row_index,36);row_index+=1
+    image('address.png',row_index,0,950,92)
+    row_index+=6
     sheet.print_area(0,0,row_index-1,10);sheet.set_footer('&CPage &P of &N')
     annexure_start = row_index + 3
     for gap_row in range(row_index, annexure_start):
@@ -468,14 +449,17 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row):
                     sheet.write_string(row,col,value,style)
             sheet.set_row(row,max(model['row_heights'][index],len(chunk)*14 if chunk else 0))
             row+=1
-    # One undivided payment/signature box, exactly beneath the final blank row.
-    footer=book.add_format({'left':2,'right':2,'top':1,'bottom':2,'border_color':'#000000'})
-    sheet.merge_range(row,0,row+4,10,'',footer)
-    for offset in range(5):sheet.set_row(row+offset,18)
+    # Keep payment and signatures framed, with the system notice below the frame.
+    for offset in range(5):
+        top=offset==0;bottom_edge=offset==4
+        left=book.add_format({'left':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
+        right=book.add_format({'right':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
+        edge=book.add_format({'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
+        for col in range(11):sheet.write_blank(row+offset,col,None,left if col==0 else right if col==10 else edge)
+        sheet.set_row(row+offset,18)
     image('payment_options.jpg',row,0,header_width*.5,110)
     image('signature.png',row,6,header_width*.47-10,110)
-    legal=book.add_format({'font_name':'Cambria','font_size':8,'align':'center','valign':'vcenter',
-        'text_wrap':True,'left':2,'right':2,'top':1,'bottom':2,'border_color':'#000000'})
+    legal=book.add_format({'font_name':'Cambria','font_size':8,'align':'center','valign':'vcenter','text_wrap':True})
     sheet.merge_range(row+5,0,row+5,10,model['legal_notice'],legal)
     sheet.set_row(row+5,28)
     sheet.print_area(0,0,row+5,10)

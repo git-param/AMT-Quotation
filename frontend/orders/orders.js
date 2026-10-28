@@ -8,6 +8,7 @@ const headerFields = ['order_date','po_reference','pi_reference','delivery_terms
 const addressFields = ['line1','line2','city','state','postal_code','country'];
 let page=1, pages=0;
 let current=null, editing=null, editingLine=null, clientData=null;
+let canEditPIReference=false;
 let detailVersion=0;
 let formVersion=0;
 let commercialInputs=[],savingCommercial=false;
@@ -397,7 +398,7 @@ async function createOrder() {
   el('shipping_charges').value='0.00';
   el('bank_charges').value='0.00';
   el('delivery_terms').value='DAP';el('delivery_time').value='4 to 6 business days';el('dispatch_method').value='DHL/Fedex/Aramex';
-  el('pi_reference').value='';el('pi_reference').readOnly=true;
+  el('pi_reference').value='';el('pi_reference').readOnly=!canEditPIReference;
   if(!await prepareClient(Number(clientScope),null,version))return;
   if(!clientData.lead.can_edit||!clientData.lead.is_active)throw new Error('Choose an editable, active client.');
   el('editor').hidden=false;el('detail').hidden=true;resetComposer();el('editor').scrollIntoView({behavior:'smooth'});
@@ -410,7 +411,7 @@ async function editOrder(id) {
   updateOrderStatusUI(data.order);
   editing=id;initialDrafts.reset();el('initialLines').hidden=true;
   headerFields.forEach(key=>{el(key).value=data.order[key];});if(!await prepareClient(data.order.client_id,data.delivery,version))return;
-  el('pi_reference').readOnly=true;
+  el('pi_reference').readOnly=!canEditPIReference;
   el('detail').hidden=true;el('formTitle').textContent='Edit order';el('referenceHint').textContent=data.order.reference;el('editor').hidden=false;resetComposer();el('editor').scrollIntoView({behavior:'smooth'});
 }
 el('orderForm').onsubmit=async event=>{
@@ -610,6 +611,7 @@ el('piForm').onsubmit=async event=>{
   }finally{updatePiReadiness();}
 };
 (async()=>{try{
+  const me=await api('/api/me');canEditPIReference=['admin','manager','sales_tl'].includes(me.role);
   if(enquiryScope){const e=(await api(`/api/enquiries/${enquiryScope}`)).enquiry;el('context').textContent=`Orders for ${e.reference} / ${e.client_name}`;el('newOrder').hidden=!e.can_edit||!e.client_active;}
   else if(clientScope){const c=(await api(`/api/leads/${clientScope}`)).lead;el('context').textContent=`Orders for ${c.name}`;el('newOrder').hidden=!c.can_edit||!c.is_active;}
   if(!clientScope)el('newOrder').hidden=true;

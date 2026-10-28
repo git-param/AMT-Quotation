@@ -1145,8 +1145,7 @@ body.embedded #detail {
   min-width: 0;
 }
 .pi-header-box {
-  border: 1.5px solid #000;
-  border-bottom: 0;
+  border: 0;
 }
 .pi-branding {
   height: auto;
@@ -1157,15 +1156,14 @@ body.embedded #detail {
   height: auto;
 }
 .pi-header-box .pi-grid-header {
-  border-left: 0;
-  border-right: 0;
-  border-top: 0;
+  border: 1.5px solid #000;
 }
-.pi-header-box .pi-grid-header td:first-child {
-  border-left: 0;
+.pi-header-box .pi-grid-title {
+  border: 0;
 }
-.pi-header-box .pi-grid-header td:last-child {
-  border-right: 0;
+.pi-header-box .pi-grid-title td {
+  border: 0;
+  padding: 3px 0 6px;
 }
 .pi-company-grid td.pi-border-top {
   border-top: 1px solid #000;
@@ -1200,13 +1198,14 @@ body.embedded #detail {
   width: 36%;
 }
 .pi-footer-box {
-  border: 1.5px solid #000;
-  border-top: 0;
+  border: 0;
 }
 .pi-paper .pi-footer-box .pi-signatures {
   margin: 0;
   padding: 7px 8px;
   gap: 10px;
+  border: 1.5px solid #000;
+  border-bottom: 0;
 }
 .pi-paper .pi-footer-box .pi-signatures img:first-child {
   width: 46%;
@@ -1220,17 +1219,21 @@ body.embedded #detail {
   width: 100%;
   height: auto;
   padding: 6px;
-  border-top: 1px solid #000;
 }
 .pi-legal-notice {
   padding: 5px 8px;
-  border-top: 1px solid #000;
   color: #333;
   font-family: Cambria, Cochin, Georgia, serif;
   font-size: 8pt;
   line-height: 1.25;
   text-align: center;
   white-space: pre-line;
+}
+.pi-footer-box:not(:has(.pi-shipping-notice)) .pi-signatures {
+  border-bottom: 1.5px solid #000;
+}
+.pi-footer-box:has(.pi-shipping-notice) .pi-shipping-notice {
+  border-bottom-width: 1.5px;
 }
 /* Single-page order composer: a quiet canvas, clear cards and confident accents. */
 #editor.order-composer {
