@@ -95,7 +95,7 @@ def pdf(doc):
         face=bold if is_bold else regular
         if cell.get('annexure'):
             face=annex_bold if is_bold else annex_regular
-            size=(8 if kind=='annexure_title' else 12)*annexure_scale
+            size=12*annexure_scale
             if kind=='annexure_title':face='Helvetica-Bold'
         if cell.get('total_cell'):alignment=1
         if cell.get('nowrap'):
@@ -178,11 +178,11 @@ def pdf(doc):
             table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),
                 ('LEFTPADDING',(0,0),(-1,-1),3),('RIGHTPADDING',(0,0),(-1,-1),3),
                 ('TOPPADDING',(0,0),(-1,-1),1.5),('BOTTOMPADDING',(0,0),(-1,-1),1.5),
-                *section_borders(section['name']),*commands,*total_commands,
+                *[rule for rule in section_borders(section['name'])
+                  if not (section['name']=='annexure' and rule[0]=='LINEABOVE')],*commands,*total_commands,
                 *([('LINEBELOW',(0,0),(-1,0),.6,colors.black)] if section['name']=='items' else []),
                 *([('LINEABOVE',(0,-1),(-1,-1),.6,colors.black)] if section['name']=='bank' else []),
-                *([('LINEABOVE',(0,0),(-1,0),1.2,colors.black),
-                   ('LINEBEFORE',(0,0),(0,-1),1.2,colors.black),
+                *([('LINEBEFORE',(0,0),(0,-1),1.2,colors.black),
                    ('LINEAFTER',(-1,0),(-1,-1),1.2,colors.black)] if section['name']=='annexure' else [])]))
             story.append(table)
     append_sections([section for section in model['sections'] if not section.get('annexure')])
@@ -295,7 +295,7 @@ def xlsx(doc):
                     single_item_cell=section['name']=='items' and index>0 and len(section['rows'])==2
                     center_money='amount' in cell['style']
                     center_cell=bool(cell.get('center') or cell.get('free'))
-                    key=(cell['style'],top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False),single_item_cell,center_money,center_cell)
+                    key=(cell['style'],col,end,section['name']=='header' and index==0,top,bottom,cell.get('open_left',False),cell.get('open_right',False),cell.get('bottom_aligned',False),single_item_cell,center_money,center_cell)
                     if key not in formats:
                         style_values={**format_values[cell['style']],'top':(2 if section['name']=='header' and index==0 else 1) if top else 0,'bottom':1 if bottom else 0,
                             'left':0 if section['name']=='title' or cell.get('open_left') else 2 if col==0 else 1,
@@ -405,7 +405,7 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row, legal_notice)
             if kind in ('head','center','bold_center','annexure_title'):
                 options['align']='center'
             if kind=='annexure_title':
-                options.update(font_name='Arial',font_size=8,valign='bottom')
+                options.update(font_name='Arial',font_size=12,valign='vcenter',top=0)
             if cell.get('accounting'):
                 options.update(num_format='"'+symbol+'" #,##0.00',align='center')
             if cell.get('total_cell'):

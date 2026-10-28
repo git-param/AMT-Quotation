@@ -533,7 +533,7 @@ def xlsx(doc):
                     right=0 if section['name']=='title' or cell.get('open_right') else 2 if end==10 else 1
                     center_money='amount' in cell['style']
                     center_cell=bool(cell.get('center') or cell.get('free'))
-                    key=(cell['style'],top,bottom,left,right,cell.get('bottom_aligned',False),center_money,center_cell)
+                    key=(cell['style'],section['name']=='header' and index==0,top,bottom,left,right,cell.get('bottom_aligned',False),center_money,center_cell)
                     if key not in formats:
                         style_values={**format_values[cell['style']],'top':(2 if section['name']=='header' and index==0 else 1) if top else 0,'bottom':1 if bottom else 0,
                             'left':left,'right':right}
