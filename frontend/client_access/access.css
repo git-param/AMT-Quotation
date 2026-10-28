@@ -1,31 +1,164 @@
-/* Client Access — uses the shared tokens and components from manager.css */
-.access-wrap{max-width:1100px}
-#content>.panel+.panel{margin-top:20px}
+/* ==========================================================
+   Client Access – redesigned stylesheet (loads after manager.css)
+   Change --ac-accent / --ac-accent-2 below to re-theme the page.
+   --ac-hdr = height of the top header bar (used to fit the page to the screen).
+   ========================================================== */
+:root{
+  --ac-accent:#2563eb;
+  --ac-accent-2:#4f46e5;
+  --ac-accent-dark:#1d4ed8;
+  --ac-accent-soft:#eef4ff;
+  --ac-accent-ink:#1e40af;
+  --ac-accent-ring:rgba(37,99,235,.32);
 
-/* One-row grant form */
-.access-bar{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px;align-items:end}
-.access-bar .f-owner{grid-column:span 4}
-.access-bar .f-client{grid-column:span 8}
-.access-bar .f-exec{grid-column:span 5}
-.access-bar .f-level{grid-column:span 4}
-.access-bar .btn-sm{grid-column:span 3;min-height:40px}
+  --ac-ink:#0f1b34;
+  --ac-ink-2:#334460;
+  --ac-muted:#64748b;
+  --ac-faint:#8a98ad;
+  --ac-line:#e2e8f0;
+  --ac-line-soft:#eef2f7;
+  --ac-surface:#ffffff;
+  --ac-surface-2:#f8fafc;
+  --ac-bg:#f1f4fa;
+  --ac-ok-soft:#ecfdf3;
+  --ac-ok:#166534;
+  --ac-err-soft:#fff1f2;
+  --ac-err:#9f1239;
 
-/* Panel heading with an action on the right */
-.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
-.panel-head h2.panel-title{margin:0}
+  --ac-radius:14px;
+  --ac-shadow:0 1px 2px rgba(15,27,52,.05),0 8px 26px rgba(15,27,52,.06);
+  --ac-ctl:40px;
+  --ac-hdr:62px;
+}
 
-/* Status message */
-#message{margin-bottom:16px}
-#message:not(:empty){padding:11px 16px;border-radius:12px;font-size:13px;font-weight:600;background:var(--ok-soft);color:#166534}
-#message.error:not(:empty){background:var(--err-soft);color:#9F1239}
-
+[hidden]{display:none!important}
+body{background:var(--ac-bg)}
 .hdr h1.hdr-logo{font-size:17px}
 
-@media(max-width:850px){
-  .access-bar .f-owner,.access-bar .f-client{grid-column:1/-1}
-  .access-bar .f-exec,.access-bar .f-level{grid-column:span 6}
+/* ---------- Focus & motion ---------- */
+.access-wrap :is(input,select,button,a):focus-visible,
+.access-wrap .table-scroll:focus-visible{outline:3px solid var(--ac-accent-ring);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
+
+/* ---------- Page shell ---------- */
+main.access-wrap{max-width:1560px;margin:0 auto;padding:18px 24px 32px;display:flex;flex-direction:column}
+
+/* Status message */
+#message{margin:0}
+#message:not(:empty){margin-bottom:14px;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:600;background:var(--ac-ok-soft);color:var(--ac-ok);border:1px solid #bbf0cf}
+#message.error:not(:empty){background:var(--ac-err-soft);color:var(--ac-err);border-color:#fbcdd5}
+
+/* ---------- Layout: share form on the left, tables on the right ---------- */
+#content{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:16px;align-items:start}
+.access-side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.access-main{display:grid;grid-template-rows:minmax(0,3fr) minmax(0,2fr);gap:16px;min-width:0;min-height:0}
+
+.access-wrap .panel.access-card{margin:0;padding:0;background:var(--ac-surface);border:1px solid var(--ac-line);border-radius:var(--ac-radius);box-shadow:var(--ac-shadow);overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.access-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px 14px;background:linear-gradient(180deg,#fafbff,var(--ac-surface))}
+.access-card-head h2.panel-title{margin:0;font-size:16px;font-weight:700;letter-spacing:-.01em;color:var(--ac-ink)}
+.access-card-head p{margin:3px 0 0;font-size:12.5px;line-height:1.5;color:var(--ac-muted)}
+
+/* ---------- Share form as a numbered flow ---------- */
+.access-form-body{padding:4px 20px 20px}
+.access-bar{display:flex;flex-direction:column;gap:0;counter-reset:step}
+.access-bar .form-field{position:relative;margin:0;padding:0 0 18px 44px;display:flex;flex-direction:column;gap:6px;counter-increment:step;min-width:0}
+.access-bar .form-field::before{content:counter(step);position:absolute;left:0;top:0;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--ac-accent),var(--ac-accent-2));box-shadow:0 3px 8px var(--ac-accent-ring)}
+.access-bar .form-field::after{content:"";position:absolute;left:14px;top:34px;bottom:4px;width:2px;border-radius:2px;background:linear-gradient(180deg,var(--ac-accent-ring),transparent)}
+.access-bar .form-field.f-level{padding-bottom:20px}
+.access-bar .form-field.f-level::after{display:none}
+.access-bar label{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ac-ink-2)}
+.access-bar select{width:100%;min-width:0;height:var(--ac-ctl);padding:0 12px;border:1px solid #cbd5e1;border-radius:10px;background:var(--ac-surface);font:inherit;font-size:13px;color:var(--ac-ink)}
+.access-bar select:focus-visible{border-color:var(--ac-accent)}
+.access-hint{display:block;font-size:12px;line-height:1.45;color:var(--ac-faint)}
+.access-bar .btn-sm{width:100%;min-height:calc(var(--ac-ctl) + 4px);border:0;border-radius:10px;background:linear-gradient(135deg,var(--ac-accent),var(--ac-accent-2));color:#fff;font:inherit;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 6px 16px var(--ac-accent-ring);transition:filter .15s,transform .05s}
+.access-bar .btn-sm:hover:not(:disabled){filter:brightness(1.07)}
+.access-bar .btn-sm:active:not(:disabled){transform:translateY(1px)}
+.access-bar .btn-sm:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+
+/* Legend card */
+.access-legend{padding:16px 20px 18px}
+.access-legend h3{margin:0 0 10px;font-size:13px;font-weight:700;color:var(--ac-ink)}
+.access-legend ul{margin:0;padding:0;list-style:none;display:grid;gap:8px;font-size:12.5px;line-height:1.5;color:var(--ac-muted)}
+.access-legend b{display:inline-block;min-width:52px;margin-right:6px;padding:2px 8px;border-radius:999px;background:var(--ac-accent-soft);border:1px solid #d6e3fc;color:var(--ac-accent-ink);font-size:11px;font-weight:700;text-align:center}
+
+/* ---------- Tables (scroll inside each card) ---------- */
+.access-wrap .refresh-btn{min-height:var(--ac-ctl);padding:0 16px;border:1px solid #d5deeb;border-radius:10px;background:var(--ac-surface);color:var(--ac-ink-2);font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.access-wrap .refresh-btn:hover:not(:disabled){background:var(--ac-accent-soft);border-color:#b9cdf8;color:var(--ac-accent-dark)}
+.access-wrap .table-scroll{flex:1 1 auto;min-height:0;margin:0;overflow:auto;overscroll-behavior:contain;border:0;border-top:1px solid var(--ac-line);border-radius:0;background:var(--ac-surface);scrollbar-width:thin;scrollbar-color:#bcc8da transparent}
+.access-wrap .table-scroll::-webkit-scrollbar{width:10px;height:10px}
+.access-wrap .table-scroll::-webkit-scrollbar-thumb{background:#c5cfde;border-radius:8px;border:2px solid var(--ac-surface)}
+.access-wrap .tbl{width:100%;min-width:640px;border-collapse:separate;border-spacing:0;text-align:left}
+.access-wrap .access-history .tbl{min-width:560px}
+.access-wrap .tbl th{position:sticky;top:0;z-index:2;padding:10px 18px;background:var(--ac-surface-2);border-bottom:1px solid var(--ac-line);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ac-muted);white-space:nowrap;text-align:left}
+.access-wrap .tbl td{padding:11px 18px;border-bottom:1px solid var(--ac-line-soft);font-size:13px;line-height:1.5;color:var(--ac-ink-2);vertical-align:middle}
+.access-wrap .tbl tbody tr:nth-child(even) td{background:#fbfcfe}
+.access-wrap .tbl tbody tr:hover td{background:var(--ac-accent-soft)}
+.access-wrap .tbl tbody tr:last-child td{border-bottom:0}
+.access-wrap .tbl td.account-name{font-weight:700;color:var(--ac-ink)}
+.access-wrap .tbl td.muted-sm{font-size:12px;color:var(--ac-muted);white-space:nowrap}
+.access-wrap .tbl td.empty{padding:36px 18px;text-align:center;color:var(--ac-muted)}
+.access-wrap .tbl .role-select{min-height:36px;padding:0 10px;border:1px solid #cbd5e1;border-radius:9px;background:var(--ac-surface);font:inherit;font-size:12px;font-weight:600;color:var(--ac-ink)}
+.access-wrap .tbl .btn-del{min-height:36px;padding:0 14px;border:1px solid #f3b9c4;border-radius:9px;background:var(--ac-surface);color:#be123c;font:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s}
+.access-wrap .tbl .btn-del:hover:not(:disabled){background:#ffe4e8}
+.access-wrap .tbl .btn-del:disabled,.access-wrap .tbl .role-select:disabled{opacity:.5;cursor:not-allowed}
+
+/* ==========================================================
+   Desktop: fit the page to the screen, scroll inside the cards
+   ========================================================== */
+@media(min-width:1000px) and (min-height:620px){
+  main.access-wrap{height:calc(100dvh - var(--ac-hdr));padding-bottom:18px;overflow:hidden}
+  #content{flex:1 1 auto;min-height:0;align-items:stretch}
+  .access-side{overflow:auto;min-height:0}
+  .access-main .access-card{height:100%}
+}
+@media(min-width:1000px) and (max-height:760px){
+  .access-bar .form-field{padding-bottom:12px}
+  .access-hint{display:none}
+  .access-legend{display:none}
+}
+
+/* ---------- Stacked (tablet / short screens) ---------- */
+@media(max-width:999px),(max-height:619px){
+  #content{grid-template-columns:minmax(0,1fr)}
+  .access-main{grid-template-rows:none}
+  .access-main .table-scroll{max-height:min(60dvh,520px)}
+  .access-bar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px}
   .access-bar .btn-sm{grid-column:1/-1}
 }
-@media(max-width:560px){
-  .access-bar .f-exec,.access-bar .f-level{grid-column:1/-1}
+
+/* ---------- Mobile: 44px targets, rows become cards ---------- */
+@media(max-width:700px),(pointer:coarse){
+  :root{--ac-ctl:44px}
+  .access-wrap .tbl .role-select,.access-wrap .tbl .btn-del{min-height:44px}
+}
+@media(max-width:700px){
+  main.access-wrap{padding:14px 12px 28px}
+  .access-bar{display:flex}
+  .access-card-head{padding:14px 16px 12px}
+  .access-form-body{padding:4px 16px 18px}
+  .access-main .table-scroll{max-height:68dvh;padding:10px;background:var(--ac-surface-2)}
+
+  .access-card .tbl{min-width:0}
+  .access-card .tbl :is(tbody,tr,td){display:block;width:100%}
+  .access-card .tbl,.access-card .tbl thead{display:block}
+  .access-card .tbl thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+  .access-card .tbl tbody tr{margin:0 0 10px;padding:10px 14px;background:var(--ac-surface);border:1px solid var(--ac-line);border-left:4px solid var(--ac-accent);border-radius:12px}
+  .access-card .tbl tbody tr:hover td,.access-card .tbl tbody tr:nth-child(even) td{background:transparent}
+  .access-wrap .access-card .tbl td{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;border:0;text-align:right;white-space:normal}
+  .access-card .tbl td::before{flex:none;color:var(--ac-muted);font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;text-align:left}
+  .access-wrap .access-card .tbl td:first-child{justify-content:flex-start;padding-bottom:8px;margin-bottom:2px;border-bottom:1px solid var(--ac-line-soft);font-size:15px;text-align:left}
+  #shares td:nth-child(2)::before{content:"Status"}
+  #shares td:nth-child(3)::before{content:"Access"}
+  #shares td:nth-child(4)::before{content:"Granted"}
+  #shares td:nth-child(5)::before{content:"Revoked"}
+  #shares td:nth-child(6)::before{content:"Action"}
+  #events td:nth-child(2)::before{content:"Executive"}
+  #events td:nth-child(3)::before{content:"Change"}
+  #events td:nth-child(4)::before{content:"By"}
+  #events td:nth-child(5)::before{content:"When"}
+  .access-wrap .access-card .tbl td.empty{display:block;text-align:center;padding:26px 8px}
+  .access-card .tbl td.empty::before{content:none}
+  .access-wrap .tbl td.muted-sm{white-space:normal}
 }

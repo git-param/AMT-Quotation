@@ -7,3 +7,6 @@ database/*.db-*
 .env
 __init__.py
 .verification/
+
+# Shared PI generation lock files must retain their inode across requests.
+*.pi-generation.lock

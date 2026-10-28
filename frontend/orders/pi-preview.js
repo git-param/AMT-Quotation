@@ -216,14 +216,14 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     render();
   }
   async function run(callback){
-    if(busy)return;busy=true;
+    if(busy)return;busy=true;host.setAttribute('aria-busy','true');
     toolbar.querySelectorAll('button').forEach(button=>button.disabled=true);
     try{await callback();}catch(error){status.textContent=error.message;status.classList.add('error');status.focus();window.skuFeedback?.show(error.message,true);}
-    finally{busy=false;toolbar.querySelectorAll('button').forEach(button=>button.disabled=false);}
+    finally{busy=false;host.setAttribute('aria-busy','false');status.classList.remove('is-generating');toolbar.querySelectorAll('button').forEach(button=>button.disabled=false);}
   }
   function button(label,callback,primary=false){
     const control=node('button',label,'btn-sm'+(primary?' btn-add':''));control.type='button';
-    control.onclick=()=>run(callback);toolbar.append(control);
+    control.disabled=busy;control.onclick=()=>run(callback);toolbar.append(control);
   }
   function render(){
     if(calculationTimer)clearTimeout(calculationTimer);calculationVersion++;calculated=[];
@@ -248,10 +248,31 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
     }
     for(const format of ['xlsx','pdf'])button('Generate '+format.toUpperCase(),async()=>{
       contactWarnings(true);
-      if(!issued){await save(true);issued=await api(state.base.replace('/preview','/issue'),json('POST',{preview_id:state.preview_id}));await onIssued(issued);render();}
+      if(!issued){
+        await save(true);
+        const previewId=state.preview_id, issueUrl=state.base.replace('/preview','/issue');
+        status.classList.add('is-generating');
+        status.textContent='Generating PI… Confirming its number and preparing PDF and Excel.';
+        let result=await api(issueUrl,json('POST',{preview_id:previewId}));
+        while(result.status==='waiting'){
+          status.textContent=result.message||'Another PI is being generated. Waiting for it to finish…';
+          await new Promise(resolve=>setTimeout(resolve,result.retry_after_ms||1000));
+          if(!state||state.preview_id!==previewId)return;
+          result=await api(issueUrl,json('POST',{preview_id:previewId}));
+        }
+        issued=result;
+        state.document.reference=result.reference;
+        state.document.order.pi_reference=result.reference;
+        state.document.reference_pending=false;
+        for(const section of state.layout.sections)for(const row of section.rows)for(const cell of row){
+          if(cell.field==='order.pi_reference'){cell.value=result.reference;cell.text=result.reference;}
+        }
+        clearPrintUrl();
+        await onIssued(issued);render();
+      }
       await window.downloadPiFile(issued[format+'_url'],issued[format+'_filename']);
     },true);
-    status=node('p',issued?'PI '+issued.reference+' issued. Both downloads use this saved invoice.':'Edit fields directly below, then review the PDF print preview. Changes apply to this PI only.','pi-preview-status');
+    status=node('p',issued?'PI '+issued.reference+' issued. Both downloads use this saved invoice.':state.document.reference_pending?'Preview only — the PI number is assigned when Generate PDF or Generate XLSX succeeds.':'Edit fields directly below, then review the PDF print preview. Changes apply to this PI only.','pi-preview-status');
     status.role='status';status.tabIndex=-1;host.append(status);
     const scroll=node('div',undefined,'pi-paper-scroll');paper=node('article',undefined,'pi-paper');scroll.append(paper);host.append(scroll);
     printFrame=node('iframe');printFrame.title='Exact PI PDF print preview';printFrame.className='pi-print-frame';printFrame.hidden=true;host.append(printFrame);
@@ -323,7 +344,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
             const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.free ? 'Free' : cell.value, cell.field, cell.multiline, cell.free ? 'text' : cell.type || "text");
             if(cell.calculated)calculated.push({path:cell.calculated,input,autoQuantity:cell.auto_quantity});
             if(cell.auto_quantity){input.maxLength=200;input.title='Edit the displayed total quantity. Clear to restore the automatic total.';}
-            if (cell.readonly) { input.readOnly = true; input.title = cell.field==='order.pi_reference'?'Only managers and Sales TLs can edit the PI number.':cell.field==='order.delivery_terms'?'Delivery terms are fixed at DAP.':cell.field?.endsWith('.line_total')?'Calculated after discount. Edit quantity or unit price to change this amount.':cell.field?.startsWith('lines.')?'Lookup SKU details can only be edited by Admins and Sales TLs.':'Shared HSN code managed in Configuration'; }
+            if (cell.readonly) { input.readOnly = true; input.title = cell.field==='order.pi_reference'?'The PI number is confirmed from the database when you generate PDF or Excel.':cell.field==='order.delivery_terms'?'Delivery terms are fixed at DAP.':cell.field?.endsWith('.line_total')?'Calculated after discount. Edit quantity or unit price to change this amount.':cell.field?.startsWith('lines.')?'Lookup SKU details can only be edited by Admins and Sales TLs.':'Shared HSN code managed in Configuration'; }
             if (!cell.label && !amount) td.lastChild.classList.add("pi-unlabelled");
             if (cell.editor_rows) input.rows = 12;
             else if (cell.multiline) input.rows = cell.field.startsWith("delivery.") ? 5 : 2;

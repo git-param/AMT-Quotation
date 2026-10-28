@@ -22,6 +22,7 @@ from flask import jsonify, request, send_file
 from backend.common.auth import authenticated_required, get_current_user
 from backend.database import get_db
 from backend.settings import allocate_pi_reference
+from backend.scalability.pi_generation import serialized_generation
 from backend.security.audit import record_action
 from backend.enquiries.lines import number
 from backend.common.currencies import CURRENCIES, UNITS
@@ -423,6 +424,7 @@ def render(raw, sheet, first, state, totals, reference, issued, prepared_by):
 
 @bp.route('/api/orders/<int:order_id>/invoices', methods=['POST'])
 @authenticated_required
+@serialized_generation
 def generate_invoice(order_id):
     connection = get_db()
     try:
@@ -440,6 +442,8 @@ def generate_invoice(order_id):
         if order['status'] == 'cancelled':
             raise ValueError('Cancelled orders cannot generate a PI.')
         generated_reference = allocate_pi_reference(connection, user['id'])
+        if connection.execute('SELECT 1 FROM order_invoices WHERE reference=?',(generated_reference,)).fetchone():
+            raise ValueError('This PI number already exists. Ask an admin to check the PI number sequence.')
         order = dict(order)
         order['pi_reference'] = generated_reference
         state = details(connection, order)

@@ -3032,3 +3032,28 @@ body.embedded #orderForm .consignee-editor textarea {
 .pi-grid-bank tr:first-child td:first-child {
   border-top: 1.5px solid #000;
 }
+
+.pi-preview-status.is-generating {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e40af;
+}
+.pi-preview-status.is-generating::before {
+  content: '';
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #bfdbfe;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: pi-generation-spin 0.8s linear infinite;
+}
+@keyframes pi-generation-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .pi-preview-status.is-generating::before { animation: none; }
+}

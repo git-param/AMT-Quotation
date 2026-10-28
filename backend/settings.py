@@ -168,18 +168,24 @@ def pi_number_last_used(connection):
     return int(row[0]) if row and str(row[0]).isdigit() else 0
 
 
-def allocate_pi_reference(connection, user_id):
-    """Reserve the next global PI number; caller must hold a write transaction."""
-    number = pi_number_last_used(connection) + 1
-    if number > 2_000_000_000:
+def next_pi_reference(connection, user_id):
+    """Read a candidate without reserving or consuming it."""
+    number=pi_number_last_used(connection)+1
+    if number>2_000_000_000:
         raise ValueError('The PI number sequence has reached its maximum value.')
+    prefix=user_pi_defaults(connection,user_id)['pi_prefix']
+    return f'{prefix}/{number}' if prefix else str(number)
+
+
+def allocate_pi_reference(connection, user_id):
+    """Confirm the next number in the transaction that stores the generated PI."""
+    reference=next_pi_reference(connection,user_id)
+    number=pi_number_last_used(connection)+1
     connection.execute(
         'INSERT INTO app_settings(key,value) VALUES(?,?) '
         'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
-        (PI_NUMBER_SETTING, str(number)),
-    )
-    prefix = user_pi_defaults(connection, user_id)['pi_prefix']
-    return f'{prefix}/{number}' if prefix else str(number)
+        (PI_NUMBER_SETTING,str(number)))
+    return reference
 
 
 @bp.route('/api/pi-number-counter', methods=['GET', 'PUT'])

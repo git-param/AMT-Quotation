@@ -213,7 +213,7 @@ def edit(document, edits, *, allow_pi_reference=False):
             raise ValueError('Invalid PI commercial fields.')
         validated = header(edits['order'],doc['order'])
         if validated['pi_reference'] != doc['order']['pi_reference'] and not allow_pi_reference:
-            raise ValueError('Only managers and Sales TLs can edit the PI number.')
+            raise ValueError('The PI number is assigned from the database when you generate PDF or Excel.')
         for key in ORDER_FIELDS:
             doc['order'][key] = validated[key]
         if not doc['order']['pi_reference']:
@@ -324,7 +324,7 @@ def print_document(document, edits, *, allow_pi_reference=False):
     if isinstance(edits.get('order'),dict):
         if (edits['order'].get('pi_reference',doc['order']['pi_reference']) != doc['order']['pi_reference']
                 and not allow_pi_reference):
-            raise ValueError('Only managers and Sales TLs can edit the PI number.')
+            raise ValueError('The PI number is assigned from the database when you generate PDF or Excel.')
         for key in ORDER_FIELDS:
             if isinstance(edits['order'].get(key),str):doc['order'][key]=edits['order'][key][:5000]
         doc['reference']=doc['order']['pi_reference']

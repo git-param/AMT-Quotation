@@ -58,3 +58,11 @@ Python verification: 21 migration tests passed; new tests confirmed WAL/busy tim
 - Shopify SKU caching is in process memory and does not coordinate across multiple web processes. Shopify API throttling may limit lookup throughput.
 - Invoice PDF/XLSX bytes are still stored as SQLite BLOBs. Move them to shared object storage when database growth or backup duration becomes a problem.
 - Multi-host web scaling requires a shared database such as PostgreSQL, a shared cache, and coordinated background jobs. This version is designed for one application host.
+
+
+PI generation now uses a process-shared file lock per database (see
+`backend/scalability/pi_generation.py`). Competing native/legacy generation
+requests receive HTTP 202 and the native preview waits/retries with a loading
+indicator. Preview operations do not allocate PI numbers. Native issuance reads
+a candidate under the generation gate, renders without a SQLite writer lock,
+then rechecks and atomically confirms the counter with both stored files.

@@ -633,12 +633,15 @@ function appendInvoice(invoice,id){
 }
 const invoicePreview=window.createPiPreview(el('piPreview'),api,json,async result=>{
   appendInvoice({...result,currency:el('piCurrency').value,workbook_format:'xlsx',has_pdf:true},current.order.id);
+  current.order.pi_reference=result.reference;el('pi_reference').value=result.reference;
   current.order.status=result.order_status||'completed';updateOrderStatusUI(current.order);
   el('detailAccess').textContent=`${current.order.status==='completed'?'Complete':'Pending'} / ${current.order.currency} / Editable`;
   await load();message(`PI ${result.reference} generated. ${current.order.status==='completed'?'PI marked complete.':'PI remains pending.'} Excel and PDF are ready.`);
 },doc=>{
-  if(current)current.order.pi_reference=doc.reference;
-  el('pi_reference').value=doc.reference;
+  if(!doc.reference_pending){
+    if(current)current.order.pi_reference=doc.reference;
+    el('pi_reference').value=doc.reference;
+  }
   if(doc.pi_format==='bulk')el('bulkDescription').value=doc.bulk_description;
 },async()=>{
   if(current)await showDetails(current.order.id);

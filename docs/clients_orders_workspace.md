@@ -136,8 +136,8 @@ Existing explicit international numbers remain editable and are preserved.
 Calling-code mappings follow the ITU E.164 country-code list:
 https://www.itu.int/dms_pub/itu-t/opb/sp/T-SP-E.164D-2016-PDF-E.pdf
 
-Before PDF print preview, generation or download, consignee country, complete
-PI number and purchase order number remain mandatory. Missing Tel/Phone, PIC
+Consignee country and the purchase order number are required for generation.
+New previews show `PI-PENDING`; a PI number is confirmed only when generating PDF/Excel. Missing Tel/Phone, PIC
 and Email produce a bottom-right warning and individual red `*required` labels
 in the editor and in generated PDF/Excel files, but generation can continue.
 Missing GST receives this warning and printed marker only for INR. Editor labels
@@ -309,3 +309,28 @@ print and issue paths enforce the policy. Existing issued documents remain
 available as historical snapshots. Rejected over-limit attempts are recorded as
 `discount_limit_exceeded` after rollback and highlighted light red in Audit Logs.
 Only admins can change the limit, and those setting changes are audited too.
+
+
+### PI numbering and generation serialization
+
+Opening, updating, calculating, printing, or closing a preview does not increment
+the PI counter or write a provisional number to the order. A new preview shows
+`PI-PENDING`. Clicking Generate PDF or Generate XLSX reads the current next
+number and generator department prefix from the database. The same confirmed
+reference is written into both files, the invoice snapshot, preview and order.
+The counter advances only in the transaction that stores both successfully
+rendered files. Rendering or commit failure does not consume a number.
+
+Native and legacy generation share a per-database filesystem lock, covering
+threads and worker processes on this application's single-host SQLite deployment.
+A busy generator returns HTTP 202 with `status: waiting`; the preview keeps its
+loading indicator and disabled controls while retrying. The operating system
+releases the lock on worker exit. Keep the `.pi-generation.lock` file in place;
+file existence does not indicate that generation is active.
+
+PDF/Excel rendering runs outside the SQLite writer transaction, so unrelated
+writes remain available. Before committing, generation rechecks access, source
+state, the discount policy, counter and department prefix. A configuration or
+source change rejects the stale generation without saving mismatched files.
+Retries of the same issued preview and downloads reuse its confirmed invoice.
+Editing an existing saved invoice retains that invoice's confirmed reference.

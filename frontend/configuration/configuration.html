@@ -23,7 +23,7 @@
   <div class="settings-note"><span aria-hidden="true">i</span><p>Applies to order items and new PI previews. Existing previews and issued invoices keep their saved code.</p></div>
 </section>
 <section class="panel settings-card" id="piNumberCounterSection" hidden aria-labelledby="piNumberCounterTitle">
-  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true">№</span><div><h2 id="piNumberCounterTitle">PI number sequence</h2><p>Set the last number used. Each new PI preview reserves the next number with its generator’s department prefix.</p></div></div>
+  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true">№</span><div><h2 id="piNumberCounterTitle">PI number sequence</h2><p>Set the last number used. Each successfully generated PI confirms the next number with its generator’s department prefix.</p></div></div>
   <form id="piNumberCounterForm">
     <div class="settings-input-row"><div class="form-field"><label for="piNumberLastUsed">Last PI number used</label><input id="piNumberLastUsed" type="number" min="0" max="2000000000" step="1" required aria-describedby="piNumberCounterHint"></div><button id="savePiNumberCounter" class="btn-sm btn-add" type="submit">Save PI number</button></div>
     <p id="piNumberCounterHint" class="field-hint">For example, enter 100 and the next PI will use 101. The sequence is shared across departments.</p>

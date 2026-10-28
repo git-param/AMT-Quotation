@@ -16,7 +16,8 @@ from backend.orders.pi_document import prepare,edit,validate_ready,validate_pdf_
 from backend.orders import pi_exports
 from backend.orders.pi_layout import layout
 from backend.orders.filenames import invoice_filename
-from backend.settings import allocate_pi_reference
+from backend.settings import allocate_pi_reference, next_pi_reference, pi_number_last_used
+from backend.scalability.pi_generation import serialized_generation
 from backend.security.audit import record_action
 from backend.scalability.pi_render import files as render_invoice_files
 
@@ -42,7 +43,8 @@ def authorized(connection,order_id):
 
 
 def can_edit_pi_reference(user):
-    return True
+    """Generation confirms PI identity; preview edits cannot change it."""
+    return False
 
 
 def preview_layout(document,user):
@@ -82,7 +84,7 @@ def persist_order_edits(connection, order_id, user, order, previous, doc):
     order_changes = {key:doc['order'][key] for key in (
         'po_reference','pi_reference','payment_terms','delivery_terms','destination',
         'delivery_time','dispatch_method','notes')
-        if doc['order'][key] != previous['order'][key]}
+        if doc['order'][key] != previous['order'][key] and key!='pi_reference'}
     if doc['date'] != previous['date']:
         if not doc.get('source_invoice_id') and connection.execute(
                 'SELECT 1 FROM order_invoices WHERE order_id=? AND deleted_at IS NULL',
@@ -226,7 +228,6 @@ def save_preview(order_id,preview_id=None):
         if order['status']=='cancelled':raise ValueError('Cancelled orders cannot generate a PI.')
         original_updated_at=order['updated_at']
         original_document_json=None
-        needs_pi_number=False
         if preview_id:
             row=preview_row(connection,order_id,preview_id,user)
             if not row:return jsonify(error='PI preview not found.'),404
@@ -246,11 +247,12 @@ def save_preview(order_id,preview_id=None):
                     return jsonify(error='The order changed after this preview was opened. Open a new PI preview.'),409
         else:
             if set(data)-{'currency','usd_inr_rate','bulk_description'}:raise ValueError('Invalid PI preview fields.')
-            needs_pi_number=True
-            if not order['pi_reference']:
-                order=dict(order)
-                order['pi_reference']='PI-PENDING'
+            original_reference=order['pi_reference']
+            order=dict(order)
+            order['pi_reference']='PI-PENDING'
             doc=prepare(details(connection,order),user,data.get('currency'),data.get('usd_inr_rate'),data.get('bulk_description'))
+            doc['reference_pending']=True
+            doc['source_state']['order']['pi_reference']=original_reference
             preview_id=uuid4().hex
         # Validate the draft here; render only when the PDF is actually requested.
         missing = missing_details(doc)
@@ -278,28 +280,11 @@ def save_preview(order_id,preview_id=None):
                 return jsonify(error='This PI has already been issued. Open a new preview for further changes.'),409
             if row['document_json']!=original_document_json:
                 return jsonify(error='The PI preview changed while it was prepared. Review the latest preview and try again.'),409
-            if for_generation:
-                if doc['reference']!=order['pi_reference']:
-                    connection.execute("UPDATE client_orders SET pi_reference=?,updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
-                        (doc['reference'],user['id'],order_id))
-                    doc['source_updated_at']=connection.execute('SELECT updated_at FROM client_orders WHERE id=?',(order_id,)).fetchone()[0]
-                    doc['source_state']['order']['pi_reference']=doc['reference']
-                    record_revision(connection,order_id,user,'edit')
-            else:
+            if not for_generation:
                 persist_order_edits(connection,order_id,user,order,previous_doc,doc)
             connection.execute("UPDATE invoice_previews SET document_json=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
                                (json.dumps(doc),preview_id))
         else:
-            if needs_pi_number:
-                assigned_ref=allocate_pi_reference(connection,user['id'])
-                doc['reference']=assigned_ref
-                doc['order']['pi_reference']=assigned_ref
-                doc['source_state']['order']['pi_reference']=assigned_ref
-                connection.execute("UPDATE client_orders SET pi_reference=?,updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
-                    (assigned_ref,user['id'],order_id))
-                doc['source_updated_at']=connection.execute('SELECT updated_at FROM client_orders WHERE id=?',(order_id,)).fetchone()[0]
-                doc['source_state']['order']['updated_at']=doc['source_updated_at']
-                record_revision(connection,order_id,user,'edit')
             connection.execute('INSERT INTO invoice_previews(id,order_id,created_by,document_json) VALUES(?,?,?,?)',
                                (preview_id,order_id,user['id'],json.dumps(doc)))
         connection.commit()
@@ -381,12 +366,12 @@ def calculate_preview(order_id,preview_id):
 
 @bp.route('/api/orders/<int:order_id>/invoices/issue',methods=['POST'])
 @authenticated_required
+@serialized_generation
 def issue_preview(order_id):
     data=request.get_json(silent=True)
     if not isinstance(data,dict) or set(data)!={'preview_id'} or not isinstance(data['preview_id'],str):
         return validation_error(ValueError('Choose an existing PI preview.'))
     preview_id=data['preview_id']
-    # Reads and rendering do not occupy SQLite's single writer slot.
     connection=get_db()
     try:
         user,order,error=authorized(connection,order_id)
@@ -394,22 +379,36 @@ def issue_preview(order_id):
         row=preview_row(connection,order_id,preview_id,user)
         if not row:return jsonify(error='PI preview not found.'),404
         if order['status']=='cancelled':raise ValueError('Cancelled orders cannot generate a PI.')
-        invoice_id=row['issued_invoice_id']
         doc=json.loads(row['document_json'])
-        if invoice_id:return issued_response(connection,order_id,invoice_id,doc)
+        if row['issued_invoice_id']:
+            return issued_response(connection,order_id,row['issued_invoice_id'],doc)
         if order['updated_at']!=doc['source_updated_at']:
             return jsonify(error='The order changed after this preview was opened. Open a new PI preview.'),409
+        original_document_json=row['document_json']
+        source=doc.get('source_invoice_id')
+        counter=pi_number_last_used(connection)
+        if source:
+            invoice=connection.execute('SELECT reference FROM order_invoices WHERE id=? AND order_id=? AND deleted_at IS NULL',(source,order_id)).fetchone()
+            if not invoice:return jsonify(error='The saved PI is no longer available.'),409
+            reference=invoice['reference']
+        else:
+            reference=next_pi_reference(connection,user['id'])
+        doc['reference']=reference
+        doc['reference_pending']=False
+        doc['order']['pi_reference']=reference
+        doc['source_state']['order']['pi_reference']=reference
         from backend.orders.policy import check_document_discount
         check_document_discount(doc)
         validate_ready(doc)
-        document_json=row['document_json']
     except ValueError as error:return validation_error(error)
     finally:connection.close()
 
+    # The process-shared generation gate stays held, but rendering does not
+    # block unrelated database writes. No counter change exists to roll back.
     try:
         workbook,pdf=render_invoice_files(doc)
-    except ValueError as error:
-        return validation_error(error)
+    except ValueError as error:return validation_error(error)
+
     connection=get_db()
     try:
         connection.execute('BEGIN IMMEDIATE')
@@ -418,47 +417,38 @@ def issue_preview(order_id):
         row=preview_row(connection,order_id,preview_id,user)
         if not row:return jsonify(error='PI preview not found.'),404
         if order['status']=='cancelled':raise ValueError('Cancelled orders cannot generate a PI.')
-        invoice_id=row['issued_invoice_id']
-        if not invoice_id:
-            if row['document_json']!=document_json or order['updated_at']!=doc['source_updated_at']:
-                return jsonify(error='The order or PI preview changed while the files were prepared. Review the latest preview and try again.'),409
-            # The approved snapshot and both files commit atomically.
-            cursor=connection.execute('INSERT INTO order_invoices(order_id,reference,currency,snapshot_json,workbook,created_by,workbook_format,pdf) '
-                "VALUES(?,?,?,?,?,?,'xlsx',?)",(order_id,doc['reference'],doc['currency'],document_json,workbook,user['id'],pdf))
-            invoice_id=cursor.lastrowid
-            connection.execute('UPDATE invoice_previews SET issued_invoice_id=? WHERE id=?',(invoice_id,row['id']))
-            connection.execute("UPDATE client_orders SET pi_reference=?,pi_date=?,status='completed',updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
-                (doc['reference'],doc['date'],user['id'],order_id))
-            record_revision(connection,order_id,user,'edit')
-            record_action('pi_generate', 'order', order_id,
-                          {'invoice_id': invoice_id, 'reference': doc['reference'],
-                           'currency': doc['currency'], 'preview_id': row['id'],
-                           'formats': ['xlsx', 'pdf']}, actor=user,
-                          connection=connection)
+        if row['issued_invoice_id']:
+            return issued_response(connection,order_id,row['issued_invoice_id'],json.loads(row['document_json']))
+        if row['document_json']!=original_document_json or order['updated_at']!=doc['source_updated_at']:
+            return jsonify(error='The order or PI preview changed while the files were prepared. Review the latest preview and try again.'),409
+        check_document_discount(doc)
+        if source:
+            invoice=connection.execute('SELECT reference FROM order_invoices WHERE id=? AND order_id=? AND deleted_at IS NULL',(source,order_id)).fetchone()
+            if not invoice or invoice['reference']!=reference:
+                return jsonify(error='The saved PI changed while the files were prepared. Open a new preview.'),409
         else:
-            source = doc.get('source_invoice_id')
-            invoice = connection.execute(
-                'SELECT id FROM order_invoices WHERE id=? AND order_id=? AND deleted_at IS NULL',
-                (source, order_id)).fetchone()
-            if not invoice:
-                return jsonify(error='The saved PI is no longer available.'), 409
-            connection.execute(
-                'UPDATE order_invoices SET reference=?,currency=?,snapshot_json=?,workbook=?,pdf=? '
-                'WHERE id=?',
-                (doc['reference'], doc['currency'], document_json, workbook, pdf, source))
-            invoice_id = source
-            connection.execute('UPDATE invoice_previews SET issued_invoice_id=? WHERE id=?',
-                              (invoice_id, row['id']))
-            connection.execute(
-                "UPDATE client_orders SET pi_reference=?,pi_date=?,updated_by=?,"
-                "updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
-                (doc['reference'], doc['date'], user['id'], order_id))
-            record_revision(connection, order_id, user, 'edit')
-            record_action('pi_update', 'order', order_id,
-                          {'invoice_id': invoice_id, 'reference': doc['reference'],
-                          'currency': doc['currency'], 'preview_id': row['id'],
-                          'formats': ['xlsx', 'pdf']}, actor=user,
-                          connection=connection)
+            if pi_number_last_used(connection)!=counter or next_pi_reference(connection,user['id'])!=reference:
+                return jsonify(error='PI numbering configuration changed during generation. Generate the PI again.'),409
+            if connection.execute('SELECT 1 FROM order_invoices WHERE reference=?',(reference,)).fetchone():
+                return jsonify(error='This PI number already exists. Ask an admin to check the PI number sequence.'),409
+            confirmed=allocate_pi_reference(connection,user['id'])
+            if confirmed!=reference:raise ValueError('The PI number changed. Generate the PI again.')
+        document_json=json.dumps(doc)
+        if source:
+            connection.execute('UPDATE order_invoices SET reference=?,currency=?,snapshot_json=?,workbook=?,pdf=? WHERE id=?',
+                (reference,doc['currency'],document_json,workbook,pdf,source))
+            invoice_id=source
+        else:
+            cursor=connection.execute('INSERT INTO order_invoices(order_id,reference,currency,snapshot_json,workbook,created_by,workbook_format,pdf) '
+                "VALUES(?,?,?,?,?,?,'xlsx',?)",(order_id,reference,doc['currency'],document_json,workbook,user['id'],pdf))
+            invoice_id=cursor.lastrowid
+        connection.execute('UPDATE invoice_previews SET issued_invoice_id=?,document_json=? WHERE id=?',(invoice_id,document_json,row['id']))
+        connection.execute("UPDATE client_orders SET pi_reference=?,pi_date=?,status='completed',updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+            (reference,doc['date'],user['id'],order_id))
+        record_revision(connection,order_id,user,'edit')
+        record_action('pi_update' if source else 'pi_generate','order',order_id,
+            {'invoice_id':invoice_id,'reference':reference,'currency':doc['currency'],
+             'preview_id':row['id'],'formats':['xlsx','pdf']},actor=user,connection=connection)
         connection.commit()
         return issued_response(connection,order_id,invoice_id,doc)
     except ValueError as error:return validation_error(error)
