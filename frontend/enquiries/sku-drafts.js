@@ -126,7 +126,7 @@
         const control=document.createElement(key==='uom'?'select':key==='description'?'textarea':'input');
         if(!['description','uom'].includes(key))control.type=type;
         if(key==='uom')for(const unit of uoms){const option=document.createElement('option');option.value=unit;option.textContent=unit;control.append(option);}
-        control.value=row[key]||(key==='uom'?'PCs':'');control.required=row.included!==false&&(!commercial||!['hsn_code','item_condition'].includes(key));control.disabled=row.included===false;if(max)control.maxLength=max;
+        control.value=row[key]||(key==='uom'?'PCs':'');control.required=row.included!==false&&(!commercial||!['hsn_code','item_condition'].includes(key));control.disabled=row.included===false||(commercial&&row.manual_entry!==true&&!['quantity','uom'].includes(key)&&!window.canEditCatalogSku);if(max)control.maxLength=max;
         if(type==='number'){control.min=key==='quantity'?'1':'0';control.step=key==='quantity'?'1':'0.01';}
         if(key==='hsn_code'&&sharedHsn){control.readOnly=true;control.title='Shared HSN code managed in Configuration';}
         control.setAttribute('aria-label',title);control.oninput=()=>{

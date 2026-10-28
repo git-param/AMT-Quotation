@@ -8,7 +8,7 @@ const headerFields = ['order_date','po_reference','pi_reference','delivery_terms
 const addressFields = ['line1','line2','city','state','postal_code','country'];
 let page=1, pages=0;
 let current=null, editing=null, editingLine=null, clientData=null;
-let canEditPIReference=false;
+let canEditPIReference=false, editingCatalogLocked=false;
 let detailVersion=0;
 let formVersion=0;
 let commercialInputs=[],savingCommercial=false;
@@ -98,6 +98,36 @@ function formattedAmount(value){
   return whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')+'.'+decimal.padEnd(2,'0');
 }
 let discountChoices=[];
+let maximumDiscountPercent=null, discountLimitRequest=0;
+function showDiscountLimit(){
+  if(maximumDiscountPercent===null)return;
+  el('discountLimitHint').textContent=`Discount must not exceed ${maximumDiscountPercent}%. `+
+    (el('discountType').value==='amount'
+      ?'The amount entered must stay within this percentage of the eligible item amount, before shipping and tax.'
+      :'This is the maximum discount allowed by your administrator.');
+}
+function clearDiscountError(){
+  el('discountValue').removeAttribute('aria-invalid');
+  el('discountError').hidden=true;
+  el('discountError').textContent='';
+}
+function showDiscountError(text,focus=false){
+  el('discountError').textContent=text;
+  el('discountError').hidden=false;
+  el('discountValue').setAttribute('aria-invalid','true');
+  if(focus){
+    el('discountValue').focus();
+    el('discountValue').scrollIntoView({block:'center',behavior:'smooth'});
+  }
+}
+el('discountValue').setAttribute('aria-describedby','discountLimitHint discountHint discountError');
+el('discountValue').oninput=()=>{
+  clearDiscountError();
+  if(el('discountType').value==='percent'&&maximumDiscountPercent!==null&&
+      Number(el('discountValue').value)>Number(maximumDiscountPercent)){
+    showDiscountError(`Discount must not exceed ${maximumDiscountPercent}%. Enter a lower discount.`);
+  }
+};
 function updateDiscountSelection(){
   const selected=discountChoices.filter(input=>input.checked).length;
   el('discountSelectionCount').textContent=selected?`${selected} of ${discountChoices.length} items selected`:
@@ -106,16 +136,25 @@ function updateDiscountSelection(){
 function discountControls(){
   const amount=el('discountType').value==='amount',total=el('discountScope').value==='total';
   el('discountValueLabel').textContent=amount?`Discount (${current.order.currency}${total?'':' per SKU line'})`:'Discount (%)';
-  el('discountValue').max=amount?'999999999.99':'100';
+  el('discountValue').max='999999999.99';
+  showDiscountLimit();
   el('discountSkus').hidden=['all','total'].includes(el('discountScope').value);
   el('discountHint').textContent=total?'Deducted once from the goods subtotal, before shipping and GST.':amount?'The fixed amount applies once to each selected SKU line and cannot exceed its original catalog rate.':'Percentage applies to each selected SKU line’s original catalog rate (before any catalog sale price), before shipping and GST.';
   for(const input of discountChoices)input.type=el('discountScope').value==='single'?'radio':'checkbox';
   el('discountSkuLegend').textContent=el('discountScope').value==='single'?'Choose one item':'Choose items';
   updateDiscountSelection();
 }
-el('discountType').onchange=discountControls;
-el('discountScope').onchange=()=>{for(const input of discountChoices)input.checked=false;discountControls();};
+el('discountType').onchange=()=>{clearDiscountError();discountControls();};
+el('discountScope').onchange=()=>{clearDiscountError();for(const input of discountChoices)input.checked=false;discountControls();};
 el('giveDiscount').onclick=()=>{
+  const limitRequest=++discountLimitRequest;
+  maximumDiscountPercent=null;clearDiscountError();
+  el('discountLimitHint').textContent='Loading the maximum allowed discount…';
+  api('/api/pi-discount-limit').then(data=>{
+    if(limitRequest!==discountLimitRequest)return;
+    maximumDiscountPercent=data.maximum_percent;showDiscountLimit();
+    el('discountValue').oninput();
+  }).catch(error=>{if(limitRequest===discountLimitRequest)el('discountLimitHint').textContent='Unable to load the discount limit. '+error.message;});
   const discount=current.order.discount;
   el('discountType').value=discount?.type||'percent';el('discountScope').value=discount?.scope||'all';
   el('discountValue').value=discount?.value||'';el('discountShow').checked=discount?.show_on_pi??true;
@@ -141,7 +180,11 @@ async function persistDiscount(remove=false){
     const data={type:el('discountType').value,value:el('discountValue').value,scope,line_ids:['all','total'].includes(scope)?[]:discountChoices.filter(input=>input.checked).map(input=>Number(input.value)),show_on_pi:el('discountShow').checked};
     await api(`/api/orders/${current.order.id}/discount`,remove?{method:'DELETE'}:json('PUT',data));
     await showDetails(current.order.id);message(remove?'Discount removed.':'Discount saved. PI amounts will include this discount.');
-  }catch(error){el('discountError').textContent=error.message;el('discountError').hidden=false;}
+  }catch(error){
+    if(!remove&&/discount.*(?:limit|exceed)/i.test(error.message)){
+      showDiscountError(error.message+' Enter a lower discount and try again.',true);
+    }else{el('discountError').textContent=error.message;el('discountError').hidden=false;}
+  }
   finally{el('applyDiscount').disabled=false;el('removeDiscount').disabled=false;}
 }
 el('discountForm').onsubmit=event=>{event.preventDefault();persistDiscount();};
@@ -518,7 +561,7 @@ async function showDetails(id) {
     const inputs={id:line.id,originalHsn:line.hsn_code||'',originalCondition:line.item_condition||''};
     for(const [key,label,limit,slot]of [['hsn_code','HSN code',20,'hsn'],['item_condition','Item condition',100,'condition']]){
       const td=cell(row,'');td.setAttribute('data-label',label);
-      if(order.can_edit){
+      if(order.can_edit&&(line.manual_entry||canEditPIReference)){
         const input=document.createElement('input');input.type='text';input.maxLength=limit;input.value=line[key]||'';
         input.placeholder=label==='HSN code'?'Enter HSN code':'Select or enter condition';input.className='commercial-input';
         input.setAttribute('aria-label',`${label} for ${line.sku}`);input.setAttribute('aria-invalid',String(!input.value));
@@ -528,9 +571,9 @@ async function showDetails(id) {
         td.append(input);inputs[slot]=input;
       }else{td.textContent=line[key]||'Not set';}
     }
-    if(order.can_edit)commercialInputs.push(inputs);
+    if(order.can_edit&&inputs.hsn&&inputs.condition)commercialInputs.push(inputs);
     const actions=cell(row,'');actions.className='order-item-row-actions';actions.setAttribute('data-label','Actions');
-    if(order.can_edit)actions.append(action('Edit',async()=>{if(commercialDirty())throw new Error('Save item details before opening the full line editor.');const latest=(await api(`/api/orders/${id}/lines/${line.id}`)).line;if(!latest.is_active)throw new Error('This line was removed.');editingLine=line.id;for(const [key,value] of Object.entries({lineSku:latest.sku,lineDescription:latest.description,lineQuantity:latest.quantity,linePrice:latest.unit_price,lineCurrency:latest.currency,lineHsn:current.shared_hsn_code||latest.hsn_code||'',lineCondition:latest.item_condition||'',lineUom:latest.uom||'PCs'}))el(key).value=value;el('lineHsn').readOnly=Boolean(current.shared_hsn_code);el('lineForm').hidden=false;el('lineForm').scrollIntoView({behavior:'smooth'});}));
+    if(order.can_edit)actions.append(action('Edit',async()=>{if(commercialDirty())throw new Error('Save item details before opening the full line editor.');const latest=(await api(`/api/orders/${id}/lines/${line.id}`)).line;if(!latest.is_active)throw new Error('This line was removed.');editingLine=line.id;editingCatalogLocked=!latest.manual_entry&&!canEditPIReference;for(const [key,value] of Object.entries({lineSku:latest.sku,lineDescription:latest.description,lineQuantity:latest.quantity,linePrice:latest.unit_price,lineCurrency:latest.currency,lineHsn:current.shared_hsn_code||latest.hsn_code||'',lineCondition:latest.item_condition||'',lineUom:latest.uom||'PCs'}))el(key).value=value;for(const key of ['lineSku','lineDescription','linePrice','lineCurrency','lineHsn','lineCondition','lineUom']){const control=el(key);const locked=key!=='lineUom'&&!latest.manual_entry&&!canEditPIReference;if(control.tagName==='SELECT')control.disabled=locked;else control.readOnly=locked;}el('lineHsn').readOnly=Boolean(current.shared_hsn_code)||(!latest.manual_entry&&!canEditPIReference);el('lineForm').hidden=false;el('lineForm').scrollIntoView({behavior:'smooth'});}));
     if(order.can_delete)actions.append(action('Delete',async()=>{if(!window.confirm(`Delete SKU ${line.sku}? History will be retained.`))return;await api(`/api/orders/${id}/lines/${line.id}`,{method:'DELETE'});await showDetails(id);},true));
     el('lineRows').append(row);
   });
@@ -546,7 +589,7 @@ async function showDetails(id) {
   selectOrderTab('items');updatePiReadiness();
   el('detail').hidden=false;el('detail').scrollIntoView({behavior:'smooth'});
 }
-el('lineForm').onsubmit=async event=>{event.preventDefault();const button=el('lineForm').querySelector?.('button[type="submit"]');if(button?.disabled)return;if(button)button.disabled=true;try{await api(`/api/orders/${current.order.id}/lines/${editingLine}`,json('PUT',{sku:el('lineSku').value,description:el('lineDescription').value,quantity:el('lineQuantity').value,unit_price:el('linePrice').value,currency:el('lineCurrency').value,hsn_code:el('lineHsn').value,item_condition:el('lineCondition').value,uom:el('lineUom').value}));await showDetails(current.order.id);message('PI line saved.');}catch(error){message(error.message,true);}finally{if(button)button.disabled=false;}};
+el('lineForm').onsubmit=async event=>{event.preventDefault();const button=el('lineForm').querySelector?.('button[type="submit"]');if(button?.disabled)return;if(button)button.disabled=true;try{await api(`/api/orders/${current.order.id}/lines/${editingLine}`,json('PUT',editingCatalogLocked?{quantity:el('lineQuantity').value,uom:el('lineUom').value}:{sku:el('lineSku').value,description:el('lineDescription').value,quantity:el('lineQuantity').value,unit_price:el('linePrice').value,currency:el('lineCurrency').value,hsn_code:el('lineHsn').value,item_condition:el('lineCondition').value,uom:el('lineUom').value}));await showDetails(current.order.id);message('PI line saved.');}catch(error){message(error.message,true);}finally{if(button)button.disabled=false;}};
 el('addLine').onclick=()=>{lineDrafts.reset();el('lineDrafts').hidden=!el('lineDrafts').hidden;};
 el('cancelLine').onclick=()=>{el('lineForm').hidden=true;};
 el('manualToggle').onclick=()=>{el('initialDrafts').hidden=false;el('manualToggle').hidden=true;};
@@ -616,7 +659,7 @@ el('piForm').onsubmit=async event=>{
   }finally{updatePiReadiness();}
 };
 (async()=>{try{
-  const me=await api('/api/me');canEditPIReference=['admin','manager','sales_tl'].includes(me.role);
+  const me=await api('/api/me');canEditPIReference=['admin','manager','sales_tl'].includes(me.role);window.canEditCatalogSku=canEditPIReference;
   if(enquiryScope){const e=(await api(`/api/enquiries/${enquiryScope}`)).enquiry;el('context').textContent=`PI for ${e.reference} / ${e.client_name}`;el('newOrder').hidden=!e.can_edit||!e.client_active;}
   else if(clientScope){const c=(await api(`/api/leads/${clientScope}`)).lead;el('context').textContent=`PI for ${c.name}`;el('newOrder').hidden=!c.can_edit||!c.is_active;}
   if(!clientScope)el('newOrder').hidden=true;

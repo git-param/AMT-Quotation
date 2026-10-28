@@ -21,6 +21,10 @@
     if(detail.sku_count!=null)parts.push(`${detail.sku_count} SKU${Number(detail.sku_count)===1?'':'s'}`);
     if(detail.found!=null)parts.push(`${detail.found} found`);
     if(detail.not_found!=null&&Number(detail.not_found))parts.push(`${detail.not_found} not found`);
+    if(detail.maximum_percent!=null)parts.push(`Discount limit ${detail.maximum_percent}%`);
+    if(detail.attempted_percent!=null)parts.push(`Attempted ${detail.attempted_percent}%`);
+    if(detail.reduction!=null)parts.push(`Attempted reduction ${detail.reduction} from ${detail.base_amount}`);
+    if(detail.sku)parts.push(`SKU ${detail.sku}`);
     if(detail.reference)parts.push(`Reference ${detail.reference}`);
     if(detail.copy_type)parts.push(`Copy: ${detail.copy_type}`);
     if(event.entity_id)parts.push(`${readable(event.entity_type)} #${event.entity_id}`);
@@ -42,6 +46,7 @@
     if(!events.length){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=7;cell.textContent='No activity found for these filters.';row.append(cell);rowHost.append(row);return;}
     for(const event of events){
       const row=document.createElement('tr'),parts=localParts(event.created_at);
+      if(event.action==='discount_limit_exceeded')row.classList.add('audit-discount-blocked');
       for(const value of [readable(event.action),event.username||'Unknown',event.role?roleLabel(event.role):'—',parts[0],parts[1],event.ip_address||'—']){const cell=document.createElement('td');cell.textContent=value;row.append(cell);}
       const detail=document.createElement('td');detail.className='audit-detail';detail.textContent=detailText(event);row.append(detail);rowHost.append(row);
     }

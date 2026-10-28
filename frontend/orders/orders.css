@@ -2186,6 +2186,34 @@ body.embedded #orderForm .consignee-editor textarea {
   font-size: 12px;
   line-height: 1.65;
 }
+.discount-limit-notice {
+  margin: 14px 0 10px;
+  padding: 12px 14px;
+  border: 1px solid #fca5a5;
+  border-left: 4px solid #dc2626;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+#discountValue[aria-invalid="true"] {
+  border: 2px solid #dc2626;
+  background: #fff7f7;
+}
+#discountValue[aria-invalid="true"]:focus {
+  outline: 3px solid #fecaca;
+  outline-offset: 2px;
+  border-color: #dc2626;
+}
+#discountError {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 600;
+}
 #discountSkus {
   margin: 0 0 20px;
   padding: 16px;

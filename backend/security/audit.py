@@ -55,6 +55,10 @@ def record_action(action, entity_type, entity_id=None, details=None, *,
 
 def audit_request(response):
     """Capture successful mutations and PI searches without request bodies."""
+    from flask import g
+    violation=getattr(g,'discount_policy_violation',None)
+    if violation and response.status_code>=400:
+        record_action('discount_limit_exceeded','order',(request.view_args or {}).get('order_id'),violation)
     if response.status_code >= 400 or request.endpoint in (
             'login.login', 'login.logout'):
         return response

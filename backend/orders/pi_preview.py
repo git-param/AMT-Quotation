@@ -48,9 +48,15 @@ def can_edit_pi_reference(user):
 def preview_layout(document,user):
     model=layout(document)
     allowed=can_edit_pi_reference(user)
+    from backend.orders.policy import can_edit_catalog
+    locked={i for i,line in enumerate(document['totals']['lines']) if not line.get('manual_entry') and not can_edit_catalog(user)}
     for section in model['sections']:
         for row in section['rows']:
             for cell in row:
+                field=cell.get('field') or ''
+                if field.startswith('lines.'):
+                    parts=field.split('.')
+                    if int(parts[1]) in locked and parts[-1] not in ('quantity','uom'):cell['readonly']=True
                 if cell.get('field')=='order.pi_reference':
                     cell['readonly']=not allowed
     return model
@@ -137,10 +143,6 @@ def persist_order_edits(connection, order_id, user, order, previous, doc):
             if not row:
                 raise PreviewConflict('An order item changed after this preview was opened. Open a new PI preview.')
             line_data = {key:line[key] for key in changed}
-            if 'unit_price' in changed and previous['order'].get('discount'):
-                # The PI rate is the discount base while a discount is active.
-                # Preserve the user's explicit PI rate edit as the new base.
-                line_data['catalog_original_price'] = line['unit_price']
             values = order_line({**line_data,
                 **({'currency':doc['currency']} if 'unit_price' in changed else {})},row)
             columns = {'quantity':'quantity_milli','unit_price':'unit_price_minor',
@@ -232,6 +234,8 @@ def save_preview(order_id,preview_id=None):
                 return jsonify(error='This PI has already been issued. Open a new preview for further changes.'),409
             original_document_json=row['document_json']
             previous_doc=json.loads(original_document_json)
+            from backend.orders.policy import check_preview_edits
+            check_preview_edits(previous_doc,data,user)
             for_generation=request.args.get('for_generation')=='1'
             if for_generation:
                 doc=print_document(previous_doc,data,allow_pi_reference=can_edit_pi_reference(user))
@@ -341,6 +345,8 @@ def print_preview(order_id,preview_id):
         if not row:return jsonify(error='PI preview not found.'),404
         data=request.get_json(silent=True)
         if not isinstance(data,dict):return jsonify(error='Provide PI preview fields.'),400
+        from backend.orders.policy import check_preview_edits
+        check_preview_edits(json.loads(row['document_json']),data,user)
         doc=print_document(json.loads(row['document_json']),data,allow_pi_reference=can_edit_pi_reference(user))
     except ValueError as error:return validation_error(error)
     finally:connection.close()
@@ -360,6 +366,8 @@ def calculate_preview(order_id,preview_id):
         row=preview_row(connection,order_id,preview_id,user)
         if not row:return jsonify(error='PI preview not found.'),404
         if row['issued_invoice_id']:return jsonify(error='This PI has already been issued.'),409
+        from backend.orders.policy import check_preview_edits
+        check_preview_edits(json.loads(row['document_json']),request.get_json(silent=True),user)
         doc=recalculate(json.loads(row['document_json']),request.get_json(silent=True))
         totals=doc['totals']
         if doc.get('pi_format')=='bulk':
@@ -391,6 +399,8 @@ def issue_preview(order_id):
         if invoice_id:return issued_response(connection,order_id,invoice_id,doc)
         if order['updated_at']!=doc['source_updated_at']:
             return jsonify(error='The order changed after this preview was opened. Open a new PI preview.'),409
+        from backend.orders.policy import check_document_discount
+        check_document_discount(doc)
         validate_ready(doc)
         document_json=row['document_json']
     except ValueError as error:return validation_error(error)

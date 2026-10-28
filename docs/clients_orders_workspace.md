@@ -285,3 +285,27 @@ provenance, idempotent issuance, stale previews, live permissions, long document
 and formula-safe XLSX cells. Browser checks exercise editable previews, exact PDF
 preview and both download buttons. Excel also opened and printed the generated
 native USD/INR workbooks with macros disabled.
+
+
+### SKU editing and maximum PI discount
+
+Lookup SKU details are fixed for Sales Executives: quantity and UoM are editable.
+Admins (including the legacy `manager` role) and Sales TLs can edit lookup
+metadata and rates. Manual lines retain their editable details. The persisted
+source flag and catalog snapshots cannot be changed through an item update.
+Catalog additions are verified against server lookup results before saving.
+
+Admins configure **Maximum PI discount** in Configuration (0–100%, two decimal
+places). The default is 0% until configured. This cap applies to every role,
+percentage and fixed-amount discounts, visible and hidden discounts, and rate
+reductions. Fixed SKU amounts are checked per targeted line; total discounts
+exclude freight, bank charges and tax. Combined price reductions and discounts
+must also stay within the cap. Amount comparisons use Decimal arithmetic with currency-cent rounding.
+
+Migration 39 adds immutable price/currency baselines. Existing lines start with
+their saved rate at upgrade; new lines capture their original agreed rate.
+Repeated edits cannot reset that baseline. Invoice save, calculation, unsaved
+print and issue paths enforce the policy. Existing issued documents remain
+available as historical snapshots. Rejected over-limit attempts are recorded as
+`discount_limit_exceeded` after rollback and highlighted light red in Audit Logs.
+Only admins can change the limit, and those setting changes are audited too.

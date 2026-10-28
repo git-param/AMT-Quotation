@@ -18,9 +18,9 @@ class Element {
   querySelectorAll() { return []; }
 }
 
-function setup(scope, fetch, currency = 'USD', commercial = false, savedRows = () => [], onSave = null) {
+function setup(scope, fetch, currency = 'USD', commercial = false, savedRows = () => [], onSave = null, canEditCatalog = false) {
   const context = {
-    window: {}, document: {createElement: tag => new Element(tag)}, fetch,
+    window: {canEditCatalogSku:canEditCatalog}, document: {createElement: tag => new Element(tag)}, fetch,
   };
   vm.createContext(context);
   const file = path.join(__dirname, '../frontend/enquiries/sku-drafts.js');
@@ -273,7 +273,7 @@ test('quotation lookup reports duplicate SKUs before clearing results or making 
   let message='',requests=0;
   const context={document:{getElementById:()=>({value:' PART-A, part-a\nNEW '})},
     setStatus:(text,kind)=>{message=text;assert.equal(kind,'status-err');},
-    fetch:async()=>{requests++;},_rows:[{sku:'KEEP'}]};
+    fetch:async()=>{requests++;},_skuLookupLimit:50,_rows:[{sku:'KEEP'}]};
   vm.createContext(context);
   vm.runInContext(source.slice(source.indexOf('async function lookupSKUs()'),source.indexOf('function showProgress(')),context);
   await context.lookupSKUs();
@@ -383,4 +383,16 @@ test('reset during asynchronous HSN loading does not restore a discarded manual 
   const pending=manual.onclick();assert.throws(()=>editor.drafts.values(),/Wait for the shared HSN/);
   editor.drafts.reset();finish({ok:true,json:async()=>({shared_hsn_code:'85371090'})});await pending;
   assert.throws(()=>editor.drafts.values(),/Select at least one/);assert.equal(manual.disabled,false);
+});
+
+
+test('lookup PI drafts restrict all fields except quantity and UoM unless privileged',async()=>{
+  for(const privileged of [false,true]){
+    const editor=setup(()=>({client_id:7}),async()=>({ok:true,json:async()=>({drafts:[{
+      sku:'LOCKED',description:'Part',quantity:'1',unit_price:'100.00',currency:'USD',found:true,stock:5
+    }]})}),'USD',true,()=>[],null,privileged);
+    await editor.button.onclick();
+    const fields=editor.host.children[3].children[1];
+    fields.children.forEach((label,index)=>assert.equal(label.children[0].disabled,[2,6].includes(index)?false:!privileged));
+  }
 });

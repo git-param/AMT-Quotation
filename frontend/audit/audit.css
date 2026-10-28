@@ -160,3 +160,4 @@ td[colspan]{text-align:center;color:var(--muted);padding:36px 14px;box-shadow:no
   .cleanup-controls{align-items:stretch;flex-direction:column}
   .cleanup-controls input,.cleanup-controls button,#confirmCleanup{width:100%}
 }
+#auditRows tr.audit-discount-blocked td { background: #fee2e2; }

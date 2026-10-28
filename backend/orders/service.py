@@ -54,6 +54,11 @@ def order_line(data, existing=None):
     if values['uom'] not in ('PCs','Lot','Kit','set') and (existing is None or 'uom' in data):
         raise ValueError('Choose PCs, Lot, Kit or set as the unit of measure.')
     values['manual_entry'] = manual_entry
+    from flask import has_request_context
+    if existing is not None and has_request_context():
+        from backend.common.auth import get_current_user
+        from backend.orders.policy import check_line_edit
+        check_line_edit(values,existing,get_current_user())
     return values
 
 
@@ -310,9 +315,49 @@ def insert_lines(connection, order_id, lines, actor):
     checked_lines = [line for line in lines if not line.get('manual_entry')]
     if checked_lines:
         from backend.orders.catalog import validate_stock_batch
-        validate_stock_batch(((line['sku'], Decimal(line['quantity_milli'])/1000)
+        products=validate_stock_batch(((line['sku'], Decimal(line['quantity_milli'])/1000)
                               for line in checked_lines), connection)
+        from flask import has_request_context
+        if has_request_context():
+            from backend.common.auth import get_current_user
+            from backend.orders.policy import can_edit_catalog,check_reduction
+            from backend.common.currencies import configured_rates
+            from backend.settings import shared_hsn
+            from decimal import ROUND_HALF_UP
+            rates={'USD':Decimal(1),**configured_rates(connection)}
+            for line in checked_lines:
+                product=(products or {}).get(line['sku'].strip().casefold())
+                if not product or (product.get('price') is None and product.get('sale_price') is None):
+                    raise ValueError('Catalog details could not be verified. Retry the SKU lookup.')
+                factor=rates.get(line['currency'])
+                if not factor and line['currency']=='INR':
+                    from backend.quotation_tool.shopify import get_inr_rate
+                    factor=get_inr_rate()
+                if not factor:
+                    raise ValueError('Configure current exchange rates for this SKU currency.')
+                def minor(value):
+                    try:
+                        amount=Decimal(str(value))*Decimal(str(factor))
+                        if not amount.is_finite() or not 0<=amount<=Decimal('999999999.99'):raise ValueError('Unsupported catalog price.')
+                        return int((amount*100).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+                    except ArithmeticError as error:raise ValueError('Unsupported catalog price.') from error
+                original=minor(product['price'] if product.get('price') is not None else product['sale_price'])
+                sale=minor(product['sale_price']) if product.get('sale_price') is not None else None
+                agreed=sale if sale is not None else original
+                check_reduction(Decimal(agreed)/100,Decimal(line['unit_price_minor'])/100,sku=line['sku'],connection=connection)
+                expected={'description':str(product.get('title') or '').strip(),
+                          'unit_price_minor':agreed,'item_condition':str(product.get('condition') or '').strip(),
+                          'hsn_code':shared_hsn(connection) or ''}
+                for key,value in expected.items():line.setdefault(key,value)
+                if not can_edit_catalog(get_current_user()) and any(line[key]!=value for key,value in expected.items()):
+                    raise ValueError('Lookup SKU details are fixed. Retry lookup to use current catalog details.')
+                line['catalog_original_price_minor']=original
+                line['catalog_sale_price_minor']=sale
+                line['policy_price_minor']=agreed
+                line['policy_currency']=line['currency']
     for line in lines:
+        line.setdefault('policy_price_minor',line['unit_price_minor'])
+        line.setdefault('policy_currency',line['currency'])
         columns = ', '.join(line)
         marks = ', '.join('?' for _ in line)
         connection.execute(
@@ -320,3 +365,13 @@ def insert_lines(connection, order_id, lines, actor):
             + ', order_id, created_by, updated_by) VALUES (' + marks
             + ', ?, ?, ?)', [*line.values(), order_id, actor, actor],
         )
+
+
+def validate_order_pricing(connection, order_id, user):
+    from backend.orders.invoices import calculate
+    from backend.common.currencies import configured_rates
+    state=details(connection,read_order(connection,user,order_id))
+    if not state['lines']:return
+    currency=state['order']['currency']
+    rates={'USD':'1',**configured_rates(connection)} if any(line['currency']!=currency for line in state['lines']) else None
+    calculate(state,currency,rates,Decimal(0))

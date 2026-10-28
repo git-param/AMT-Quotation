@@ -23,10 +23,13 @@ def validate(value, lines):
         raise ValueError('Select the SKU lines to discount.')
     if set(ids) - {line['id'] for line in lines}:
         raise ValueError('Choose active SKU lines belonging to this order.')
-    maximum = Decimal('100') if value['type'] == 'percent' else Decimal('999999999.99')
+    maximum = Decimal('999999999.99')
     scaled = number(value['value'], 2, maximum, True)
     if not lines:
         raise ValueError('Add SKU lines before giving a discount.')
+    if value['type'] == 'percent':
+        from backend.orders.policy import check_percent
+        check_percent(Decimal(scaled)/100)
     return {**value, 'value': format(Decimal(scaled) / 100, '.2f')}
 
 
@@ -43,8 +46,13 @@ def apply(lines, discount, convert_amount, currency):
         raise ValueError('A discounted SKU was removed. Update the discount selection before generating a PI.')
     base = sum((Decimal(line['line_total']) for line in selected), Decimal(0))
     value = Decimal(discount['value'])
+    if discount['type']=='percent':
+        from backend.orders.policy import check_percent
+        check_percent(value)
     def deduction(gross):
         amount = (gross * value / 100).quantize(CENT, rounding=ROUND_HALF_UP) if discount['type'] == 'percent' else convert_amount(value)
+        from backend.orders.policy import check_reduction
+        check_reduction(gross,gross-amount)
         if amount > gross:
             raise ValueError('Discount cannot exceed the amount being discounted.')
         return amount

@@ -313,3 +313,29 @@ def settings():
         return jsonify(error=str(error)), 400
     finally:
         connection.close()
+
+
+@bp.route('/api/pi-discount-limit', methods=['GET','PUT'])
+@authenticated_required
+def pi_discount_limit():
+    from backend.orders.policy import maximum_discount
+    from backend.enquiries.lines import number
+    user=get_current_user()
+    if not user:return jsonify(error='Not logged in'),401
+    connection=get_db()
+    try:
+        if request.method=='PUT':
+            if user['role'] not in ('admin','manager'):
+                return jsonify(error='Only admins can configure the maximum discount.'),403
+            data=request.get_json(silent=True)
+            if not isinstance(data,dict) or set(data)!={'maximum_percent'}:
+                return jsonify(error='Provide the maximum discount percentage.'),400
+            try:value=Decimal(number(data['maximum_percent'],2,Decimal('100')))/100
+            except ValueError as error:return jsonify(error=str(error)),400
+            with connection:
+                before=maximum_discount(connection)
+                connection.execute("INSERT INTO app_settings(key,value) VALUES('max_pi_discount_percent',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(value),))
+                record_action('discount_limit_update','app_settings','max_pi_discount_percent',
+                              {'before':str(before),'after':str(value)},actor=user,connection=connection)
+        return jsonify(maximum_percent=str(maximum_discount(connection)))
+    finally:connection.close()

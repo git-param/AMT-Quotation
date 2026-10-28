@@ -329,6 +329,8 @@ def save_order(order_id=None):
             if not state['delivery']:
                 raise ValueError('Complete delivery details before confirming an order.')
             delivery(connection, client, {}, state['delivery'], destination=values['destination'])
+        from backend.orders.service import validate_order_pricing
+        validate_order_pricing(connection,order_id,user)
         record_revision(connection, order_id, user,
                         'edit' if old else 'create')
         result = details(connection, read_order(connection, user, order_id))
@@ -430,6 +432,8 @@ def order_lines(order_id, line_id=None):
             "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?",
             (user['id'], order_id),
         )
+        from backend.orders.service import validate_order_pricing
+        validate_order_pricing(connection,order_id,user)
         record_revision(connection, order_id, user, action)
         result = details(connection, read_order(connection, user, order_id))
         connection.commit()

@@ -44,12 +44,14 @@ def validate_stock_batch(items, connection=None):
         required[key] = (name, previous + Decimal(str(quantity)))
     enforce_sku_lookup_limit(len(required), connection)
     issues = []
+    products = {}
     for sku, quantity in required.values():
         try:
             product = lookup_stock(sku)
             if not product.get('found'):
                 issues.append(f'SKU {sku}: not found; availability could not be verified.')
                 continue
+            products[sku.strip().casefold()]=product
             available = Decimal(str(product.get('Quantity')))
             if not available.is_finite():
                 raise ValueError('Invalid stock')
@@ -62,3 +64,5 @@ def validate_stock_batch(items, connection=None):
             issues.append(f'SKU {sku}: stock lookup failed or availability is unknown. Try saving again.')
     if issues:
         raise ValueError('Cannot save SKU items. '+' '.join(issues))
+
+    return products

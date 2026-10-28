@@ -849,4 +849,11 @@ MIGRATIONS = (
         "INSERT INTO role_permissions(role_code,permission_code) "
         "SELECT code,'audit.delete' FROM roles WHERE code IN ('admin','manager')",
     )),
+    (39, 'pi_discount_policy_baselines', (
+        'ALTER TABLE order_sku_lines ADD COLUMN policy_price_minor INTEGER',
+        'ALTER TABLE order_sku_lines ADD COLUMN policy_currency TEXT',
+        'UPDATE order_sku_lines SET policy_price_minor=unit_price_minor, policy_currency=currency',
+        "INSERT OR IGNORE INTO app_settings(key,value) VALUES('max_pi_discount_percent','0')",
+    )),
+
 )

@@ -243,7 +243,7 @@ def edit(document, edits, *, allow_pi_reference=False):
             validated = order_line({**{k:v for k,v in line.items() if k!='id'},'currency':doc['currency']})
             if doc.get('shared_hsn_code'):
                 validated['hsn_code'] = doc['shared_hsn_code']
-            result.append({**originals[line['id']],**serialize(validated),'id':line['id']})
+            result.append({**originals[line['id']],**{k:v for k,v in serialize(validated).items() if k not in ('catalog_original_price','catalog_sale_price')},'manual_entry':originals[line['id']].get('manual_entry',0),'id':line['id']})
         lines = result
     shipping = edits.get('shipping_charges',doc['totals']['shipping'])
     shipping_minor = number(shipping,2,Decimal('999999999.99'))
@@ -314,7 +314,9 @@ def print_document(document, edits, *, allow_pi_reference=False):
     if 'bank_charges' in edits:numeric['bank_charges']=edits['bank_charges']
     try:
         doc = edit(doc,numeric)
-    except ValueError:
+    except ValueError as error:
+        from backend.orders.policy import DiscountLimitError
+        if isinstance(error,DiscountLimitError):raise
         # Unfinished numeric inputs can still be printed using the last totals.
         pass
     for key in ('date','prepared_phone','terms','bulk_description','amount_in_words'):

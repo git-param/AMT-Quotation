@@ -323,7 +323,7 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
             const input = field(td, cell.label || (amount ? symbol : cell.aria || cell.field.split(".").at(-1).replaceAll("_", " ")), cell.free ? 'Free' : cell.value, cell.field, cell.multiline, cell.free ? 'text' : cell.type || "text");
             if(cell.calculated)calculated.push({path:cell.calculated,input,autoQuantity:cell.auto_quantity});
             if(cell.auto_quantity){input.maxLength=200;input.title='Edit the displayed total quantity. Clear to restore the automatic total.';}
-            if (cell.readonly) { input.readOnly = true; input.title = cell.field==='order.pi_reference'?'Only managers and Sales TLs can edit the PI number.':cell.field==='order.delivery_terms'?'Delivery terms are fixed at DAP.':cell.field?.endsWith('.line_total')?'Calculated after discount. Edit quantity or unit price to change this amount.':'Shared HSN code managed in Configuration'; }
+            if (cell.readonly) { input.readOnly = true; input.title = cell.field==='order.pi_reference'?'Only managers and Sales TLs can edit the PI number.':cell.field==='order.delivery_terms'?'Delivery terms are fixed at DAP.':cell.field?.endsWith('.line_total')?'Calculated after discount. Edit quantity or unit price to change this amount.':cell.field?.startsWith('lines.')?'Lookup SKU details can only be edited by Admins and Sales TLs.':'Shared HSN code managed in Configuration'; }
             if (!cell.label && !amount) td.lastChild.classList.add("pi-unlabelled");
             if (cell.editor_rows) input.rows = 12;
             else if (cell.multiline) input.rows = cell.field.startsWith("delivery.") ? 5 : 2;

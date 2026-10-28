@@ -170,15 +170,41 @@ def calculate(state, currency, rate, tax_rate):
                          or line['id'] in discount.get('line_ids', []))
         if uses_original and line.get('catalog_original_price') is not None:
             source_price = line['catalog_original_price']
+        base_price = line.get('policy_base_price')
+        if base_price is None:
+            base_price = Decimal(line.get('policy_price_minor') if line.get('policy_price_minor') is not None else Decimal(line['unit_price'])*100)/100
+        base_currency=line.get('policy_currency') or line['currency']
+        if line.get('policy_base_price') is None and base_currency!=line['currency']:
+            from backend.common.currencies import configured_rates
+            from backend.database import get_db
+            db=get_db()
+            try:base_rates={'USD':'1',**configured_rates(db)}
+            finally:db.close()
+            if not base_rates.get(base_currency) or not base_rates.get(line['currency']):
+                raise ValueError('Configure rates for the original item price currency.')
+            base_price=Decimal(base_price)/Decimal(str(base_rates[base_currency]))*Decimal(str(base_rates[line['currency']]))
+        policy_base = convert(base_price,line['currency'])
+        if uses_original and line.get('catalog_original_price') is not None:
+            if money(line['unit_price'])!=money(base_price):source_price=line['unit_price']
+            policy_base=convert(line['catalog_original_price'],line['currency'])
         price = convert(source_price, line['currency'])
         # Round converted unit price first, then extend by whole-unit quantity.
         total = money(price * Decimal(line['quantity']))
         lines.append({**line, 'source_currency': line['currency'],
-                      'source_unit_price': source_price, 'currency': currency,
-                      'unit_price': format(price, '.2f'), 'line_total': format(total, '.2f')})
+                      'source_unit_price': source_price, 'currency': currency, 'policy_base_price':format(policy_base,'.2f'),
+                      'unit_price': format(price, '.2f'), 'line_total': format(total, '.2f'),
+                      **{key:format(convert(line[key],line['currency']),'.2f') for key in ('catalog_original_price','catalog_sale_price') if line.get(key) is not None}})
     from backend.orders.discounts import apply
     lines, summary_discount, discount_total = apply(lines, order.get('discount'),
         lambda value: convert(value, order['currency']), currency)
+    from backend.orders.policy import check_reduction
+    for line in lines:
+        check_reduction(Decimal(line['policy_base_price'])*Decimal(line['quantity']),
+                        Decimal(line['line_total']),sku=line['sku'])
+    if summary_discount:
+        gross=sum((Decimal(line['line_total']) for line in lines),Decimal(0))
+        baseline=sum((Decimal(line['policy_base_price'])*Decimal(line['quantity']) for line in lines),Decimal(0))
+        check_reduction(baseline,gross-summary_discount)
     subtotal = sum((Decimal(line['line_total']) for line in lines), Decimal(0)) - summary_discount
     shipping = convert(order['shipping_charges'], order['currency'])
     bank_charges = convert(order.get('bank_charges', '0'), order['currency'])

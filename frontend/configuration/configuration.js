@@ -1,4 +1,9 @@
 (() => {
+  document.getElementById('discountLimitForm').onsubmit=async event=>{
+    event.preventDefault();const status=document.getElementById('discountLimitMessage');
+    try{const response=await fetch('/api/pi-discount-limit',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({maximum_percent:document.getElementById('discountLimit').value})});const data=await response.json();if(!response.ok)throw new Error(data.error);status.textContent='Maximum discount saved.';status.className='';}
+    catch(error){status.textContent=error.message;status.className='error';}
+  };
   const form = document.getElementById('settingsForm');
   const input = document.getElementById('hsnCode');
   const save = document.getElementById('save');
@@ -204,6 +209,10 @@
     fetch('/api/me').then(async response => { if (!response.ok) throw new Error('Unable to load permissions.'); return response.json(); }),
     departments(),
   ]).then(([user, data]) => {
+    if(['admin','manager'].includes(user.role)){
+      document.getElementById('discountLimitSection').hidden=false;
+      fetch('/api/pi-discount-limit').then(r=>r.json()).then(data=>{document.getElementById('discountLimit').value=data.maximum_percent;}).catch(error=>{document.getElementById('discountLimitMessage').textContent=error.message;});
+    }
     departmentForm.hidden = !user.permissions.includes('users.manage');
     prefixForm.hidden = !user.permissions.includes('users.manage');
     piCounterSection.hidden = !user.permissions.includes('users.manage');

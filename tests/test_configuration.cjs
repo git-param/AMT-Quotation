@@ -13,11 +13,16 @@ async function setup(admin) {
   const prefixes = {};
   let rates = {};
   let lookupLimit = 50;
+  let discountLimit = "0";
   const context = {
     document: {getElementById: get, createElement: () => ({})},
     setInterval: () => 0,
     fetch: async (url, options) => {
-      if (url === '/api/me') return {ok: true, json: async () => ({permissions: admin ? ['settings.manage', 'users.manage'] : ['settings.manage']})};
+      if (url === '/api/me') return {ok: true, json: async () => ({role:admin?'admin':'sales_tl',permissions: admin ? ['settings.manage', 'users.manage'] : ['settings.manage']})};
+      if (url === '/api/pi-discount-limit') {
+        if(options)discountLimit=JSON.parse(options.body).maximum_percent;
+        return {ok:true,json:async()=>({maximum_percent:discountLimit})};
+      }
       if (url === '/api/settings') return {ok: true, json: async () => ({hsn_code: '85371090'})};
       if (url === '/api/sku-lookup-limit') {
         if (options) lookupLimit = JSON.parse(options.body).max_sku_lookup;
@@ -100,4 +105,16 @@ test('admin can save the currency rate refresh interval', async () => {
   await get('currencyRatesForm').onsubmit({preventDefault(){}});
   assert.equal(get('currencyRatesMessage').textContent,'Refresh interval saved.');
   assert.equal(get('rateRefreshHours').value,12);
+});
+
+
+test('only admins see and save the maximum PI discount', async () => {
+  const {get}=await setup(true);
+  assert.equal(get('discountLimitSection').hidden,false);
+  assert.equal(get('discountLimit').value,'0');
+  get('discountLimit').value='12.50';
+  await get('discountLimitForm').onsubmit({preventDefault(){}});
+  assert.equal(get('discountLimitMessage').textContent,'Maximum discount saved.');
+  const viewer=await setup(false);
+  assert.equal(viewer.get('discountLimitSection').hidden,true);
 });
