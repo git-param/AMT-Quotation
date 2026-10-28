@@ -1,4 +1,4 @@
-/* Order workflow checks using a small DOM fixture and mocked scoped APIs. */
+/* PI workflow checks using a small DOM fixture and mocked scoped APIs. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -63,7 +63,8 @@ function setup(search = '?client_id=9') {
       else if(url==='/api/orders' && options.method==='POST')response=data;
       else if(url==='/api/orders/7')response=data;
       else if(url==='/api/orders/7/status'){data.order.status=JSON.parse(options.body).status;response={order:data.order};}
-      else if(url==='/api/orders/7/invoices/12'&&options.method==='DELETE')response={message:'PI removed.'};
+      else if(url==='/api/orders/7/invoices/12/edit-preview'&&options.method==='POST')response={preview_id:'preview-12',document:{reference:'PI-9215'}};
+      else if(url==='/api/orders/7/invoices/12'&&options.method==='DELETE')response={message:'PI deleted.'};
       else if(url==='/api/orders/7/discount'){data.order.discount=options.method==='DELETE'?null:JSON.parse(options.body);response=data;}
       else if(url==='/api/orders/7/line-commercial-details'){const body=JSON.parse(options.body);for(const item of body.lines)Object.assign(data.lines.find(line=>line.id===item.id),item);response=data;}
       else if(url.startsWith('/api/enquiries?'))response={enquiries:[enquiry],pages:1};
@@ -104,14 +105,14 @@ test('party blocks are prefilled from editable client data without removed order
   const block=fixture.element('consignee_text').value;
   assert.match(block,/Company/);assert.match(block,/Saved shipping/);assert.match(block,/Tel\/Phone: \+12345678901/);assert.match(block,/Email: pic@example.com/);
   assert.equal(fixture.element('buyer_text').value,fixture.context.window.orderLocations.addressOnly(block));assert.equal(fixture.element('notify_text').value,fixture.context.window.orderLocations.addressOnly(block));
-  fixture.element('consignee_text').value=block+'\nOrder-only instruction';fixture.element('consignee_text').oninput();
+  fixture.element('consignee_text').value=block+'\nPI-only instruction';fixture.element('consignee_text').oninput();
   await fixture.element('orderForm').onsubmit({preventDefault(){}});
   const request=fixture.requests.find(item=>item.url==='/api/orders'&&item.options.method==='POST');
   const body=JSON.parse(request.options.body);
   assert.equal(body.client_id,9);assert.deepEqual(body.lines,[]);
   for(const key of ['status','payment_terms','pi_date','enquiry_id','notes'])assert.equal(body[key],undefined);
   assert.equal(body.pi_reference,'');assert.equal(body.delivery.instructions,undefined);
-  assert.match(body.delivery.consignee_text,/Order-only instruction/);
+  assert.match(body.delivery.consignee_text,/PI-only instruction/);
   assert.equal(body.delivery.buyer_text,fixture.context.window.orderLocations.addressOnly(body.delivery.consignee_text));assert.equal(body.delivery.shipping_address,undefined);
 });
 
@@ -198,7 +199,7 @@ test('country suggestions sync the consignee and set INR and show consignee GST 
   assert.equal(saved.currency,'INR');
 });
 
-test('VIEW order detail hides editing and management controls',async()=>{
+test('View PI detail hides editing and management controls',async()=>{
   const fixture=setup();await settle();fixture.data.order.can_edit=false;
   await fixture.context.showDetails(7);
   for(const id of ['editOrder','addLine','piForm'])assert.equal(fixture.element(id).hidden,true);
@@ -223,11 +224,11 @@ test('related order summaries preserve client scope and read-only navigation',as
   const host=new Element();
   await fixture.context.window.renderRelatedOrders(host,{client_id:9},false);
   const section=host.children[0];
-  assert.equal(section.children[0].children[0].textContent,'Orders & Proforma Invoices');
+  assert.equal(section.children[0].children[0].textContent,'Proforma Invoices');
   assert.equal(section.children[0].children.length,1); // VIEW has no Add order.
-  assert.equal(section.children[2].children[0].children[0].textContent,'Pending orders');
+  assert.equal(section.children[2].children[0].children[0].textContent,'Pending PI');
   assert.equal(section.children[2].children[0].children[1].textContent,'1');
-  assert.equal(section.children[3].children[0].children[0].textContent,'Complete orders');
+  assert.equal(section.children[3].children[0].children[0].textContent,'Completed PI');
   assert.equal(section.children[3].children[2].hidden,true);
   assert.ok(fixture.requests.some(item=>item.url.includes('client_id=9')&&item.url.includes('completion=pending')));
   assert.ok(fixture.requests.some(item=>item.url.includes('completion=complete')));
@@ -335,11 +336,14 @@ test('completion actions stay hidden for read-only and cancelled orders',async()
   assert.equal(f.element('toggleOrderStatus').hidden,true);
 });
 
-test('invoice minus button confirms removal and calls only the selected record endpoint',async()=>{
+test('saved PI actions use edit and delete icons with the selected record endpoint',async()=>{
   const f=setup();await settle();f.data.order.can_delete_order=true;await f.context.showDetails(7);
   f.context.appendInvoice({id:12,reference:'PI-9215',currency:'USD',workbook_format:'xlsx',has_pdf:true},7);
-  const row=f.element('invoiceList').children[0],button=row.children.at(-1);
-  assert.equal(button.textContent,'\u2212');assert.equal(button.attributes['aria-label'],'Remove PI PI-9215');
+  const row=f.element('invoiceList').children[0];
+  const buttons=row.children.filter(child=>child.tag==='button');
+  assert.equal(buttons.length,2);assert.equal(buttons[0].attributes['aria-label'],'Edit PI PI-9215');
+  assert.equal(buttons[1].attributes['aria-label'],'Delete PI PI-9215');
+  const button=buttons[1];
   f.context.window.confirm=()=>false;await button.onclick();
   assert.equal(f.requests.filter(item=>item.options.method==='DELETE').length,0);
   f.context.window.confirm=()=>true;await button.onclick();

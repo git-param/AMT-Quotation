@@ -14,8 +14,7 @@ ITEM_HEADING = 'Electronics and Electrical Spare Parts'
 SHIPPING_NOTICE = ('Please note that the shipment will be dispatched and the final shipping documents '
                    'will be prepared as per the Proforma Invoice. Kindly confirm on the same email '
                    'to avoid any changes after order processing.')
-LEGAL_NOTICE = ('This is a computer-generated Proforma Invoice and does not require a digital signature.\n'
-                '© Aeliya Marine Tech Private Limited')
+LEGAL_NOTICE = ('This is a computer-generated Proforma Invoice - © Aeliya Marine Tech Private Limited')
 
 
 def shipping_notice(doc):
@@ -99,13 +98,13 @@ def layout(doc):
     metadata=[
         [c(5,2,'Proforma Invoice No:'),editable(7,4,'',doc['reference'],'order.pi_reference','bold',aria='Proforma Invoice No.')],
         [c(5,2,'Proforma Invoice Date:','date_label'),editable(7,4,'',doc['date'],'date',type='date',aria='Proforma Invoice Date',display_text=date_display)],
-        [c(5,2,'Purchase Order:'),editable(7,4,'',order['po_reference'],'order.po_reference',aria='Purchase Order')],
+        [c(5,2,'Purchase PI:'),editable(7,4,'',order['po_reference'],'order.po_reference',aria='Purchase PI')],
         [c(5,2,'Prepared By: '+doc['prepared_by']),editable(7,4,'Tel: ',doc.get('prepared_phone',''),'prepared_phone',type='tel',aria='Tel')],
         [editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_top=True)],
         [editable(5,6,'Delivery Terms: DAP basis from ',order['destination'],'order.destination',aria='DAP basis country')]]
     header=[]
     for index in range(7):
-        left=c(0,5,'SUPPLIER/SELLER','bold') if index==0 else c(0,5,seller[index-1] if index<=len(seller) else '')
+        left=c(0,5,'Supplier','bold') if index==0 else c(0,5,seller[index-1] if index<=len(seller) else '')
         if index<5:right=metadata[index]
         elif index==5:right=metadata[5]
         else:right=[editable(5,3,'Delivery Time: ',order['delivery_time'],'order.delivery_time'),
@@ -118,7 +117,7 @@ def layout(doc):
     # Additional configured seller lines are retained, rather than discarded.
     for value in seller[6:]:header.append([c(0,5,value),c(5,6)])
     parties=[
-        [c(0,5,'CONSIGNEE','bold'),c(5,6,'BUYER Details','bold')],
+        [c(0,5,'Consignee','bold'),c(5,6,'Buyer Details','bold')],
         [party_cell(0,5,doc['delivery']['consignee_text'],'delivery.consignee_text',editor_rows=3),
          party_cell(5,6,doc['delivery']['buyer_text'],'delivery.buyer_text')],
         [c(0,5,'',placeholder=True),c(5,6,'Notify Details','bold',line_top=True)],
@@ -129,8 +128,8 @@ def layout(doc):
     parties[-1][0].update(text=secondary,bottom_aligned=True,
                           party=True,field='delivery.consignee_text')
     item_header=[c(start,span,label,'head') for start,span,label in
-        [(0,1,'Sno'),(1,3,'Description'),(4,1,'HSN Code'),(5,1,'Condition'),
-         (6,2,'QTY'),(8,1,rate_heading(total['lines'])),(9,2,'Total Amount')]]
+        [(0,1,'Sr. No'),(1,3,'Description'),(4,1,'HSN Code'),(5,1,'Condition'),
+         (6,2,'Quantity'),(8,1,rate_heading(total['lines'])),(9,2,'Total Amount')]]
     next(cell for cell in item_header if cell['col'] == 8)['rate_heading'] = True
     items=[item_header]
     for index,line in enumerate(total['lines']):

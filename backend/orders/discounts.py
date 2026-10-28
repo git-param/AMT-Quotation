@@ -1,4 +1,4 @@
-"""Order discount validation and deterministic cent-based allocation."""
+"""PI discount validation and deterministic cent-based allocation."""
 from decimal import Decimal, ROUND_HALF_UP
 from backend.enquiries.lines import number
 

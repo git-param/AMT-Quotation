@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Clients &amp; Orders | AMT</title>
+    <title>Clients &amp; PI | AMT</title>
     <link rel="stylesheet" href="/static/manager_dashboard/manager.css" />
     <link rel="stylesheet" href="/static/enquiry_sources/sources.css" />
     <link rel="stylesheet" href="/static/client_leads/leads.css" />
@@ -11,7 +11,7 @@
   <body>
     <header class="hdr">
       <div>
-        <div class="hdr-logo">Clients &amp; Orders</div>
+        <div class="hdr-logo">Clients &amp; PI</div>
         <div class="hdr-sub">Client relationships, orders and proforma invoices</div>
       </div>
       <nav>
@@ -35,9 +35,9 @@
         <section id="directoryPanel" aria-labelledby="pageTitle">
           <div class="cl-hero">
             <div>
-              <span class="cl-eyebrow">Clients &amp; Orders</span>
+              <span class="cl-eyebrow">Clients &amp; PI</span>
               <h1 id="pageTitle">Your clients</h1>
-              <p>Open a client to manage their profile, pending orders and invoices.</p>
+              <p>Open a client to manage their profile, Pending PI and invoices.</p>
             </div>
             <button class="cl-btn cl-btn-primary" id="addLead" type="button" aria-controls="leadEditor" aria-expanded="false" aria-haspopup="dialog">
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
@@ -72,7 +72,7 @@
               </div>
 
               <div class="cl-toolbar-end">
-                <button class="cl-btn" id="toggleFilters" type="button" aria-expanded="false" aria-controls="morePanel">
+                <button class="cl-btn" id="toggleFilters" type="button" aria-expanded="true" aria-controls="morePanel">
                   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
                   Filters &amp; sort <span class="cl-count" id="moreCount" hidden></span>
                 </button>
@@ -82,12 +82,12 @@
                 </button>
               </div>
 
-              <div class="cl-more" id="morePanel" hidden>
+              <div class="cl-more" id="morePanel">
                 <div class="cl-field"><label for="filterCreator">Creator / owner</label><select id="filterCreator" class="cl-input"><option value="">All accessible creators</option></select></div>
                 <div class="cl-field"><label for="filterAccess">Shared access</label><select id="filterAccess" class="cl-input"><option value="all">All access</option><option value="shared">Shared with me</option><option value="VIEW">VIEW shares</option><option value="EDIT">EDIT shares</option></select></div>
                 <div class="cl-field"><label for="filterSource">Enquiry source</label><select id="filterSource" class="cl-input"><option value="">All sources</option></select></div>
-                <div class="cl-field"><label for="sort">Sort by</label><select id="sort" class="cl-input"><option value="created">Created</option><option value="company">Company</option><option value="name">Client name</option></select></div>
-                <div class="cl-field"><label for="direction">Direction</label><select id="direction" class="cl-input"><option value="desc">Descending</option><option value="asc">Ascending</option></select></div>
+                <div class="cl-field"><label for="sort">Sort by</label><select id="sort" class="cl-input"><option value="created">Created</option><option value="company">Company</option><option value="name" selected>Client name</option></select></div>
+                <div class="cl-field"><label for="direction">Direction</label><select id="direction" class="cl-input"><option value="desc">Descending</option><option value="asc" selected>Ascending</option></select></div>
               </div>
             </form>
 
@@ -95,7 +95,7 @@
 
             <div class="cl-list-meta"><p id="summary" aria-live="polite"></p></div>
             <div class="cl-list-head" aria-hidden="true">
-              <span>Client</span><span>Contact</span><span>Owner</span><span>Orders</span><span>Status</span><span class="cl-head-actions">Actions</span>
+              <span>Client</span><span>Contact</span><span>Owner</span><span>PI</span><span>Status</span><span class="cl-head-actions">Actions</span>
             </div>
             <ul id="leads" class="cl-list" aria-busy="false"></ul>
 

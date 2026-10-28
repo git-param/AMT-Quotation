@@ -117,7 +117,7 @@ def change_order_status(order_id):
         user = get_current_user()
         order = read_order(connection, user, order_id)
         if not order:
-            return jsonify(error='Order not found.'), 404
+            return jsonify(error='PI not found.'), 404
         if not order['can_edit']:
             return jsonify(error='Client access is read-only.'), 403
         data = request.get_json(silent=True)
@@ -147,7 +147,7 @@ def order_detail(order_id):
         connection.execute('BEGIN')
         order = read_order(connection, get_current_user(), order_id)
         if not order:
-            return jsonify(error='Order not found.'), 404
+            return jsonify(error='PI not found.'), 404
         result = details(connection, order)
         result['pi_defaults'] = user_pi_defaults(connection, order['created_by'])
         result['revisions'] = [dict(row, snapshot=json.loads(
@@ -171,8 +171,8 @@ def delete_order(order_id):
         connection.execute('BEGIN IMMEDIATE')
         user=get_current_user()
         order=read_order(connection,user,order_id)
-        if not order:return jsonify(error='Order not found.'),404
-        if not order['can_delete_order']:return jsonify(error='Order deletion is not permitted.'),403
+        if not order:return jsonify(error='PI not found.'),404
+        if not order['can_delete_order']:return jsonify(error='PI deletion is not permitted.'),403
         snapshot=details(connection,order)
         connection.execute("UPDATE client_orders SET deleted_by=?,deleted_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updated_by=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
             (user['id'],user['id'],order_id))
@@ -182,7 +182,7 @@ def delete_order(order_id):
                        'deleted_at': deleted_at, 'snapshot': snapshot},
                       actor=user, connection=connection)
         connection.commit()
-        return jsonify(message='Order deleted. History and deletion log retained.')
+        return jsonify(message='PI deleted. History and deletion log retained.')
     finally:connection.rollback();connection.close()
 
 
@@ -222,7 +222,7 @@ def save_order(order_id=None):
             raise ValueError('Provide a JSON object.')
         old = read_order(connection, user, order_id) if order_id else None
         if order_id and not old:
-            return jsonify(error='Order not found.'), 404
+            return jsonify(error='PI not found.'), 404
         if old and not old['can_edit']:
             return jsonify(error='Client access is read-only.'), 403
         if old:
@@ -361,7 +361,7 @@ def order_lines(order_id, line_id=None):
             return jsonify(error='Not logged in'), 401
         order = read_order(connection, user, order_id)
         if not order:
-            return jsonify(error='Order not found.'), 404
+            return jsonify(error='PI not found.'), 404
         row = None
         if line_id is not None:
             row = connection.execute(
@@ -369,7 +369,7 @@ def order_lines(order_id, line_id=None):
                 (line_id, order_id),
             ).fetchone()
             if not row:
-                return jsonify(error='Order line not found.'), 404
+                return jsonify(error='PI line not found.'), 404
         if request.method == 'GET':
             return jsonify(line=serialize(row)) if row else jsonify(
                 details(connection, order))
@@ -455,7 +455,7 @@ def save_discount(order_id):
         user = get_current_user()
         order = read_order(connection, user, order_id)
         if not order:
-            return jsonify(error='Order not found.'), 404
+            return jsonify(error='PI not found.'), 404
         if not order['can_edit']:
             return jsonify(error='Client access is read-only.'), 403
         state = details(connection, order)
@@ -547,7 +547,7 @@ def save_commercial_details(order_id):
             return jsonify(error='Not logged in'), 401
         order = read_order(connection, user, order_id)
         if not order:
-            return jsonify(error='Order not found.'), 404
+            return jsonify(error='PI not found.'), 404
         if not order['can_edit']:
             return jsonify(error='Client access is read-only.'), 403
         data = request.get_json(silent=True)
@@ -612,7 +612,7 @@ def review_legacy_line(order_id, source_id):
         user = get_current_user()
         order = read_order(connection, user, order_id)
         if not order:
-            return jsonify(error='Order not found.'), 404
+            return jsonify(error='PI not found.'), 404
         if not order['can_edit']:
             return jsonify(error='Client access is read-only.'), 403
         data = request.get_json(silent=True)

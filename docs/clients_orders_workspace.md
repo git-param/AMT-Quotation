@@ -1,14 +1,14 @@
-# Clients & Orders workspace
+# Clients & PI workspace
 
 `/clients-orders` is the client directory and profile workspace. `/leads` remains
 a compatible alias. `/enquiries` bookmarks redirect into the workspace; historical
-enquiry APIs remain authorized and available for compatibility. Orders open in
+enquiry APIs remain authorized and available for compatibility. PI open in
 an embedded order editor inside the client profile, using the existing order
 module. There is no active enquiry creation screen in navigation.
 
 Client master fields, ownership, supervision, active VIEW/EDIT sharing, soft
 deletion, and management-only SKU removal retain their existing rules. Client
-profiles expose separate pending orders and complete orders, including PI references.
+profiles expose separate Pending PI and Completed PI, including PI references.
 Filters, pagination, totals, histories, exports, and writes use current client
 authorization. An inactive client remains readable; it cannot receive new orders.
 
@@ -21,7 +21,7 @@ any existing shipping/billing location into it; old addresses, status, business
 details and history remain preserved and compatible with existing APIs. Location
 is searchable with the client directory's existing authorization scope.
 
-Order creation/editing no longer asks for PI reference/date, payment terms or
+PI creation/editing no longer asks for PI reference/date, payment terms or
 status. Those server fields remain intact on existing records; new orders default
 to pending drafts. Native PI previews use the company payment terms when an order
 has no saved terms. Existing saved payment terms take precedence. Commercial
@@ -46,7 +46,7 @@ new immutable delivery version, and generated PIs keep their issued content.
 
 ## Completing item details before PI generation
 
-The order workspace now uses Items & PI, Order details, and History tabs. The
+The order workspace now uses Items & PI, PI details, and History tabs. The
 centered dialog has a fixed close header and a single scrolling document; small
 screens use item cards with visible HSN/condition inputs.
 
@@ -62,11 +62,11 @@ existing client permissions.
 `id`, `hsn_code` and `item_condition` values. Up to 50 active lines are updated
 atomically with current EDIT authorization and one complete revision. Prices,
 quantities, currencies, source links, and ownership are unchanged. Cross-order,
-removed, duplicate or invalid line IDs roll back the complete request. Order
+removed, duplicate or invalid line IDs roll back the complete request. PI
 responses expose `pi_line_requirements`; attempted issuance with incomplete item
 fields returns `code: pi_lines_incomplete` and a `missing_lines` list.
 
-## Order API
+## PI API
 
 `POST /api/orders` now accepts `client_id` without `enquiry_id`. The old
 `enquiry_id`/`source_line_ids` contract remains supported and checked against
@@ -121,7 +121,7 @@ returns to the editable page. Preview edits apply to the issued PI, leaving the
 source order intact. Seller/bank details, branding, currency and
 ownership cannot be supplied or overridden by preview edits.
 
-Orders, item lines and native PIs support USD, INR, AED (UAE dirham), GBP
+PI, item lines and native PIs support USD, INR, AED (UAE dirham), GBP
 (British pound) and EUR (euro). Admins set units per 1 USD under Configuration →
 Currency conversion rates. Missing rates block conversion with a specific
 configuration message; they never relabel an unconverted amount. Blank INR uses
@@ -188,21 +188,22 @@ Dividers below the title/payment terms, above notify details and around shipping
 totals match the marked layout. Continuation pages do not repeat the branding
 header. Payment/signature images follow the terms above the address strip.
 
-Company seller/bank/payment/tax/terms configuration lives in the singleton
-`company_pi_settings` table. It is company-owned, never a client/order input.
-For an existing deployment, install `requirements.txt`, back up the database,
-apply migration 18, then explicitly import its configured historical workbooks
-once:
+Company seller/bank/payment/tax/terms configuration lives in
+`backend/orders/company_profile.py` as the editable `COMPANY_PI_PROFILE`
+constant. It is company-owned, never a client/order input. Change that file
+and restart the application before generating new PIs.
+
+The old database table and import command remain only for compatibility with
+existing deployments and are not read during normal native PI generation. The
+legacy import command is:
 
 ```powershell
 python -m backend.orders.company import-legacy
 ```
 
-The command reads `PI_TEMPLATE_USD` and `PI_TEMPLATE_INR` from `backend/.env`,
-validates the established company layouts, copies settings and records an audit
-entry. It does not run during native generation. Missing company configuration
-blocks preview with an actionable error. Re-importing deliberately updates the
-company configuration; issued snapshots and files remain unchanged.
+It reads the historical workbooks and updates the compatibility table; native PI
+generation does not read that table or require those workbooks. Issued snapshots
+and files remain unchanged when the constants are edited.
 
 Conversion retains the existing explicit rule: enter INR per 1 USD; multiply
 USD to INR and divide INR to USD. Converted unit prices round HALF_UP to two

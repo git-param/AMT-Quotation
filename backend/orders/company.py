@@ -1,4 +1,5 @@
-"""Company-owned PI settings. Legacy workbooks are an explicit one-time import."""
+"""Company-owned PI settings and legacy workbook compatibility import."""
+from copy import deepcopy
 import argparse
 import json
 from io import BytesIO
@@ -6,13 +7,11 @@ from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 
 from backend.database import get_db
+from backend.orders.company_profile import COMPANY_PI_PROFILE
 
 
 def get_profile(connection):
-    row = connection.execute('SELECT profile_json FROM company_pi_settings WHERE id=1').fetchone()
-    if not row:
-        raise ValueError('Company PI settings are not configured. Ask your administrator to configure seller and bank details.')
-    profile = json.loads(row[0])
+    profile = deepcopy(COMPANY_PI_PROFILE)
     for currency in ('AED', 'GBP', 'EUR'):
         for key in ('payment_terms', 'tax_rates', 'terms'):
             profile[key].setdefault(currency, profile[key]['USD'])

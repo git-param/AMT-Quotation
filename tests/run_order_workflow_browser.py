@@ -50,7 +50,7 @@ connection.close()
 def fixture_product(sku):
     if sku == 'LOOKUP-AVAILABLE':
         return {'found': True, 'title': 'Available lookup fixture', 'price': 12.50,
-                'qty': 8, 'condition': 'New'}
+                'Quantity': 8, 'condition': 'New'}
     return {'found': False}
 
 product_patch = patch('backend.enquiries.lines.lookup_product', side_effect=fixture_product)

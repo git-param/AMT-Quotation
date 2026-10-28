@@ -1,4 +1,4 @@
-"""Order validation, client-scoped queries and immutable delivery snapshots."""
+"""PI validation, client-scoped queries and immutable delivery snapshots."""
 from backend.common.currencies import CURRENCIES
 
 from datetime import date

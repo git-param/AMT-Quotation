@@ -12,14 +12,14 @@ USD_TERMS = (
     '1. Subject To Bhavnagar Jurisdiction',
     '2. Local Taxes And Custom Duty At Destination Not Included [Importer Country]',
     '3. Shipment: Dispatch Within 24 Hours Of Payment Confirmation',
-    '4. Offer Subject To Remain Unsold Against Order Confirmation',
+    '4. Offer Subject To Remain Unsold Against PI Confirmation',
     '5. Warranty: 30-Day Technical Warranty: Full Refund Or Replacement If The Product Is Non-Functional Or Technically Defective.',
 )
 
 INR_TERMS = (
     '1. Subject To Bhavnagar Jurisdiction',
     '2. Shipment: Dispatch Within 24 Hours Of Payment Confirmation',
-    '3. Offer Subject To Remain Unsold Against Order Confirmation',
+    '3. Offer Subject To Remain Unsold Against PI Confirmation',
     '4. Warranty: 30-Day Technical Warranty: Full Refund Or Replacement If The Product Is Non-Functional Or Technically Defective.',
     '5. The Final Tax Invoice Will Be Based On Weight (UOM). Above Mentioned Quantity In Proforma Invoice Is For Reference Only.',
 )

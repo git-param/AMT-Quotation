@@ -10,7 +10,7 @@
   <script src="/static/common/sidebar.js" defer></script>
 </head>
 <body>
-  <header class="hdr"><div><div class="hdr-logo">Search PI</div><div class="hdr-sub">Saved proforma invoices</div></div><nav><a href="/clients-orders">Clients &amp; Orders</a><a href="/">Quotation Tool</a><a href="/logout">Sign Out</a></nav></header>
+  <header class="hdr"><div><div class="hdr-logo">Search PI</div><div class="hdr-sub">Saved proforma invoices</div></div><nav><a href="/clients-orders">Clients &amp; PI</a><a href="/">Quotation Tool</a><a href="/logout">Sign Out</a></nav></header>
   <main class="pi-search-page">
     <div class="pi-search-intro"><span class="pi-search-eyebrow">Invoice library</span><h1>Find your proforma invoice</h1><p>Search by PI number, client, company, order number or purchase order number.</p></div>
     <section class="pi-search-panel" aria-label="Search saved proforma invoices">
@@ -21,7 +21,7 @@
       </form>
       <div class="pi-search-results-heading"><h2>Proforma invoices</h2><p id="piSearchSummary" role="status" aria-live="polite">Loading invoices...</p></div>
       <div id="piSearchResults" class="pi-search-table-wrap" aria-busy="true">
-        <table class="pi-search-table"><caption class="pi-search-sr-only">Saved proforma invoices with their clients, orders and downloads</caption><thead><tr><th scope="col">PI number</th><th scope="col">Client</th><th scope="col">Order</th><th scope="col">Generated</th><th scope="col">Currency</th><th scope="col">Downloads</th></tr></thead><tbody id="piSearchRows"></tbody></table>
+        <table class="pi-search-table"><caption class="pi-search-sr-only">Saved proforma invoices with their clients, orders and downloads</caption><thead><tr><th scope="col">PI number</th><th scope="col">Client</th><th scope="col">PI</th><th scope="col">Generated</th><th scope="col">Currency</th><th scope="col">Downloads</th></tr></thead><tbody id="piSearchRows"></tbody></table>
       </div>
       <div class="pi-search-footer"><p>Downloads contain the saved invoice issued for each order.</p><nav class="pi-search-pagination" aria-label="Invoice result pages"><button id="piPrevious" type="button" disabled>Previous</button><span id="piPageInfo">Page 1 of 1</span><button id="piNext" type="button" disabled>Next</button></nav></div>
     </section>

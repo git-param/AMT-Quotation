@@ -23,7 +23,7 @@ class EnquiryTests(unittest.TestCase):
     def setUp(self):
         test_leads.LeadTests.setUp(self)
         stock_patch = patch('backend.orders.catalog.lookup_stock',
-                            return_value={'found':True,'qty':1000000})
+                            return_value={'found':True,'Quantity':1000000})
         stock_patch.start();self.addCleanup(stock_patch.stop)
         self.client.application.register_blueprint(access_bp)
         self.client.application.register_blueprint(bp)

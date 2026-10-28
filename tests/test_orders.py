@@ -95,10 +95,10 @@ class OrderTests(unittest.TestCase):
         data={'sku':'STOCK-CHECK','description':'Stock checked part','quantity':'1','unit_price':'10.00','currency':'USD',
               'hsn_code':'85371090','item_condition':'Used','uom':'Kit'}
         remember_stock('STOCK-CHECK',100)
-        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'qty':0}):
+        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'Quantity':0}):
             result=self.client.post(base,json=data)
         self.assertEqual(result.status_code,400);self.assertIn('Out of stock',result.json['error'])
-        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'qty':2}):
+        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'Quantity':2}):
             result=self.client.post(base,json={**data,'quantity':'3'})
             self.assertEqual(result.status_code,400);self.assertIn('only 2 available',result.json['error'])
             self.assertEqual(self.client.post(base,json={**data,'quantity':'2'}).status_code,201)
@@ -110,21 +110,21 @@ class OrderTests(unittest.TestCase):
         state=self.order();line=state['lines'][0]
         path=f'/api/orders/{state["order"]["id"]}/lines/{line["id"]}'
         remember_stock(line['sku'],100)
-        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'qty':2}) as lookup:
+        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'Quantity':2}) as lookup:
             response=self.client.put(path,json={'quantity':'3'})
             self.assertEqual(response.status_code,400,response.json)
             self.assertIn(f'SKU {line["sku"]}: requested 3, but only 2 available',response.json['error'])
             lookup.assert_called_once_with(line['sku'])
         self.assertEqual(self.client.get(path).json['line']['quantity'],line['quantity'])
         remember_stock(line['sku'],0)
-        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'qty':3}):
+        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'Quantity':3}):
             self.assertEqual(self.client.put(path,json={'quantity':'3'}).status_code,200)
 
     def test_bulk_save_lists_all_short_skus_and_saves_nothing(self):
         state=self.order();base=f'/api/orders/{state["order"]["id"]}/lines'
         items=[{'sku':sku,'description':'Part','quantity':'3','unit_price':'10','currency':'USD'}
                for sku in ('ENOUGH','LOW-A','LOW-B')]
-        def stock(sku):return {'found':True,'qty':{'ENOUGH':3,'LOW-A':2,'LOW-B':0}[sku]}
+        def stock(sku):return {'found':True,'Quantity':{'ENOUGH':3,'LOW-A':2,'LOW-B':0}[sku]}
         with patch('backend.orders.catalog.lookup_stock',side_effect=stock) as lookup:
             response=self.client.post(base+'/bulk',json={'lines':items})
             self.assertEqual(response.status_code,400,response.json)
@@ -136,7 +136,7 @@ class OrderTests(unittest.TestCase):
     def test_save_blocks_when_stock_cannot_be_verified(self):
         state=self.order();line=state['lines'][0]
         path=f'/api/orders/{state["order"]["id"]}/lines/{line["id"]}'
-        for stock in ({'found':False},{'found':True,'qty':None},RuntimeError('Offline')):
+        for stock in ({'found':False},{'found':True,'Quantity':None},RuntimeError('Offline')):
             with patch('backend.orders.catalog.lookup_stock',side_effect=[stock]):
                 response=self.client.put(path,json={'quantity':'2'})
                 self.assertEqual(response.status_code,400,response.json)
@@ -238,7 +238,7 @@ class OrderTests(unittest.TestCase):
             'delivery']['shipping_address']['line1'], 'Shipping B')
         updated = self.client.put(f'/api/orders/{order_id}', json={
             'delivery': {
-                'shipping_address': {'line1': 'Order only', 'country': 'USA'},
+                'shipping_address': {'line1': 'PI only', 'country': 'USA'},
                 'consignee': {'name': 'US recipient',
                               'email': 'pic@example.com',
                               'phone': '+12345678901', 'pic': 'PIC'},
@@ -250,7 +250,7 @@ class OrderTests(unittest.TestCase):
         self.assertEqual(updated.status_code, 200)
         delivery = updated.json['delivery']
         self.assertIsNone(delivery['saved_address_id'])
-        self.assertEqual(delivery['shipping_address']['line1'], 'Order only')
+        self.assertEqual(delivery['shipping_address']['line1'], 'PI only')
         self.assertEqual(len(updated.json['delivery_history']), 2)
         original = updated.json['delivery_history'][1]
         self.assertEqual(original['shipping_address']['line1'], 'Shipping B')
@@ -267,7 +267,7 @@ class OrderTests(unittest.TestCase):
         self.assertEqual(sibling['delivery']['shipping_address']['line1'],
                          'Another destination')
         self.assertEqual(self.client.get(f'/api/orders/{order_id}').json[
-            'delivery']['shipping_address']['line1'], 'Order only')
+            'delivery']['shipping_address']['line1'], 'PI only')
 
     def test_validation_and_atomic_failure_leave_no_partial_order(self):
         invalid = [

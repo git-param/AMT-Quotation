@@ -404,7 +404,7 @@ def generate_invoice(order_id):
         user = get_current_user()
         order = read_order(connection, user, order_id)
         if not order:
-            return jsonify(error='Order not found.'), 404
+            return jsonify(error='PI not found.'), 404
         if not order['can_edit']:
             return jsonify(error='Client access is read-only.'), 403
         data = request.get_json(silent=True)
@@ -486,7 +486,7 @@ def remove_invoice(order_id, invoice_id):
         connection.execute('BEGIN IMMEDIATE')
         user=get_current_user()
         order=read_order(connection,user,order_id)
-        if not order:return jsonify(error='Order not found.'),404
+        if not order:return jsonify(error='PI not found.'),404
         if not order['can_edit'] or not order['can_delete_order']:
             return jsonify(error='PI removal is not permitted.'),403
         invoice=connection.execute('SELECT id,reference,currency FROM order_invoices '
@@ -511,7 +511,7 @@ def download_invoice(order_id, invoice_id):
     connection = get_db()
     try:
         if not read_order(connection, get_current_user(), order_id):
-            return jsonify(error='Order not found.'), 404
+            return jsonify(error='PI not found.'), 404
         invoice = connection.execute('SELECT * FROM order_invoices WHERE id = ? AND order_id = ? AND deleted_at IS NULL',
                                      (invoice_id, order_id)).fetchone()
         if not invoice:

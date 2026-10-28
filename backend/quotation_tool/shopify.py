@@ -153,7 +153,7 @@ def fetch_sku(sku_raw, *, refresh=False):
             'title':     product.get('title', ''),
             'condition': (cond + _cond_suffix(cond)) if cond else '',
             'url':       url,
-            'qty':       node.get('inventoryQuantity', ''),
+            'Quantity':       node.get('inventoryQuantity', ''),
             'price':     float(node['compareAtPrice']) if (node.get('compareAtPrice') and node.get('price') and float(node['compareAtPrice']) > float(node['price'])) else (float(node['price']) if node.get('price') else None),
             'sale_price': float(node['price']) if (node.get('compareAtPrice') and node.get('price') and float(node['compareAtPrice']) > float(node['price'])) else None,
         }
@@ -233,7 +233,7 @@ def fetch_skus_batch(skus, chunk=40):
                                 'title': product.get('title', ''),
                                 'condition': condition + _cond_suffix(condition) if condition else '',
                                 'url': url,
-                                'qty': node.get('inventoryQuantity', ''),
+                                'Quantity': node.get('inventoryQuantity', ''),
                                 'price': compare if discount else price,
                                 'sale_price': price if discount else None,
                             }

@@ -291,7 +291,7 @@ def sku_lookup(enquiry_id):
                 Decimal('0.01'), rounding=ROUND_HALF_UP), '.2f'),
             'currency': 'USD',
         }
-        return jsonify(draft=draft, stock=product.get('qty'),
+        return jsonify(draft=draft, stock=product.get('Quantity'),
                        condition=product.get('condition'),
                        url=product.get('url'))
     finally:
@@ -434,10 +434,10 @@ def bulk_lookup():
                     row['error'] = 'SKU not found in the catalog. Add this SKU manually.'
                 else:
                     from backend.orders.catalog import remember_stock
-                    remember_stock(sku,product.get('qty'))
+                    remember_stock(sku,product.get('Quantity'))
                     row.update(description=product.get('title', ''),
                                found=True, lookup_status='found',
-                               stock=product.get('qty'),
+                               stock=product.get('Quantity'),
                                condition=product.get('condition', ''),
                                url=product.get('url', ''))
                     row['catalog_prices'] = {}

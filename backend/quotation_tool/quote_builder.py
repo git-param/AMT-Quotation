@@ -97,7 +97,7 @@ def _q_build_table(rows, currency, rate):
     out.append('<th style="%s;text-align:left">Description</th>' % thw(20))
     out.append('<th style="%s">Condition</th>' % thw(9))
     out.append('<th style="%s">Product Details &amp; Pictures</th>' % thw(8))
-    out.append('<th style="%s">Available QTY</th>' % thw(6))
+    out.append('<th style="%s">Available Quantity</th>' % thw(6))
     out.append('<th style="%s">%s</th>' % (thw(8 if has_discount else 9), price_hdr))
     if has_discount:
         sub = ('<br><span style="font-size:9pt;font-weight:normal;">%s off</span>' % hdr_pct) if hdr_pct else ''
@@ -152,8 +152,8 @@ def _q_build_table(rows, currency, rate):
         else:
             rate_td = '<td style="%s">%s</td>' % (tdC, money(_q_eff_price(r)))
 
-        qty = r.get('qty')
-        qty_s = ('%s Pcs' % qty) if (qty not in (None, '')) else ''
+        Quantity = r.get('Quantity')
+        qty_s = ('%s Pcs' % Quantity) if (Quantity not in (None, '')) else ''
         # Partner rows say Attached - never hand the customer the partner's link.
         if _q_is_partner(r):
             link = 'Attached'

@@ -1,6 +1,6 @@
-# Order composer
+# PI composer
 
-Add Order and editable pending drafts use one continuous form. Proforma Invoice
+Add PI and editable pending drafts use one continuous form. Proforma Invoice
 No. and Purchase Order No. come first, followed by location, currency, order date,
 delivery defaults, parties and items. All order header fields stay visible.
 The embedded popup uses only its outer Close button; standalone orders retain
@@ -16,11 +16,11 @@ Delivery defaults, India/INR and GST behavior, SKU validation, server totals,
 PI references, permissions, snapshots and configured issuer/bank details use
 the existing implementation.
 
-## Order discounts
+## PI discounts
 
 After saving an order and adding its items, use **Give discount** in Items & PI.
 Percentage is the default; Amount uses the order currency. Choose All SKUs,
-Single SKU, Select multiple SKUs, or Order total. A fixed SKU discount is applied
+Single SKU, Select multiple SKUs, or PI total. A fixed SKU discount is applied
 once per selected line; a total discount is deducted once from the goods subtotal.
 Discounts apply before shipping and GST. Values cannot exceed the selected amount
 or 100 percent. Edit discount reopens saved choices, and Remove discount restores

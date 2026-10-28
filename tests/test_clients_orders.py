@@ -67,7 +67,7 @@ class WorkspaceTests(unittest.TestCase):
             'payment_terms': '100% advance', 'delivery_terms': 'DAP',
             'destination': 'USA', 'delivery_time': '6 days', 'dispatch_method': 'Courier',
             'shipping_charges': '10.00', 'po_reference': 'PO/123',
-            'delivery': {'shipping_address': {'line1': 'Order destination', 'country': 'USA'},
+            'delivery': {'shipping_address': {'line1': 'PI destination', 'country': 'USA'},
                          'consignee': {'name': 'Consignee', 'phone': '+12025550123', 'email': 'consignee@example.com', 'pic': 'Fixture Contact', 'gst_number': '24TEST123'},
                          'notify_party': {'name': 'Notify', 'address': {
                              'line1': 'Notify address', 'country': 'USA'}}},
@@ -367,7 +367,7 @@ class WorkspaceTests(unittest.TestCase):
         names = {'USD': 'Updated PI Format USD - 180626 2.xlsm', 'INR': 'Updated PI Format INR 1 2 2.xlsm'}
         if not all((defaults / name).exists() or (defaults / ('pi-'+code+'.xlsm')).exists() for code,name in names.items()):
             self.skipTest('Local company workbook integration fixtures are unavailable.')
-        state = self.direct(notes='Order notes ' * 100)
+        state = self.direct(notes='PI notes ' * 100)
         state['lines'] *= 50
         for currency in ('USD', 'INR'):
             raw, sheet, first, tax = template(currency)

@@ -1,4 +1,4 @@
-/* Clients & Orders — directory, client drawer and profile.
+/* Clients & PI — directory, client drawer and profile.
    Everything is scoped to .cl-page so it cannot leak into (or be overridden by)
    the shared manager / sources stylesheets. */
 
@@ -215,7 +215,7 @@ textarea.cl-input { resize: vertical; min-height: 84px; }
 .cl-person { padding: 10px 12px; margin-top: 8px; border-radius: 10px; background: var(--cl-wash); border: 1px solid var(--cl-line-soft); }
 .cl-person strong { display: block; margin-bottom: 2px; font-size: 13px; color: var(--cl-ink); }
 
-/* Orders block (rendered by related.js) restyled to sit inside the profile. */
+/* PI block (rendered by related.js) restyled to sit inside the profile. */
 #clientDetail #detailBody > .related-orders { grid-column: 2; grid-row: 1; padding: 22px; border-radius: 16px; border-color: var(--cl-line); background: var(--cl-surface); box-shadow: 0 1px 2px rgba(15, 23, 42, .04); min-width: 0; }
 #clientDetail .related-orders .source-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 #clientDetail .related-orders .source-toolbar h3 { font-size: 17px; color: var(--cl-brand); letter-spacing: -.01em; }

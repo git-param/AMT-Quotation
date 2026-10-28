@@ -25,7 +25,7 @@ test('zero available quantity blocks every quotation copy format', async () => {
   };
   vm.createContext(context);
   vm.runInContext(source, context);
-  vm.runInContext(`_rows = [{found: true, qty: 0, price: 10, sku: 'A'}];
+  vm.runInContext(`_rows = [{found: true, Quantity: 0, price: 10, sku: 'A'}];
     copyFormal('USD'); copyFormalLetter('USD'); copyWA('USD');`, context);
   await new Promise(resolve => setImmediate(resolve));
 
@@ -55,8 +55,8 @@ test('unselecting a zero-quantity SKU allows copying the selected SKUs', () => {
   vm.createContext(context);
   vm.runInContext(source, context);
   const copiedHtml = vm.runInContext(`_rows = [
-    {found: true, qty: 2, price: 10, sku: 'A', title: 'Available part'},
-    {found: true, qty: 0, price: 20, sku: 'B', title: 'Unavailable part'}
+    {found: true, Quantity: 2, price: 10, sku: 'A', title: 'Available part'},
+    {found: true, Quantity: 0, price: 20, sku: 'B', title: 'Unavailable part'}
   ]; copyBlocked() ? 'blocked' : buildHTMLTable('USD');`, context);
 
   assert.equal(status.textContent, '');

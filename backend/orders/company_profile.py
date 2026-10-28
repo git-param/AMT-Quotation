@@ -1,0 +1,45 @@
+"""Editable company-owned values printed on generated proforma invoices."""
+
+COMPANY_PI_PROFILE = {
+    'seller': [
+        'Aeliya Marine Tech Private Limited',
+        '1149, Sir P Pattani Road, Krishna Nagar',
+        'Meghani Circle, Bhavnagar 364001, Gujarat - India.',
+        'GSTIN: 24AANCA4097K1Z9  IEC CODE: 2415002224',
+        'Tel : +91-9725218535/37',
+        'Email :  sales@aeliyamarine.com',
+    ],
+    'bank': [
+        'A/C NAME: AELIYA MARINE TECH PRIVATE LIMITED',
+        'BANKER: ICICI BANK LIMITED',
+        'A/C NO: 027205006499 || SWIFT CODE: ICICINBBCTS || IFSC CODE: ICIC0000272',
+        'ADDRESS: WAGHAWADI ROAD, BHAVNAGAR',
+    ],
+    'bank_charges': 'NOTE: BANK CHARGES AND INTERMEDIARY BANK CHARGES ARE FROM BUYER SIDE',
+    'payment_terms': {
+        'USD': '100% Advance',
+        'INR': '100% Advance',
+    },
+    'tax_rates': {
+        'USD': '0',
+        'INR': '0.18',
+    },
+    'terms': {
+        'USD': [
+            '1. SUBJECT TO BHAVNAGAR JURISDICTION',
+            '2. PAYMENT 100% ADVANCE',
+            '3. LOCAL TAXES AND CUSTOM DUTY AT DESTINATION NOT INCLUDED [IMPORTER COUNTRY]',
+            '4. SHIPMENT: DISPATCH WITHIN 24 HOURS OF PAYMENT CONFIRMATION',
+            '5. OFFER SUBJECT TO REMAIN UNSOLD AGAINST ORDER CONFIRMATION',
+            '6. WARRANTY: 30 DAYS TECHNICAL WARRANTY IF THE PRODUCT IS FOUND TO BE NOT WORKING OR ANY OTHER TECHNICAL ISSUE ARISES THEN WE WILL REFUND OR REPLACE IT WITHIN 30 DAYS',
+        ],
+        'INR': [
+            '1. SUBJECT TO BHAVNAGAR JURISDICTION',
+            '2. PAYMENT 100% ADVANCE',
+            '3. SHIPMENT: DISPATCH WITHIN 24 HOURS OF PAYMENT CONFIRMATION',
+            '4. OFFER SUBJECT TO REMAIN UNSOLD AGAINST ORDER CONFIRMATION',
+            '5. WARRANTY: 30 DAYS TECHNICAL WARRANTY IF THE PRODUCT IS FOUND TO BE NOT WORKING OR ANY OTHER TECHNICAL ISSUE ARISES THEN WE WILL REFUND OR REPLACE IT WITHIN 30 DAYS',
+            '6. THE FINAL TAX INVOCIE WILL BE BASED ON WEIGHT (UOM). ABOVE MENTIONED QUANTITY IN PI IS FOR REFERENCE ONLY.',
+        ],
+    },
+}

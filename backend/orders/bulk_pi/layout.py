@@ -71,7 +71,7 @@ def annexure_section(doc):
     title = cell(0, 'Annexure-1', 'annexure_title')
     title['span'] = 6
     rows = [[title], [cell(col, label, 'head') for col, label in enumerate([
-        'Sr No.', 'Item Description', 'Condition', 'Qty',
+        'Sr No.', 'Item Description', 'Condition', 'Quantity',
         'Unit Price\n('+doc['currency']+')', 'Total Price\n('+doc['currency']+')'])]]
     for index, line in enumerate(doc['totals']['lines']):
         prefix = f'lines.{index}.'

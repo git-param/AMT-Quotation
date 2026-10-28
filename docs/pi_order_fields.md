@@ -31,7 +31,7 @@ requirements; they must not be guessed from a client's current details.
 Country values should be normalized rather than copying the hidden helper list,
 which includes repeated countries and aliases such as USA/United States.
 
-## Order and PI header fields
+## PI and PI header fields
 
 PI number (F4/H4), PI date (F5/H5), purchase-order reference (F6/H6),
 prepared-by employee and telephone (F7/I7), payment terms (F8), delivery terms

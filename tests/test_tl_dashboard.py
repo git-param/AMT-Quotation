@@ -148,7 +148,7 @@ class TeamDashboardTests(unittest.TestCase):
         connection = database.get_db()
         self.assertEqual(connection.execute('SELECT COUNT(*) FROM search_logs').fetchone()[0], 0)
         connection.close()
-        with patch('backend.enquiries.lines.lookup_product', return_value={'found':True,'price':10,'qty':5}), patch('backend.enquiries.lines.lookup_rate', return_value=80):
+        with patch('backend.enquiries.lines.lookup_product', return_value={'found':True,'price':10,'Quantity':5}), patch('backend.enquiries.lines.lookup_rate', return_value=80):
             response = self.client.post('/api/enquiries/sku-lookup', json={'client_id':self.parent,'skus':['A','B'],'currency':'USD'})
             self.assertEqual(response.status_code, 200, response.json)
             response = self.client.post(f'/api/enquiries/{self.enquiry_id}/sku-lookup', json={'sku':'A'})

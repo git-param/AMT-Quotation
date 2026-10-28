@@ -174,7 +174,7 @@ class LineTests(unittest.TestCase):
         endpoint = f'/api/enquiries/{self.enquiry_id}/sku-lookup'
         with patch('backend.enquiries.lines.lookup_product', return_value={
                 'found': True, 'sku': 'SKU-001', 'title': 'Product title',
-                'price': 20.0, 'sale_price': 12.5, 'qty': 8}) as lookup:
+                'price': 20.0, 'sale_price': 12.5, 'Quantity': 8}) as lookup:
             response = self.client.post(endpoint, json={'sku': ' SKU-001 '})
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json['draft']['unit_price'], '12.50')
@@ -304,7 +304,7 @@ class LineTests(unittest.TestCase):
         connection.close()
         with patch('backend.enquiries.lines.lookup_product', return_value={
                 'found': True, 'sku': 'NEW', 'title': 'Fetched part',
-                'price': 20, 'sale_price': 10, 'qty': 5}), \
+                'price': 20, 'sale_price': 10, 'Quantity': 5}), \
                 patch('backend.enquiries.lines.lookup_rate', return_value=90):
             response = self.client.post('/api/enquiries/sku-lookup', json={
                 'client_id': self.parent, 'skus': ['NEW', 'NEXT'],
@@ -357,7 +357,7 @@ class LineTests(unittest.TestCase):
     def test_quantity_save_checks_fresh_stock_and_aggregates_existing_sku_lines(self):
         line=self.add(quantity='1').json['line']
         self.add(quantity='1')
-        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'qty':2}) as lookup:
+        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'Quantity':2}) as lookup:
             response=self.client.put(self.path+'/'+str(line['id']),json={'quantity':'2'})
             self.assertEqual(response.status_code,400,response.json)
             self.assertIn('SKU-001: requested 3, but only 2 available',response.json['error'])
@@ -366,7 +366,7 @@ class LineTests(unittest.TestCase):
 
     def test_bulk_save_reports_every_short_sku_without_partial_writes(self):
         items=[{'sku':sku,'description':'Part','quantity':'2','unit_price':'10','currency':'USD'} for sku in ('LOW-A','LOW-B')]
-        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'qty':1}) as lookup:
+        with patch('backend.orders.catalog.lookup_stock',return_value={'found':True,'Quantity':1}) as lookup:
             response=self.client.post(self.path+'/bulk',json={'lines':items})
             self.assertEqual(response.status_code,400,response.json)
             self.assertIn('LOW-A',response.json['error']);self.assertIn('LOW-B',response.json['error'])
@@ -454,7 +454,7 @@ class LineTests(unittest.TestCase):
     def test_bulk_lookup_keeps_successes_and_distinguishes_missing_from_network_failures(self):
         def product(sku):
             if sku == 'AVAILABLE':
-                return {'found': True, 'title': 'Available part', 'price': 10, 'qty': 5}
+                return {'found': True, 'title': 'Available part', 'price': 10, 'Quantity': 5}
             if sku == 'MISSING':
                 return {'found': False}
             raise RuntimeError('Catalog unavailable')

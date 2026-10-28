@@ -16,9 +16,9 @@ Authorized detail requests alone can retrieve this history.
 ## Future order model contract (design only)
 
 An order belongs to one client; a client may have any number of orders. The
-future Orders module should create its own delivery/address record containing:
+future PI module should create its own delivery/address record containing:
 
-- Order ID and client ID.
+- PI ID and client ID.
 - Optional selected `client_address_history.id` plus address kind, validated to
   belong to that order's client.
 - Copied billing and shipping/consignee address snapshots, never references that

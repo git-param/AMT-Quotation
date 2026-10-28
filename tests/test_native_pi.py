@@ -18,7 +18,7 @@ class NativePiTests(unittest.TestCase):
     setUpBase = test_clients_orders.WorkspaceTests.setUp
     def direct(self, **changes):
         changes.setdefault('delivery', {
-            'shipping_address': {'line1': 'Order destination', 'country': 'USA'},
+            'shipping_address': {'line1': 'PI destination', 'country': 'USA'},
             'consignee': {'name': 'Consignee', 'phone': '+12025550123', 'email': 'consignee@example.com',
                           'pic': 'Fixture Contact', 'gst_number': '24TEST123'},
             'notify_party': {'name': 'Notify', 'address': {'line1': 'Notify address', 'country': 'USA'}},
@@ -500,7 +500,7 @@ class NativePiTests(unittest.TestCase):
         connection=database.get_db()
         try:
             with connection:
-                # Order identities and child records use IDs, even when labels match.
+                # PI identities and child records use IDs, even when labels match.
                 connection.execute('UPDATE client_orders SET reference=? WHERE id=?',
                                    (other['order']['reference'],self.order_id))
             self.assertEqual(connection.execute('PRAGMA foreign_key_check').fetchall(),[])

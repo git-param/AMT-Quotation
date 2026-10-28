@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Orders | AMT</title>
+    <title>PI | AMT</title>
     <link rel="stylesheet" href="/static/manager_dashboard/manager.css">
     <link rel="stylesheet" href="/static/enquiry_sources/sources.css">
     <link rel="stylesheet" href="/static/enquiries/enquiries.css">
@@ -17,19 +17,19 @@
 <body>
     <header class="hdr">
         <div>
-            <div class="hdr-logo">Orders</div>
+            <div class="hdr-logo">PI</div>
             <div class="hdr-sub">Client orders and delivery details</div>
         </div>
-        <nav><a class="back-link" href="/clients-orders">Clients &amp; Orders</a><a class="back-link" href="/">Quotation
+        <nav><a class="back-link" href="/clients-orders">Clients &amp; PI</a><a class="back-link" href="/">Quotation
                 Tool</a><a class="back-link" href="/logout">Sign Out</a></nav>
     </header>
     <main class="wrap">
         <p id="message" role="status" aria-live="polite"></p>
         <div class="page-intro">
-            <div><span class="eyebrow">ORDERS</span>
-                <h1 id="pageTitle">Orders and delivery, in one place</h1>
+            <div><span class="eyebrow">PI</span>
+                <h1 id="pageTitle">PI and delivery, in one place</h1>
                 <p id="context"></p>
-            </div><button id="newOrder" class="btn-sm btn-add" type="button">Add Order</button>
+            </div><button id="newOrder" class="btn-sm btn-add" type="button">Add PI</button>
         </div>
         <section class="panel">
             <div class="source-toolbar">
@@ -38,8 +38,8 @@
                     <p id="summary"></p>
                 </div><button id="refresh" class="btn-sm" type="button">Refresh</button>
             </div>
-            <form id="filters" class="picker"><input id="search" placeholder="Order, PO, PI, enquiry or client"
-                    aria-label="Search orders" maxlength="200"><select id="filterStatus" aria-label="Order status">
+            <form id="filters" class="picker"><input id="search" placeholder="PI, PO, PI, enquiry or client"
+                    aria-label="Search orders" maxlength="200"><select id="filterStatus" aria-label="PI status">
                     <option value="all">All statuses</option>
                     <option value="draft">Draft</option>
                     <option value="confirmed">Confirmed</option>
@@ -48,7 +48,7 @@
                     <option value="completed">Completed</option>
                     <option value="cancelled">Cancelled</option>
                 </select><select id="sort" aria-label="Sort orders">
-                    <option value="date">Order date</option>
+                    <option value="date">PI date</option>
                     <option value="reference">Reference</option>
                     <option value="created">Created</option>
                     <option value="status">Status</option>
@@ -60,7 +60,7 @@
                 <table class="tbl">
                     <thead>
                         <tr>
-                            <th>Order</th>
+                            <th>PI</th>
                             <th>Client</th>
                             <th>Enquiry</th>
                             <th>Date</th>
@@ -81,7 +81,7 @@
                 <div class="composer-title-group">
                     <span class="composer-emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span>
                     <div><span class="eyebrow">A GOOD DEAL STARTS HERE</span><h2 id="formTitle">New order</h2>
-                    <p id="referenceHint">Order reference is generated when saved.</p></div>
+                    <p id="referenceHint">PI reference is generated when saved.</p></div>
                 </div>
                 <div class="order-status-actions"><button id="composerStatus" class="btn-sm order-status-toggle" type="button" hidden>Complete</button><button id="cancel" class="btn-sm" type="button">Cancel</button></div>
             </div>
@@ -94,7 +94,7 @@
                             <div class="form-field"><label for="po_reference">Purchase Order No.</label><input id="po_reference" type="text" placeholder="e.g. PO-2026-001"></div>
                             <div class="form-field"><label for="destination">Shipping destination / consignee country</label><input id="destination" maxlength="200" list="orderCountries" autocomplete="off" placeholder="Country where goods will be delivered"><datalist id="orderCountries"></datalist></div>
                             <div class="form-field"><label for="currency">Deal currency</label><select id="currency" aria-describedby="currencyHelp"><option>USD</option><option>INR</option><option value="AED">AED (UAE dirham)</option><option value="GBP">GBP (British pound)</option><option value="EUR">EUR (Euro)</option></select></div>
-                            <div class="form-field"><label for="order_date">Order date <span class="field-required">(required)</span></label><input id="order_date" type="date" required></div>
+                            <div class="form-field"><label for="order_date">PI date <span class="field-required">(required)</span></label><input id="order_date" type="date" required></div>
                         </div>
                         <p id="currencyHelp" class="composer-currency-help">India uses INR. Changing currency does not convert prices.</p>
                         <div class="fields composer-fields composer-fields--shipping">
@@ -148,17 +148,17 @@
         </section>
         <section id="detail" class="panel" hidden>
             <div class="source-toolbar order-record-header">
-                <div><span class="eyebrow">CLIENT ORDER</span>
+                <div><span class="eyebrow">CLIENT PI</span>
                     <h2 id="detailTitle"></h2>
                     <p id="detailAccess"></p>
                 </div>
-                <div><button id="toggleOrderStatus" class="btn-sm order-status-toggle" type="button" hidden>Complete</button><button id="deleteOrder" class="btn-sm btn-del" type="button" hidden>Delete order</button><button id="editOrder" class="btn-sm" type="button">Edit order</button><button id="closeDetail"
+                <div><button id="toggleOrderStatus" class="btn-sm order-status-toggle" type="button" hidden>Complete</button><button id="deleteOrder" class="btn-sm btn-del" type="button" hidden>Delete PI</button><button id="editOrder" class="btn-sm" type="button">Edit PI</button><button id="closeDetail"
                         class="btn-sm" type="button">Close</button></div>
             </div>
             <nav id="recordLinks" class="picker" aria-label="Related records"></nav>
-            <div class="order-tabs" role="tablist" aria-label="Order workspace sections"><button id="tabItems"
+            <div class="order-tabs" role="tablist" aria-label="PI workspace sections"><button id="tabItems"
                     type="button" role="tab" aria-controls="itemsTab">Items &amp; PI</button><button id="tabDetails"
-                    type="button" role="tab" aria-controls="detailsTab">Order details</button><button id="tabHistory"
+                    type="button" role="tab" aria-controls="detailsTab">PI details</button><button id="tabHistory"
                     type="button" role="tab" aria-controls="historyTab">History</button></div>
             <div id="detailsTab" role="tabpanel" aria-labelledby="tabDetails" hidden>
                 <div id="detailBody" class="order-detail-grid"></div>
@@ -172,7 +172,7 @@
                 <section id="skuSection" class="order-items">
                     <div class="source-toolbar">
                         <div>
-                            <h2>Order items</h2>
+                            <h2>PI items</h2>
                             <p class="section-hint">Review quantities, agreed prices and the details printed on your PI.
                             </p>
                         </div>
@@ -186,12 +186,12 @@
                     <form id="discountForm" class="discount-panel" hidden>
                         <div class="discount-heading">
                             <span class="discount-icon" aria-hidden="true">%</span>
-                            <div><span class="discount-eyebrow">Pricing adjustment</span><h3>Order discount</h3><p>Choose a discount and the items it applies to.</p></div>
+                            <div><span class="discount-eyebrow">Pricing adjustment</span><h3>PI discount</h3><p>Choose a discount and the items it applies to.</p></div>
                         </div>
                         <div class="fields discount-fields">
                             <div class="form-field"><label for="discountType">Discount type</label><select id="discountType"><option value="percent">Percentage (%)</option><option value="amount">Amount</option></select></div>
                             <div class="form-field"><label id="discountValueLabel" for="discountValue">Discount (%)</label><input id="discountValue" type="number" min="0.01" max="100" step="0.01" required></div>
-                            <div class="form-field"><label for="discountScope">Apply discount to</label><select id="discountScope"><option value="all">All SKUs</option><option value="single">Single SKU</option><option value="multiple">Select multiple SKUs</option><option value="total">Order total</option></select></div>
+                            <div class="form-field"><label for="discountScope">Apply discount to</label><select id="discountScope"><option value="all">All SKUs</option><option value="single">Single SKU</option><option value="multiple">Select multiple SKUs</option><option value="total">PI total</option></select></div>
                         </div>
                         <p id="discountHint" class="discount-hint">Percentage applies to each selected SKU line, before shipping and GST.</p>
                         <fieldset id="discountSkus" hidden><legend id="discountSkuLegend">Choose items</legend><p id="discountSelectionCount" class="discount-selection-count" role="status"></p><div id="discountSkuChoices"></div></fieldset>
@@ -202,7 +202,7 @@
                     <form id="lineForm" class="line-editor" hidden>
                         <div class="line-editor-heading">
                             <span class="line-editor-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 5 5-12 12-6 1 1-6L16 3Z M13 6l5 5"/></svg></span>
-                            <div><span class="line-editor-eyebrow">Item details</span><h3>Edit order item</h3><p>Update this item's quantity, price and invoice details.</p></div>
+                            <div><span class="line-editor-eyebrow">Item details</span><h3>Edit PI item</h3><p>Update this item's quantity, price and invoice details.</p></div>
                         </div>
                         <section class="line-editor-group" aria-labelledby="lineProductHeading">
                         <h4 id="lineProductHeading">Product</h4>
@@ -238,11 +238,11 @@
                     </form>
                     <div class="source-table order-line-table">
                         <table class="tbl order-lines-grid">
-                            <colgroup><col class="order-col-item"><col class="order-col-qty"><col class="order-col-price"><col class="order-col-amount"><col class="order-col-hsn"><col class="order-col-condition"><col class="order-col-actions"></colgroup>
+                            <colgroup><col class="order-col-item"><col class="order-col-Quantity"><col class="order-col-price"><col class="order-col-amount"><col class="order-col-hsn"><col class="order-col-condition"><col class="order-col-actions"></colgroup>
                             <thead>
                                 <tr>
                                     <th>Item</th>
-                                    <th>Qty / UOM</th>
+                                    <th>Quantity / UOM</th>
                                     <th>Unit price</th>
                                     <th>Amount</th>
                                     <th>HSN code</th>
@@ -311,7 +311,7 @@ A lot of Annexure-1</textarea>
                     <div id="deliveryHistory"></div>
                 </details>
                 <details>
-                    <summary>Order revision history</summary>
+                    <summary>PI revision history</summary>
                     <div id="revisions"></div>
                 </details>
             </div>

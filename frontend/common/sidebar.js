@@ -23,7 +23,7 @@
   if(!header)return;
   const entries=[
     ['Quotation Tool','/','M4 3h16v18H4z M8 7h8 M8 11h8 M8 15h5'],
-    ['Clients & Orders','/clients-orders','M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z M4 21v-2a8 8 0 0 1 16 0v2'],
+    ['Clients & PI','/clients-orders','M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z M4 21v-2a8 8 0 0 1 16 0v2'],
     ['Search PI','/search-pi','M14 3H5v18h14V8l-5-5Z M14 3v5h5 M15 14a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z M14 16l3 3'],
     ['TL Dashboard','/tl-dashboard','M3 20h18 M6 16v-5 M12 16V5 M18 16V8','management.view'],
     ['Client Access / Sharing','/client-access','M15 5a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z M3 12a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z M15 19a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z M9 11l6-5 M9 13l6 5','leads.share_manage'],

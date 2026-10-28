@@ -50,7 +50,7 @@ def validate_stock_batch(items, connection=None):
             if not product.get('found'):
                 issues.append(f'SKU {sku}: not found; availability could not be verified.')
                 continue
-            available = Decimal(str(product.get('qty')))
+            available = Decimal(str(product.get('Quantity')))
             if not available.is_finite():
                 raise ValueError('Invalid stock')
             available = max(Decimal(0), available)

@@ -1,4 +1,4 @@
-"""Order ownership, team deletion, retained records and scoped audit logs."""
+"""PI ownership, team deletion, retained records and scoped audit logs."""
 import json
 import unittest
 

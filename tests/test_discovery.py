@@ -182,7 +182,7 @@ class DiscoveryTests(unittest.TestCase):
                          detail['lead']['created_at'])
         self.assertEqual(self.client.put(f'/api/leads/{uid}', json={
             'order_shipping_address': {
-                'line1': 'Order only', 'country': 'USA'
+                'line1': 'PI only', 'country': 'USA'
             },
         }).status_code, 400)
         self.client.put(

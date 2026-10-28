@@ -50,8 +50,8 @@ In the quotation page, search a numeric SKU and open the **Price History** tab
 to see its pricing timeline. The tab shows when prices changed, by whom, and why.
 The shared Pricing App IP policy is documented in [Security](docs/security.md).
 
-The active CRM workflow is now **Clients & Orders** at `/clients-orders`: search
-clients, manage their profiles, save independent pending orders, and generate
+The active CRM workflow is now **Clients & PI** at `/clients-orders`: search
+clients, manage their profiles, save independent Pending PI, and generate
 USD/INR proforma invoices. Company seller/bank details remain in server-configured
 PI templates. See [workspace setup, API, migrations and verification](docs/clients_orders_workspace.md).
 The module notes below also describe historical functionality retained for compatibility.
@@ -604,7 +604,7 @@ shows its first ten enquiries and links to the full scoped list.
 Future enquiry SKU lines should reference `client_enquiries.id` with multiple
 lines per enquiry; future orders may reference an enquiry ID and must validate
 that their client matches the enquiry's client. No placeholder SKU/order tables
-are created here. Order delivery/consignee snapshots remain separate from client
+are created here. PI delivery/consignee snapshots remain separate from client
 defaults as specified in [the address design](docs/order_address_design.md) and
 [PI field checklist](docs/pi_order_fields.md). Enquiries do not modify saved
 addresses or implement order management or PI generation.

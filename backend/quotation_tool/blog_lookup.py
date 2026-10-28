@@ -62,7 +62,7 @@ def lookup_ref(ref):
                 continue
             raw_condition = _field(body, 'CONDITION')
             condition = raw_condition
-            quantity = _field(body, r'(?:QTY|QUANTITY)(?:\s+AVAILABLE)?')
+            quantity = _field(body, r'(?:Quantity|QUANTITY)(?:\s+AVAILABLE)?')
             match = re.search(r'\b(\d+)\s*(?:PCS?|PIECES?|NOS?|UNITS?)\b', raw_condition, re.I)
             if match:
                 quantity = match.group(1)
@@ -72,7 +72,7 @@ def lookup_ref(ref):
             images = _images(markup)
             found = {
                 'found': True, 'sku': ref, 'title': (entry.get('title') or {}).get('$t', ''),
-                'condition': condition, 'qty': int(quantity_match.group()) if quantity_match else '',
+                'condition': condition, 'Quantity': int(quantity_match.group()) if quantity_match else '',
                 'price': None, 'sale_price': None,
                 'url': next((link.get('href', '') for link in links
                              if link.get('rel') == 'alternate'), ''),

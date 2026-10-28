@@ -1,4 +1,4 @@
-/* Orders reuse the CRM panels, fields, responsive tables and SKU draft editor. */
+/* PI reuse the CRM panels, fields, responsive tables and SKU draft editor. */
 .wrap {
   max-width: 1480px;
 }
@@ -17,7 +17,7 @@
   opacity: 0.55;
   cursor: wait;
 }
-.pi-remove-button {
+.pi-action-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -30,19 +30,33 @@
   border-radius: 7px;
   background: #fff7f8;
   color: #be123c;
-  font-size: 22px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
+}
+.pi-edit-button {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.pi-edit-button:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+.pi-remove-button {
+  border-color: #fecdd3;
+  background: #fff7f8;
+  color: #be123c;
 }
 .pi-remove-button:hover {
   background: #ffe4e6;
   border-color: #fda4af;
 }
-.pi-remove-button:focus-visible {
+.pi-action-button:focus-visible {
   outline: 3px solid #fda4af;
   outline-offset: 2px;
 }
-.pi-remove-button:disabled {
+.pi-action-button:disabled {
   opacity: 0.5;
   cursor: wait;
 }
@@ -237,6 +251,27 @@ body.embedded .wrap > section.panel:first-of-type {
 #invoiceList a {
   display: block;
   padding: 10px 0;
+}
+#invoiceList .pi-download-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 0;
+  border-bottom: 1px solid #e8edf3;
+}
+#invoiceList .pi-download-row strong {
+  min-width: 250px;
+  color: #123b68;
+}
+#invoiceList .pi-download-row a {
+  padding: 0;
+}
+#invoiceList .pi-action-button {
+  margin-left: auto;
+}
+#invoiceList .pi-edit-button + .pi-remove-button {
+  margin-left: 0;
 }
 #conversionHint {
   color: #526173;
@@ -2514,7 +2549,7 @@ body.embedded #orderForm .consignee-editor textarea {
 .order-col-item {
   width: 28%;
 }
-.order-col-qty {
+.order-col-Quantity {
   width: 9%;
 }
 .order-col-price,

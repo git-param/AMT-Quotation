@@ -34,7 +34,7 @@ async function toggleOrderCompletion(){
     if(current?.order.id===orderId)current.order.status=result.order.status;
     updateOrderStatusUI(result.order);
     if(current?.order.id===orderId)el('detailAccess').textContent=`${result.order.status==='completed'?'Complete':'Pending'} / ${current.order.currency} / Editable`;
-    await load();message(target==='completed'?'Order moved to complete orders.':'Order moved to pending orders.');
+    await load();message(target==='completed'?'PI moved to Completed PI.':'PI moved to Pending PI.');
   }catch(error){message(error.message,true);}
   finally{statusSaving=false;updateOrderStatusUI(statusOrder);}
 }
@@ -125,7 +125,7 @@ el('giveDiscount').onclick=()=>{
     label.className='discount-sku-card';input.onchange=updateDiscountSelection;
     const details=document.createElement('span');details.className='discount-sku-details';
     const sku=document.createElement('strong');sku.textContent=line.sku;
-    const description=document.createElement('small');description.textContent=line.description||'Order item';details.append(sku,description);
+    const description=document.createElement('small');description.textContent=line.description||'PI item';details.append(sku,description);
     const amount=document.createElement('span');amount.className='discount-sku-amount';
     const caption=document.createElement('small');caption.textContent='Line total';
     const price=document.createElement('strong');price.textContent=`${line.currency} ${formattedAmount(line.line_total)}`;
@@ -159,10 +159,10 @@ function action(label,callback,danger=false){
 }
 function cell(row,value){const td=document.createElement('td');td.textContent=value??'';row.append(td);return td;}
 async function deleteOrder(order){
-  if(!window.confirm(`Are you sure you want to delete order ${order.reference}? The order will be removed from active lists. Its history and who deleted it will be retained.`))return;
+  if(!window.confirm(`Are you sure you want to Delete PI ${order.reference}? The order will be removed from active lists. Its history and who deleted it will be retained.`))return;
   await api(`/api/orders/${order.id}`,{method:'DELETE'});
   detailVersion++;formVersion++;current=null;invoicePreview.reset();el('detail').hidden=true;el('editor').hidden=true;
-  await load();message(`Order ${order.reference} deleted. Deletion recorded in the order deletion log.`);
+  await load();message(`PI ${order.reference} deleted. Deletion recorded in the order deletion log.`);
   if(params.get('embedded')==='1')window.parent.postMessage({type:'amt-order-close'},location.origin);
 }
 function addressText(address){return addressFields.map(key=>address?.[key]).filter(Boolean).join('\n')||'Not provided';}
@@ -388,7 +388,7 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
   return true;
 }
 async function createOrder() {
-  if(!clientScope)throw new Error('Open a client in Clients & Orders to add an order.');
+  if(!clientScope)throw new Error('Open a client in Clients & PI to add an order.');
   const version=++formVersion;editing=null;el('orderForm').reset();initialDrafts.reset();
   updateOrderStatusUI(null);
   el('initialDrafts').hidden=true;el('initialLines').hidden=false;
@@ -406,13 +406,13 @@ async function createOrder() {
 async function editOrder(id) {
   const version=++formVersion;
   const data=await api(`/api/orders/${id}`);if(!data.order.can_edit)throw new Error('Client access is read-only.');
-  if((clientScope&&String(data.order.client_id)!==clientScope)||(enquiryScope&&String(data.order.enquiry_id)!==enquiryScope))throw new Error('Order does not belong to the selected record.');
+  if((clientScope&&String(data.order.client_id)!==clientScope)||(enquiryScope&&String(data.order.enquiry_id)!==enquiryScope))throw new Error('PI does not belong to the selected record.');
   if(version!==formVersion)return;
   updateOrderStatusUI(data.order);
   editing=id;initialDrafts.reset();el('initialLines').hidden=true;
   headerFields.forEach(key=>{el(key).value=data.order[key];});if(!await prepareClient(data.order.client_id,data.delivery,version))return;
   el('pi_reference').readOnly=!canEditPIReference;
-  el('detail').hidden=true;el('formTitle').textContent='Edit order';el('referenceHint').textContent=data.order.reference;el('editor').hidden=false;resetComposer();el('editor').scrollIntoView({behavior:'smooth'});
+  el('detail').hidden=true;el('formTitle').textContent='Edit PI';el('referenceHint').textContent=data.order.reference;el('editor').hidden=false;resetComposer();el('editor').scrollIntoView({behavior:'smooth'});
 }
 el('orderForm').onsubmit=async event=>{
   event.preventDefault();
@@ -431,13 +431,13 @@ el('orderForm').onsubmit=async event=>{
       notify_text:el('notify_text').value};
     if(editing===null){data.client_id=Number(clientScope);data.lines=el('initialDrafts').hidden?[]:initialDrafts.values();}
     const result=await api(editing===null?'/api/orders':`/api/orders/${editing}`,json(editing===null?'POST':'PUT',data));
-    el('editor').hidden=true;await load();await showDetails(result.order.id);message('Order saved.');
+    el('editor').hidden=true;await load();await showDetails(result.order.id);message('PI saved.');
   }catch(error){if(window.skuFeedback){el('formError').hidden=true;}else{el('formError').textContent=error.message;el('formError').hidden=false;el('formError').focus();}message(error.message,true);}finally{el('save').disabled=false;el('save').textContent=editing===null?'Save draft':'Save changes';}
 };
 
 async function showDetails(id) {
   const version=++detailVersion;const data=await api(`/api/orders/${id}`);if(version!==detailVersion)return;
-  if((clientScope&&String(data.order.client_id)!==clientScope)||(enquiryScope&&String(data.order.enquiry_id)!==enquiryScope))throw new Error('Order does not belong to the selected record.');
+  if((clientScope&&String(data.order.client_id)!==clientScope)||(enquiryScope&&String(data.order.enquiry_id)!==enquiryScope))throw new Error('PI does not belong to the selected record.');
   current=data;commercialInputs=[];editingLine=null;el('editor').hidden=true;el('piError').hidden=true;el('lineForm').hidden=true;el('lineDrafts').hidden=true;el('copyPanel').hidden=true;lineDrafts.reset();
   const order=data.order;
   updateOrderStatusUI(order);
@@ -486,9 +486,9 @@ async function showDetails(id) {
   for(const [label,url] of [[`Client: ${order.client_name}`,`/clients-orders?client_id=${order.client_id}`]]){const link=document.createElement('a');link.textContent=label;link.href=url;el('recordLinks').append(link);}
   el('detailBody').replaceChildren();
   const section=(label,value)=>{const block=document.createElement('section');const title=document.createElement('h3');title.textContent=label;const text=document.createElement('p');text.textContent=value||'Not provided';block.append(title,text);el('detailBody').append(block);};
-  section('Order and PO / PI references',[order.order_date,order.po_reference&&`PO: ${order.po_reference}`,order.pi_reference&&`PI: ${order.pi_reference}`,order.pi_date&&`PI date: ${order.pi_date}`].filter(Boolean).join('\n'));
+  section('PI and PO / PI references',[order.order_date,order.po_reference&&`PO: ${order.po_reference}`,order.pi_reference&&`PI: ${order.pi_reference}`,order.pi_date&&`PI date: ${order.pi_date}`].filter(Boolean).join('\n'));
   section('Payment and delivery terms',[order.payment_terms,order.delivery_terms,order.delivery_time,order.dispatch_method].filter(Boolean).join('\n'));
-  el('ownershipHistory').textContent=`Client owner: ${order.owner_name} / Order created by ${order.creator_name} / ${new Date(order.created_at).toLocaleString()}`;
+  el('ownershipHistory').textContent=`Client owner: ${order.owner_name} / PI created by ${order.creator_name} / ${new Date(order.created_at).toLocaleString()}`;
   section('Destination / charges',[order.destination,`Shipping: ${order.currency} ${order.shipping_charges}`,`Bank: ${order.currency} ${order.bank_charges}`].filter(Boolean).join(' / '));
   const destination=data.delivery||{};
   section('Consignee',destination.consignee_text??formatPartyBlock(destination.consignee,destination.shipping_address));
@@ -546,7 +546,7 @@ async function showDetails(id) {
   selectOrderTab('items');updatePiReadiness();
   el('detail').hidden=false;el('detail').scrollIntoView({behavior:'smooth'});
 }
-el('lineForm').onsubmit=async event=>{event.preventDefault();const button=el('lineForm').querySelector?.('button[type="submit"]');if(button?.disabled)return;if(button)button.disabled=true;try{await api(`/api/orders/${current.order.id}/lines/${editingLine}`,json('PUT',{sku:el('lineSku').value,description:el('lineDescription').value,quantity:el('lineQuantity').value,unit_price:el('linePrice').value,currency:el('lineCurrency').value,hsn_code:el('lineHsn').value,item_condition:el('lineCondition').value,uom:el('lineUom').value}));await showDetails(current.order.id);message('Order line saved.');}catch(error){message(error.message,true);}finally{if(button)button.disabled=false;}};
+el('lineForm').onsubmit=async event=>{event.preventDefault();const button=el('lineForm').querySelector?.('button[type="submit"]');if(button?.disabled)return;if(button)button.disabled=true;try{await api(`/api/orders/${current.order.id}/lines/${editingLine}`,json('PUT',{sku:el('lineSku').value,description:el('lineDescription').value,quantity:el('lineQuantity').value,unit_price:el('linePrice').value,currency:el('lineCurrency').value,hsn_code:el('lineHsn').value,item_condition:el('lineCondition').value,uom:el('lineUom').value}));await showDetails(current.order.id);message('PI line saved.');}catch(error){message(error.message,true);}finally{if(button)button.disabled=false;}};
 el('addLine').onclick=()=>{lineDrafts.reset();el('lineDrafts').hidden=!el('lineDrafts').hidden;};
 el('cancelLine').onclick=()=>{el('lineForm').hidden=true;};
 el('manualToggle').onclick=()=>{el('initialDrafts').hidden=false;el('manualToggle').hidden=true;};
@@ -565,18 +565,23 @@ el('piCurrency').onchange=()=>{
 };
 function appendInvoice(invoice,id){
   const row=document.createElement('div');row.className='pi-download-row';
-  const title=document.createElement('span');title.textContent=`${invoice.reference} / ${invoice.currency} / ${(invoice.created_at||'').slice(0,10)}`;row.append(title);
+  const title=document.createElement('strong');title.textContent=`${invoice.reference} / ${invoice.currency} / ${(invoice.created_at||'').slice(0,10)}`;row.append(title);
   for(const format of [invoice.workbook_format||'xlsm',...(invoice.has_pdf?['pdf']:[])]){const link=document.createElement('a');link.textContent='Download '+format.toUpperCase();link.href=`/api/orders/${id}/invoices/${invoice.id}/download?format=${format}`;link.onclick=async event=>{event.preventDefault();try{await window.downloadPiFile(link.href);}catch(error){message(error.message,true);}};row.append(link);}
+  if(current?.order.can_edit){
+    const edit=document.createElement('button');edit.type='button';edit.className='pi-action-button pi-edit-button';edit.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16.5 3.5 4 4L8 20H4v-4L16.5 3.5Z"/><path d="m14 6 4 4"/></svg>';edit.title='Edit PI';edit.setAttribute('aria-label','Edit PI '+invoice.reference);
+    edit.onclick=async()=>{edit.disabled=true;try{const base=`/api/orders/${id}/invoices/preview`;const result=await api(`/api/orders/${id}/invoices/${invoice.id}/edit-preview`,json('POST',{}));invoicePreview.open(result,base);}catch(error){message(error.message,true);}finally{edit.disabled=false;}};
+    row.append(edit);
+  }
   if(current?.order.can_edit&&current.order.can_delete_order){
-    const remove=document.createElement('button');remove.type='button';remove.className='pi-remove-button';remove.textContent='\u2212';remove.title='Remove PI';remove.setAttribute('aria-label','Remove PI '+invoice.reference);
+    const remove=document.createElement('button');remove.type='button';remove.className='pi-action-button pi-remove-button';remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="m9 7 1-3h4l1 3M6 7l1 14h10l1-14"/></svg>';remove.title='Delete PI';remove.setAttribute('aria-label','Delete PI '+invoice.reference);
     remove.onclick=async()=>{
-      if(!window.confirm(`Remove PI ${invoice.reference} from the invoice records?`))return;
+      if(!window.confirm(`Delete PI ${invoice.reference} from the invoice records?`))return;
       remove.disabled=true;
       try{
         await api(`/api/orders/${id}/invoices/${invoice.id}`,{method:'DELETE'});
         row.remove();if(current?.order.id===id)current.invoices=(current.invoices||[]).filter(item=>item.id!==invoice.id);
         invoicePreview.removeIssued?.(invoice.id);
-        message('PI removed.');
+        message('PI deleted.');
       }catch(error){remove.disabled=false;message(error.message,true);}
     };
     row.append(remove);
@@ -587,7 +592,7 @@ const invoicePreview=window.createPiPreview(el('piPreview'),api,json,async resul
   appendInvoice({...result,currency:el('piCurrency').value,workbook_format:'xlsx',has_pdf:true},current.order.id);
   current.order.status=result.order_status||'completed';updateOrderStatusUI(current.order);
   el('detailAccess').textContent=`${current.order.status==='completed'?'Complete':'Pending'} / ${current.order.currency} / Editable`;
-  await load();message(`PI ${result.reference} generated. ${current.order.status==='completed'?'Order marked complete.':'Order remains pending.'} Excel and PDF are ready.`);
+  await load();message(`PI ${result.reference} generated. ${current.order.status==='completed'?'PI marked complete.':'PI remains pending.'} Excel and PDF are ready.`);
 },doc=>{
   if(current)current.order.pi_reference=doc.reference;
   el('pi_reference').value=doc.reference;
@@ -612,8 +617,8 @@ el('piForm').onsubmit=async event=>{
 };
 (async()=>{try{
   const me=await api('/api/me');canEditPIReference=['admin','manager','sales_tl'].includes(me.role);
-  if(enquiryScope){const e=(await api(`/api/enquiries/${enquiryScope}`)).enquiry;el('context').textContent=`Orders for ${e.reference} / ${e.client_name}`;el('newOrder').hidden=!e.can_edit||!e.client_active;}
-  else if(clientScope){const c=(await api(`/api/leads/${clientScope}`)).lead;el('context').textContent=`Orders for ${c.name}`;el('newOrder').hidden=!c.can_edit||!c.is_active;}
+  if(enquiryScope){const e=(await api(`/api/enquiries/${enquiryScope}`)).enquiry;el('context').textContent=`PI for ${e.reference} / ${e.client_name}`;el('newOrder').hidden=!e.can_edit||!e.client_active;}
+  else if(clientScope){const c=(await api(`/api/leads/${clientScope}`)).lead;el('context').textContent=`PI for ${c.name}`;el('newOrder').hidden=!c.can_edit||!c.is_active;}
   if(!clientScope)el('newOrder').hidden=true;
   await load();if(params.get('order_id')){if(params.get('edit')==='1')await editOrder(Number(params.get('order_id')));else await showDetails(Number(params.get('order_id')));}if(params.get('new')==='1')await createOrder();
 }catch(error){message(error.message,true);}})();

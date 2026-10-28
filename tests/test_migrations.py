@@ -200,7 +200,7 @@ class MigrationTests(unittest.TestCase):
             connection.execute("INSERT INTO client_leads(name,created_by) VALUES('Client',1)")
             connection.execute("INSERT INTO client_orders(reference,client_id,order_date,currency,created_by,updated_by) VALUES('ORDER-1',1,'2026-10-17','USD',1,1)")
             connection.execute("INSERT INTO order_sku_lines(order_id,sku,description,quantity_milli,unit_price_minor,currency,created_by,updated_by) VALUES(1,'SKU','Part',1000,100,'USD',1,1)")
-            connection.execute("INSERT INTO order_invoices(order_id,reference,currency,snapshot_json,workbook,created_by,workbook_format,pdf) VALUES(1,'PI-1','USD','{}',?,1,'xlsx',?)",(b'workbook',b'pdf'))
+            connection.execute("INSERT INTO order_invoices(order_id,reference,currency,snapshot_json,workbook,created_by,workbook_format,pdf) VALUES(1,'ORDER-1','USD','{}',?,1,'xlsx',?)",(b'workbook',b'pdf'))
             connection.execute("UPDATE sqlite_sequence SET seq=100 WHERE name='client_orders'")
             before = {table: connection.execute('SELECT * FROM '+table).fetchall() for table in tables}
             indexes = connection.execute("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").fetchall()
@@ -231,7 +231,7 @@ class MigrationTests(unittest.TestCase):
             connection.execute("INSERT INTO client_orders(reference,client_id,order_date,currency,created_by,updated_by) "
                                "VALUES('ORDER-1',1,'2026-10-16','USD',1,1)")
             connection.execute("INSERT INTO order_invoices(order_id,reference,currency,snapshot_json,workbook,created_by,workbook_format,pdf) "
-                               "VALUES(1,'PI-1','USD','{}',?,1,'xlsx',?)",(b'workbook fixture',b'pdf fixture'))
+                               "VALUES(1,'ORDER-1','USD','{}',?,1,'xlsx',?)",(b'workbook fixture',b'pdf fixture'))
             connection.execute("INSERT INTO invoice_previews(id,order_id,created_by,document_json,issued_invoice_id) "
                                "VALUES('preview',1,1,'{}',1)")
             connection.execute("INSERT INTO order_sku_lines(order_id,sku,description,quantity_milli,unit_price_minor,currency,created_by,updated_by) "

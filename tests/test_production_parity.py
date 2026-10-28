@@ -26,13 +26,13 @@ class ProductionParityTests(unittest.TestCase):
         with patch('backend.quotation_tool.blog_lookup.requests.get', return_value=response):
             result = lookup_ref(ref)
         self.assertEqual(result['source'], 'atlas')
-        self.assertEqual(result['qty'], 4)
+        self.assertEqual(result['Quantity'], 4)
         self.assertIsNone(result['price'])
         self.assertEqual(result['condition'], 'USED')
 
     def test_price_recheck_and_partner_link_are_not_presented_as_an_offer(self):
         rows = [{'found': True, 'sku': 'A', 'title': 'Part', 'condition': 'Used',
-                 'price': 100, 'sale_price': 80, 'qty': 1,
+                 'price': 100, 'sale_price': 80, 'Quantity': 1,
                  'source': 'atlas', 'url': 'https://atlasship.blogspot.com/post'}]
         html = _q_build_table(rows, 'USD', 0)
         self.assertIn('Price recheck needed', html)
@@ -102,7 +102,7 @@ class ProductionParityTests(unittest.TestCase):
         app = Flask(__name__)
         product = {'sku_input': '26733', 'sku': '26733', 'found': True,
                    'title': 'Pump', 'condition': 'Used', 'price': 100.0,
-                   'sale_price': None, 'qty': 1, 'url': ''}
+                   'sale_price': None, 'Quantity': 1, 'url': ''}
         with app.test_request_context('/api/quotation/letter', method='POST',
                                       json={'skus': ['26733'], 'currency': 'USD'}), \
                 patch('backend.quotation_tool.routes._lookup_rows', return_value=[product]), \

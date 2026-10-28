@@ -16,8 +16,8 @@ class StockTests(unittest.TestCase):
                                     'SHOPIFY_CLIENT_ID':'fixture',
                                     'SHOPIFY_CLIENT_SECRET':'fixture'}):
             from backend.quotation_tool import shopify
-        with patch.object(shopify, 'fetch_sku', return_value={'found':True,'qty':2}) as lookup:
-            self.assertEqual(lookup_stock('PART')['qty'],2)
+        with patch.object(shopify, 'fetch_sku', return_value={'found':True,'Quantity':2}) as lookup:
+            self.assertEqual(lookup_stock('PART')['Quantity'],2)
             lookup.assert_called_once_with('PART',refresh=True)
 
     def test_refresh_ignores_cached_stock_and_updates_cache(self):
@@ -29,19 +29,19 @@ class StockTests(unittest.TestCase):
         response.json.return_value={'data':{'productVariants':{'edges':[{'node':{
             'sku':'PART','price':'10','inventoryQuantity':2,'product':{'title':'Part'}
         }}]}}}
-        cache={'PART':({'found':True,'qty':100},shopify.time.time())}
+        cache={'PART':({'found':True,'Quantity':100},shopify.time.time())}
         with patch.object(shopify,'_sku_cache',cache), \
                 patch.object(shopify,'_get_token',return_value='fixture'), \
                 patch.object(shopify.requests,'post',return_value=response) as request:
-            self.assertEqual(shopify.fetch_sku('PART')['qty'],100)
+            self.assertEqual(shopify.fetch_sku('PART')['Quantity'],100)
             request.assert_not_called()
-            self.assertEqual(shopify.fetch_sku('PART',refresh=True)['qty'],2)
+            self.assertEqual(shopify.fetch_sku('PART',refresh=True)['Quantity'],2)
             request.assert_called_once()
-            self.assertEqual(shopify.fetch_sku('PART')['qty'],2)
+            self.assertEqual(shopify.fetch_sku('PART')['Quantity'],2)
             self.assertEqual(request.call_count,1)
 
     def test_batch_checks_each_sku_once_and_reports_all_failures(self):
-        products=[{'found':True,'qty':2},{'found':True,'qty':0},RuntimeError('Offline')]
+        products=[{'found':True,'Quantity':2},{'found':True,'Quantity':0},RuntimeError('Offline')]
         with patch('backend.orders.catalog.enforce_sku_lookup_limit'), \
                 patch('backend.orders.catalog.lookup_stock',side_effect=products) as lookup:
             with self.assertRaises(ValueError) as error:

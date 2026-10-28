@@ -17,7 +17,7 @@ def log_quote_lines(user_name, source, results):
                          str(item.get('title') or '')[:300],
                          str(item.get('condition') or '')[:80],
                          item.get('price'), item.get('sale_price'),
-                         _q_eff_price(item), str(item.get('qty') or '')[:20],
+                         _q_eff_price(item), str(item.get('Quantity') or '')[:20],
                          str(item.get('source') or 'shopify')[:20]))
     if not rows:
         return

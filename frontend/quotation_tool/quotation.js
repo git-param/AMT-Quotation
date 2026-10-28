@@ -187,7 +187,7 @@ function renderResults() {
     }
     const usd = fmtDualUsd(r);
     const inr = fmtDualInr(r, _rate);
-    const qty = r.qty !== '' && r.qty != null ? `${r.qty} Pcs` : '';
+    const Quantity = r.Quantity !== '' && r.Quantity != null ? `${r.Quantity} Pcs` : '';
     const link = r.url ? `<a href="${esc(r.url)}" target="_blank">Click here</a>` : '';
     if (r.url) _urlMap[sr] = r.url;
     const skuVal = r.sku || r.sku_input;
@@ -199,7 +199,7 @@ function renderResults() {
       <td class="left">${esc(r.title || '')}</td>
       <td class="center">${esc(r.condition || '')}</td>
       <td class="center" style="white-space:nowrap">${link}</td>
-      <td class="center">${esc(qty)}</td>
+      <td class="center">${esc(Quantity)}</td>
       <td class="center">${usd}</td>
       <td class="center">${inr}</td>
       <td class="center">Free</td>
@@ -219,7 +219,7 @@ function renderResults() {
 function updateCopyButtonState() {
   const warn = document.getElementById('recheckWarningBar');
   const rows = copyRows();
-  const hasZeroQuantity = rows.some(r => r.found && (r.qty === 0 || String(r.qty).trim() === '0'));
+  const hasZeroQuantity = rows.some(r => r.found && (r.Quantity === 0 || String(r.Quantity).trim() === '0'));
   const hasRecheckRows = rows.some(r => r.found && r.sale_price != null && r.price != null
     && r.sale_price < r.price && Math.round((1 - r.sale_price / r.price) * 100) > MAX_DISC_PCT);
   const copyBlocked = hasRecheckRows || hasZeroQuantity;
@@ -243,7 +243,7 @@ function copyRows() {
 
 function copyBlocked() {
   const rows = copyRows();
-  const hasZeroQuantity = rows.some(r => r.found && (r.qty === 0 || String(r.qty).trim() === '0'));
+  const hasZeroQuantity = rows.some(r => r.found && (r.Quantity === 0 || String(r.Quantity).trim() === '0'));
   const hasRecheckRows = rows.some(r => r.found && r.sale_price != null && r.price != null
     && r.sale_price < r.price && Math.round((1 - r.sale_price / r.price) * 100) > MAX_DISC_PCT);
   if (hasRecheckRows) {
@@ -325,7 +325,7 @@ function buildHTMLTable(currency) {
 <th style="${thw(20)};text-align:left">Description</th>
 <th style="${thw(9)}">Condition</th>
 <th style="${thw(8)}">Product Details &amp; Pictures</th>
-<th style="${thw(6)}">Available QTY</th>
+<th style="${thw(6)}">Available Quantity</th>
 <th style="${thw(hasDiscount?8:9)}">${priceHdr}</th>
 ${hasDiscount ? `<th style="${thw(7)}">Discount${_discHeaderPct ? '<br><span style="font-size:9pt;font-weight:normal;">' + _discHeaderPct + ' off</span>' : ''}</th><th style="${thw(8)}">Final Price</th>` : ''}
 <th style="${thw(6)}">Shipping</th>
@@ -400,7 +400,7 @@ ${hasDiscount ? `<td style="${tdD}">—</td><td style="${tdC}">—</td>` : ''}
       rateTd = `<td style="${tdC}">${priceStr}</td>`;
     }
 
-    const qty  = (r.qty !== '' && r.qty != null) ? `${r.qty} Pcs` : '';
+    const Quantity  = (r.Quantity !== '' && r.Quantity != null) ? `${r.Quantity} Pcs` : '';
     const link = r.url ? `<a href="${escH(r.url)}" style="color:#1155CC;text-decoration:underline;">Click here</a>` : '';
     html += `<tr>
 <td style="${tdC}">${escH(r.sku || r.sku_input)}</td>
@@ -408,7 +408,7 @@ ${hasDiscount ? `<td style="${tdD}">—</td><td style="${tdC}">—</td>` : ''}
 <td style="${tdL}">${escH(r.title || '')}</td>
 <td style="${tdC}">${escH(r.condition || '')}</td>
 <td style="${tdC};white-space:nowrap">${link}</td>
-<td style="${tdC}">${escH(qty)}</td>
+<td style="${tdC}">${escH(Quantity)}</td>
 ${rateTd}${discTd}${finalTd}
 <td style="${tdC}">Free</td>
 <td style="${tdC}">Ready Stock</td>
@@ -558,7 +558,7 @@ Based on your request we are pleased to offer you the below product.
 Product Details/Photos ${r.url || ''}
 
 *Price: ${priceStr}*
-Available Qty: ${r.qty ?? ''}
+Available Quantity: ${r.Quantity ?? ''}
 Condition: ${r.condition || ''}${gst}
 
 *Shipping: Free*

@@ -448,7 +448,7 @@ class RBACTests(unittest.TestCase):
 
     def test_quotation_lookup_and_rate_keep_existing_response_format(self):
         self.session_as('sales_executive')
-        product = {'found': True, 'sku': '001', 'price': 25.0, 'qty': 3}
+        product = {'found': True, 'sku': '001', 'price': 25.0, 'Quantity': 3}
         with patch('backend.quotation_tool.routes.fetch_sku',
                    return_value=product) as lookup, \
                 patch('backend.quotation_tool.routes.threading.Thread'):

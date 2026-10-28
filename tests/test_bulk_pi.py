@@ -215,7 +215,7 @@ class BulkPiTests(unittest.TestCase):
         self.assertEqual(section['rows'][0][0]['text'], 'Annexure-1')
         self.assertEqual(section['rows'][0][0]['span'], 6)
         self.assertEqual([cell['text'] for cell in section['rows'][1]],
-                         ['Sr No.','Item Description','Condition','Qty','Unit Price\n(USD)','Total Price\n(USD)'])
+                         ['Sr No.','Item Description','Condition','Quantity','Unit Price\n(USD)','Total Price\n(USD)'])
         self.assertTrue(all(len(row)==6 for row in section['rows'][1:-1]))
         self.assertEqual([cell['col'] for cell in section['rows'][-1]], [0,1,2,3])
         self.assertTrue(all(not cell['text'] for row in section['rows'][11:13] for cell in row))

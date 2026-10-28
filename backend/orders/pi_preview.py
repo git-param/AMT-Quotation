@@ -35,14 +35,14 @@ def authorized(connection,order_id):
         return None,None,(jsonify(error='Not logged in'),401)
     order=read_order(connection,user,order_id)
     if not order:
-        return None,None,(jsonify(error='Order not found.'),404)
+        return None,None,(jsonify(error='PI not found.'),404)
     if not order['can_edit']:
         return None,None,(jsonify(error='Client access is read-only.'),403)
     return user,order,None
 
 
 def can_edit_pi_reference(user):
-    return user['role'] in ('admin','manager','sales_tl')
+    return True
 
 
 def preview_layout(document,user):
@@ -78,7 +78,8 @@ def persist_order_edits(connection, order_id, user, order, previous, doc):
         'delivery_time','dispatch_method','notes')
         if doc['order'][key] != previous['order'][key]}
     if doc['date'] != previous['date']:
-        if connection.execute('SELECT 1 FROM order_invoices WHERE order_id=? AND deleted_at IS NULL',
+        if not doc.get('source_invoice_id') and connection.execute(
+                'SELECT 1 FROM order_invoices WHERE order_id=? AND deleted_at IS NULL',
                               (order_id,)).fetchone():
             raise ValueError('Generated PI dates cannot be edited.')
         order_changes['pi_date'] = doc['date']
@@ -165,6 +166,49 @@ def persist_order_edits(connection, order_id, user, order, previous, doc):
     doc['source_updated_at'] = doc['source_state']['order']['updated_at']
     doc['order']['pi_date'] = doc['source_state']['order']['pi_date']
     return True
+
+
+@bp.route('/api/orders/<int:order_id>/invoices/<int:invoice_id>/edit-preview', methods=['POST'])
+@authenticated_required
+def edit_invoice_preview(order_id, invoice_id):
+    connection = get_db()
+    try:
+        user, order, error = authorized(connection, order_id)
+        if error:
+            return error
+        invoice = connection.execute(
+            'SELECT snapshot_json FROM order_invoices '
+            'WHERE id=? AND order_id=? AND deleted_at IS NULL',
+            (invoice_id, order_id)).fetchone()
+        if not invoice:
+            return jsonify(error='PI not found.'), 404
+        document = json.loads(invoice['snapshot_json'])
+        if not isinstance(document, dict) or not document.get('totals'):
+            return jsonify(error='This saved PI format cannot be edited.'), 409
+        if not document.get('source_state') and isinstance(document.get('state'), dict):
+            document = prepare(document['state'], user, invoice['currency'],
+                               document['totals'].get('usd_inr_rate'))
+            document['date'] = json.loads(invoice['snapshot_json']).get('date', document['date'])
+        if not document.get('source_state'):
+            return jsonify(error='This saved PI format cannot be edited.'), 409
+        document['source_invoice_id'] = invoice_id
+        document['source_updated_at'] = order['updated_at']
+        document['source_state'] = details(connection, order)
+        document['source_state']['order']['updated_at'] = order['updated_at']
+        preview_id = uuid4().hex
+        connection.execute(
+            'INSERT INTO invoice_previews(id,order_id,created_by,document_json) VALUES(?,?,?,?)',
+            (preview_id, order_id, user['id'], json.dumps(document)))
+        connection.commit()
+        return jsonify(preview_id=preview_id, document=document,
+                       layout=preview_layout(document, user),
+                       missing_fields=missing_details(document),
+                       pdf_url=f'/api/orders/{order_id}/invoices/preview/{preview_id}/pdf')
+    except (ValueError, json.JSONDecodeError) as error:
+        return validation_error(error)
+    finally:
+        connection.rollback()
+        connection.close()
 
 
 @bp.route('/api/orders/<int:order_id>/invoices/preview',methods=['POST'])
@@ -381,7 +425,33 @@ def issue_preview(order_id):
                            'currency': doc['currency'], 'preview_id': row['id'],
                            'formats': ['xlsx', 'pdf']}, actor=user,
                           connection=connection)
+        else:
+            source = doc.get('source_invoice_id')
+            invoice = connection.execute(
+                'SELECT id FROM order_invoices WHERE id=? AND order_id=? AND deleted_at IS NULL',
+                (source, order_id)).fetchone()
+            if not invoice:
+                return jsonify(error='The saved PI is no longer available.'), 409
+            connection.execute(
+                'UPDATE order_invoices SET reference=?,currency=?,snapshot_json=?,workbook=?,pdf=? '
+                'WHERE id=?',
+                (doc['reference'], doc['currency'], document_json, workbook, pdf, source))
+            invoice_id = source
+            connection.execute('UPDATE invoice_previews SET issued_invoice_id=? WHERE id=?',
+                              (invoice_id, row['id']))
+            connection.execute(
+                "UPDATE client_orders SET pi_reference=?,pi_date=?,updated_by=?,"
+                "updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+                (doc['reference'], doc['date'], user['id'], order_id))
+            record_revision(connection, order_id, user, 'edit')
+            record_action('pi_update', 'order', order_id,
+                          {'invoice_id': invoice_id, 'reference': doc['reference'],
+                          'currency': doc['currency'], 'preview_id': row['id'],
+                          'formats': ['xlsx', 'pdf']}, actor=user,
+                          connection=connection)
         connection.commit()
         return issued_response(connection,order_id,invoice_id,doc)
     except ValueError as error:return validation_error(error)
+    except sqlite3.IntegrityError:
+        return jsonify(error='Another PI already uses that PI number.'),409
     finally:connection.rollback();connection.close()

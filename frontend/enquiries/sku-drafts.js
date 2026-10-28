@@ -34,7 +34,7 @@
     host.classList.add('sku-drafts');
     if(commercial)host.classList.add('sku-drafts--order');
     host.replaceChildren();
-    const heading = document.createElement('h3'); heading.textContent = commercial ? 'Order SKU items' : 'Enquiry SKU items';
+    const heading = document.createElement('h3'); heading.textContent = commercial ? 'PI SKU items' : 'Enquiry SKU items';
     const hint = document.createElement('p'); hint.textContent = 'Enter SKUs (one per line or comma-separated)';
     const input = document.createElement('textarea'); input.rows = 3; input.placeholder = '1258\n2456'; input.setAttribute('aria-label','SKU codes');
     const tools = document.createElement('div'); tools.className = 'draft-tools';
@@ -46,7 +46,7 @@
     const tableBox = document.createElement('div'); tableBox.className = 'source-table';
     const table = document.createElement('table'); table.className = 'tbl';
     const head = document.createElement('thead'); const headRow = document.createElement('tr');
-    ['','SKU','Sr No','Description','Condition','Product Details & Pictures','Available QTY','Rate/Pcs (USD)','Rate/Pcs (INR)','Shipping','Lead Time','Image'].forEach(label => { const th = document.createElement('th'); th.textContent = label; headRow.append(th); }); head.append(headRow);
+    ['','SKU','Sr No','Description','Condition','Product Details & Pictures','Available Quantity','Rate/Pcs (USD)','Rate/Pcs (INR)','Shipping','Lead Time','Image'].forEach(label => { const th = document.createElement('th'); th.textContent = label; headRow.append(th); }); head.append(headRow);
     const allBox = document.createElement('input'); allBox.type='checkbox'; allBox.checked=true; allBox.setAttribute('aria-label','Include all SKU items'); headRow.children[0].append(allBox);
     const body = document.createElement('tbody'); table.append(head,body); tableBox.append(table);
     tools.append(fetchButton,manual,status); lookup.append(hint,input,tools); host.append(heading,lookup,tableBox);
@@ -115,7 +115,7 @@
       activeRow=Math.min(activeRow,rows.length-1);
       const row=rows[activeRow];
       const toolbar=document.createElement('div');toolbar.className='draft-edit-toolbar';
-      const label=document.createElement('span');label.textContent=commercial?'Edit order item':'Edit enquiry item';
+      const label=document.createElement('span');label.textContent=commercial?'Edit PI item':'Edit enquiry item';
       const picker=document.createElement('select');picker.setAttribute('aria-label','Choose SKU item to edit');
       rows.forEach((item,index)=>{const option=document.createElement('option');option.value=index;option.textContent=item.sku || 'Manual item';picker.append(option);});
       picker.value=activeRow;picker.onchange=()=>{activeRow=Number(picker.value);renderEditor();};toolbar.append(label,picker);

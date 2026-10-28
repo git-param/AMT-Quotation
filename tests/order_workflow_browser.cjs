@@ -18,7 +18,7 @@ try{
 await send('Runtime.enable');await send('Page.enable');await send('Emulation.setDeviceMetricsOverride',{width:1366,height:960,deviceScaleFactor:1,mobile:false});
 await send('Page.navigate',{url:base+'/login'});await until("document.querySelector('#username')");
 assert.equal(await evaluate("fetch('/login',{method:'POST',body:new URLSearchParams({username:'browser-fixture',password:'local-fixture-only'})}).then(r=>r.ok)"),true);
-const client=await evaluate(`fetch('/api/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Order Workflow Fixture',company:'Northstar Industrial',email:'orders@example.com',phone:'+919876543210',shipping_address:{line1:'12 Industrial Estate',city:'Mumbai',country:'India'}})}).then(r=>r.json())`);
+const client=await evaluate(`fetch('/api/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'PI Workflow Fixture',company:'Northstar Industrial',email:'orders@example.com',phone:'+919876543210',shipping_address:{line1:'12 Industrial Estate',city:'Mumbai',country:'India'}})}).then(r=>r.json())`);
 assert.ok(client.lead?.id,JSON.stringify(client));const clientId=client.lead.id;
 await send('Page.navigate',{url:base+'/orders?client_id='+clientId+'&new=1'});
 await until("!document.querySelector('#editor')?.hidden && document.querySelector('#referenceHint').textContent.includes('Northstar Industrial')");
@@ -101,9 +101,9 @@ await shot('order-composer-review-mobile');assert.equal(await evaluate("document
 await click('save');await until("!document.querySelector('#detail').hidden");
 record=await evaluate("fetch('/api/orders/'+current.order.id).then(r=>r.json())");
 assert.equal(record.lines.length,1);assert.equal(record.lines[0].quantity,'3');assert.equal(record.lines[0].unit_price,'25.50');assert.match(record.delivery.buyer_text,/Mobile Buyer/);
-// Exercise the actual Clients & Orders iframe too.
-await send('Page.navigate',{url:base+'/clients-orders'});await until("document.querySelector('#leads')?.textContent.includes('Order Workflow Fixture')");
-await evaluate("[...document.querySelectorAll('#leads button')].find(b=>b.getAttribute('aria-label')?.includes('Order Workflow Fixture') && b.getAttribute('aria-label')?.startsWith('View details')).click()");
+// Exercise the actual Clients & PI iframe too.
+await send('Page.navigate',{url:base+'/clients-orders'});await until("document.querySelector('#leads')?.textContent.includes('PI Workflow Fixture')");
+await evaluate("[...document.querySelectorAll('#leads button')].find(b=>b.getAttribute('aria-label')?.includes('PI Workflow Fixture') && b.getAttribute('aria-label')?.startsWith('View details')).click()");
 await until("document.querySelector('.related-orders .btn-add')");await evaluate("document.querySelector('.related-orders .btn-add').click()");
 await until("document.querySelector('iframe')?.contentWindow.document.querySelector('#editor') && !document.querySelector('iframe').contentWindow.document.querySelector('#editor').hidden");
 assert.equal(await evaluate("document.querySelector('iframe').contentWindow.document.documentElement.scrollWidth<=document.querySelector('iframe').contentWindow.innerWidth"),true);

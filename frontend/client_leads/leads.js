@@ -1,4 +1,4 @@
-/* Clients & Orders — directory, client drawer and profile.
+/* Clients & PI — directory, client drawer and profile.
    Business rules are unchanged: every API call, permission flag and ownership
    rule below comes straight from the previous implementation. */
 let profileVersion = 0;
@@ -218,7 +218,7 @@ function renderLead(lead) {
         ? [lead.email && h('span', { class: 'cl-line', text: lead.email }), lead.phone && h('span', { class: 'cl-line', text: lead.phone })]
         : [h('span', { class: 'cl-muted', text: 'No contact details' })])),
     h('div', { class: 'cl-cell cl-owner', 'data-label': 'Owner', text: lead.creator_name || '-' }),
-    h('div', { class: 'cl-cell', 'data-label': 'Orders' },
+    h('div', { class: 'cl-cell', 'data-label': 'PI' },
       h('button', {
         type: 'button', class: 'cl-orders', onclick: open,
         'aria-label': `${orders} ${orders === 1 ? 'order' : 'orders'}, ${pending} pending. Open ${lead.name}`,
@@ -303,6 +303,7 @@ byId('toggleFilters').onclick = () => {
   panel.hidden = !panel.hidden;
   byId('toggleFilters').setAttribute('aria-expanded', String(!panel.hidden));
 };
+byId('toggleFilters').setAttribute('aria-expanded', String(!byId('morePanel').hidden));
 byId('previousPage').onclick = () => { if (currentPage > 1) { currentPage--; load().catch(fail); } };
 byId('nextPage').onclick = () => { if (currentPage < totalPages) { currentPage++; load().catch(fail); } };
 byId('pageSize').onchange = () => { currentPage = 1; load().catch(fail); };
