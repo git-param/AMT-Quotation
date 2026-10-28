@@ -14,7 +14,7 @@ from backend.orders.locations import country_block, gst_number, with_gst, withou
 from backend.orders.service import header, order_line
 from backend.common.currencies import CURRENCIES, conversion_rates, configured_rates
 
-ASSETS = ('header.png', 'address.png', 'payment_options.jpg', 'signature.png')
+ASSETS = ('header.png', 'payment_options.jpg', 'signature.png')
 ORDER_FIELDS = {'po_reference', 'pi_reference', 'payment_terms', 'delivery_terms', 'destination',
                 'delivery_time', 'dispatch_method', 'notes'}
 LINE_FIELDS = {'id','sku','description','hsn_code','item_condition','uom','quantity','unit_price'}

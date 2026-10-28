@@ -1,13 +1,14 @@
 """Render the established company invoice grid without a reference workbook."""
 from backend.common.currencies import currency_symbol
 import base64
+import math
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 from threading import Lock
 from xml.sax.saxutils import escape
 
-from PIL import Image as PILImage
+from PIL import Image as PILImage, ImageDraw, ImageFont
 import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell
 from reportlab.lib import colors
@@ -16,9 +17,10 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, KeepInFrame
+from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, KeepInFrame, Flowable
 
 from backend.orders.normal_pi.layout import layout,terms
+from backend.orders.company_profile import COMPANY_PI_PROFILE
 from backend.orders.terms_config import RETURN_POLICY_LABEL, RETURN_POLICY_URL
 
 _font_lock = Lock()
@@ -42,6 +44,192 @@ class FullWidthKeepInFrame(KeepInFrame):
 
 def asset(doc,name):
     return BytesIO(base64.b64decode(doc['assets'][name]))
+
+
+class OfficeLocationPin(Flowable):
+    """Match the office pin silhouette used in the editable PI preview."""
+    def __init__(self):
+        super().__init__()
+        self.width=27*.75
+        self.height=31*.75
+        self.hAlign='CENTER'
+
+    def draw(self):
+        red=colors.HexColor('#852020')
+        self.canv.setFillColor(red)
+        scale_x=self.width/36
+        scale_y=self.height/42
+        def point(x,y):
+            return x*scale_x,(42-y)*scale_y
+        path=self.canv.beginPath()
+        path.moveTo(*point(18,1.5))
+        path.curveTo(*point(8.9,1.5),*point(2,8.4),*point(2,17.1))
+        path.curveTo(*point(2,28.2),*point(18,40.5),*point(18,40.5))
+        path.curveTo(*point(18,40.5),*point(34,28.2),*point(34,17.1))
+        path.curveTo(*point(34,8.4),*point(27.1,1.5),*point(18,1.5))
+        path.close()
+        self.canv.drawPath(path,stroke=0,fill=1)
+        self.canv.setFillColor(colors.white)
+        self.canv.circle(*point(18,16.8),6.1*(scale_x+scale_y)/2,stroke=0,fill=1)
+
+
+class OfficeAddressTable(Table):
+    """Three address cells styled like the reference office-address strip."""
+    divider_height=40*.75
+    minimum_height=140*.75
+
+    def wrap(self, availWidth, availHeight):
+        width,height=super().wrap(availWidth,availHeight)
+        if height < self.minimum_height:
+            extra=self.minimum_height-height
+            for cell in self._cellvalues[0]:
+                if isinstance(cell,(list,tuple)) and cell and isinstance(cell[-1],Spacer):
+                    cell[-1].height=extra
+            width,height=super().wrap(availWidth,availHeight)
+        return width,height
+
+    def drawOn(self, canv, x, y, _sW=0):
+        # A KeepInFrame can offer extra width while drawing its children.
+        # Keep the footer anchored to the invoice frame instead of centering
+        # it again inside that larger temporary width.
+        return super().drawOn(canv,x,y,_sW=0)
+
+    def draw(self):
+        super().draw()
+        self.canv.saveState()
+        try:
+            self.canv.setFillColor(colors.HexColor('#852020'))
+            top_offset=(8+(140-16-100)/2+39)*.75
+            top_y=self._height-top_offset
+            bottom_y=max(0,top_y-self.divider_height)
+            for x in (self._width*.3125,self._width*.6875):
+                # A narrow lens has pointed ends and a wider middle, matching
+                # the reference separator rather than a constant-width stroke.
+                height=top_y-bottom_y
+                half_width=1.5*.75
+                tilt=math.tan(math.radians(1))*height
+                path=self.canv.beginPath()
+                path.moveTo(x,bottom_y)
+                path.curveTo(x-half_width,bottom_y+height*.25,
+                             x+tilt-half_width,bottom_y+height*.75,x+tilt,top_y)
+                path.curveTo(x+tilt+half_width,bottom_y+height*.75,
+                             x+half_width,bottom_y+height*.25,x,bottom_y)
+                path.close()
+                self.canv.drawPath(path,stroke=0,fill=1)
+        finally:
+            self.canv.restoreState()
+
+
+def office_address_font():
+    for path in (Path('C:/Windows/Fonts/arialbd.ttf'),
+                 Path('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')):
+        if path.is_file():
+            with _font_lock:
+                if 'PIOfficeBold' not in pdfmetrics.getRegisteredFontNames():
+                    pdfmetrics.registerFont(TTFont('PIOfficeBold',str(path)))
+            return 'PIOfficeBold'
+    return 'Helvetica-Bold'
+
+
+def office_address_pdf(addresses, usable):
+    style = ParagraphStyle('office_address', fontName=office_address_font(), fontSize=7.5,
+                           leading=8.1, alignment=1, textColor=colors.HexColor('#171717'),
+                           wordWrap='CJK')
+    cells = [[OfficeLocationPin(), Spacer(1, 6.75), Paragraph(escape(address).replace('\n', '<br/>'), style), Spacer(1, 0)]
+             for address in (addresses or [])[:3]]
+    while len(cells) < 3:
+        cells.append([Spacer(1,0)])
+    # Use the complete available width so the addresses and dividers share
+    # the reference's evenly spaced 12.5%, 50%, and 87.5% address centers.
+    widths=[usable*.25,usable*.125,usable*.25,usable*.125,usable*.25]
+    cells=[cells[0],[Spacer(1,0)],cells[1],[Spacer(1,0)],cells[2]]
+    table = OfficeAddressTable([cells], colWidths=widths, hAlign='LEFT')
+    table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 8*.75+9), ('BOTTOMPADDING', (0, 0), (-1, -1), 8*.75),
+    ]))
+    return table
+
+
+def office_address_png(addresses, width_px, height_px=140):
+    """Build the Excel office strip, using address.png for its exact default design."""
+    scale=2
+    width=max(3,int(width_px))*scale;height=max(1,int(height_px))*scale
+    default_addresses=COMPANY_PI_PROFILE['office_addresses']
+    if list(addresses or [])[:3]==default_addresses and len(list(addresses or []))==3:
+        reference=Path(__file__).resolve().parents[3]/'assets'/'PI-img'/'address.png'
+        if reference.is_file():
+            with PILImage.open(reference) as source:
+                target_height=max(1,round(width*source.height/source.width))
+                image=source.convert('RGBA').resize((width,target_height),PILImage.Resampling.LANCZOS)
+            output=BytesIO();image.save(output,format='PNG');output.seek(0)
+            return output
+    canvas=PILImage.new('RGB',(width,height),'white');draw=ImageDraw.Draw(canvas)
+    font_path=Path('C:/Windows/Fonts/arialbd.ttf')
+    font_px=max(12,min(int(width_px)*.0112,15))
+    try:font=ImageFont.truetype(str(font_path),round(font_px*scale))
+    except OSError:font=ImageFont.load_default()
+    red=(133,32,32);column=width*.25;center_start=width*.125;center_step=width*.375
+    def bezier(start,control1,control2,end,steps=12):
+        points=[]
+        for step in range(1,steps+1):
+            t=step/steps;u=1-t
+            points.append((u**3*start[0]+3*u**2*t*control1[0]+3*u*t**2*control2[0]+t**3*end[0],
+                           u**3*start[1]+3*u**2*t*control1[1]+3*u*t**2*control2[1]+t**3*end[1]))
+        return points
+    # Use token-based wrapping so long address lines never cross a divider.
+    for index,address in enumerate((addresses or [])[:3]):
+        center=round(center_start+index*center_step)
+        left=round(center-column/2);right=round(center+column/2)
+        max_width=right-left-44*scale
+        lines=[]
+        for source_line in str(address).replace('\\n','\n').splitlines():
+            words=source_line.split();current=''
+            for word in words:
+                if draw.textbbox((0,0),word,font=font)[2] > max_width:
+                    if current:lines.append(current);current=''
+                    fragment=''
+                    for character in word:
+                        candidate=fragment+character
+                        if fragment and draw.textbbox((0,0),candidate,font=font)[2] > max_width:
+                            lines.append(fragment);fragment=character
+                        else:fragment=candidate
+                    current=fragment
+                    continue
+                candidate=(current+' '+word).strip()
+                if current and draw.textbbox((0,0),candidate,font=font)[2] > max_width:
+                    lines.append(current);current=word
+                else:current=candidate
+            lines.append(current)
+        # Match the browser SVG pin and its 27 x 31 CSS-pixel size.
+        pin_y=20*scale;pin_scale_x=27*scale/36;pin_scale_y=31*scale/42;pin_left=center-18*pin_scale_x
+        def pin_point(x,y):return pin_left+x*pin_scale_x,pin_y+y*pin_scale_y
+        pin=[pin_point(18,1.5)]
+        pin+=bezier(pin_point(18,1.5),pin_point(8.9,1.5),pin_point(2,8.4),pin_point(2,17.1))
+        pin+=bezier(pin_point(2,17.1),pin_point(2,28.2),pin_point(18,40.5),pin_point(18,40.5))
+        pin+=bezier(pin_point(18,40.5),pin_point(18,40.5),pin_point(34,28.2),pin_point(34,17.1))
+        pin+=bezier(pin_point(34,17.1),pin_point(34,8.4),pin_point(27.1,1.5),pin_point(18,1.5))
+        draw.polygon(pin,fill=red)
+        hole_x=6.1*pin_scale_x;hole_y=6.1*pin_scale_y
+        hole_cx,hole_cy=pin_point(18,16.8)
+        draw.ellipse((hole_cx-hole_x,hole_cy-hole_y,hole_cx+hole_x,hole_cy+hole_y),fill='white')
+        line_height=font_px*1.08*scale
+        y=pin_y+31*scale+9*scale
+        for line in lines:
+            box=draw.textbbox((0,0),line,font=font)
+            x=center-(box[2]-box[0])//2
+            draw.text((x,y),line,font=font,fill=(23,23,23));y+=line_height
+    for x in (round(width*.3125),round(width*.6875)):
+        divider_top=(8+((140-16-100)/2)+39)*scale;divider_bottom=divider_top+40*scale
+        top_x=round(x+math.sin(math.radians(1))*20*scale)
+        bottom_x=round(x-math.sin(math.radians(1))*20*scale)
+        draw.line((top_x,divider_top,bottom_x,divider_bottom),fill=red,width=3*scale)
+        radius=3*scale/2
+        draw.ellipse((top_x-radius,divider_top-radius,top_x+radius,divider_top+radius),fill=red)
+        draw.ellipse((bottom_x-radius,divider_bottom-radius,bottom_x+radius,divider_bottom+radius),fill=red)
+    output=BytesIO();canvas.save(output,format='PNG');output.seek(0)
+    return output
 
 
 def clip_workbook_header(raw):
@@ -197,12 +385,12 @@ def pdf(doc):
         if section['name']=='items' and doc.get('pi_format','normal')=='normal' and len(doc['totals']['lines'])<=4:
             item_table=(len(story),rows,heights,table_style)
         story.append(table)
-    footer_rows=[[image('payment_options.jpg',usable*.46),image('signature.png',usable*.44)]]
+    footer_rows=[[image('payment_options.jpg',usable*.43),image('signature.png',usable*.43)]]
     if model['shipping_notice']:
         footer_rows.append([Paragraph(escape(model['shipping_notice']),ParagraphStyle(
             'shipping_notice',fontName=bold,fontSize=10,leading=13,
             textColor=colors.red)),''])
-    footer_block=Table(footer_rows,colWidths=[usable*.5]*2,splitByRow=0)
+    footer_block=Table(footer_rows,colWidths=[usable*.5]*2,splitByRow=0,hAlign='LEFT')
     footer_block.setStyle(TableStyle([
         *([('SPAN',(0,1),(1,1)),('BACKGROUND',(0,1),(-1,1),colors.yellow)]
           if model['shipping_notice'] else []),
@@ -215,7 +403,9 @@ def pdf(doc):
         ('LINEBELOW',(0,-1),(-1,-1),1.2,colors.black),
         *([('LINEABOVE',(0,1),(-1,1),.6,colors.black)] if model['shipping_notice'] else [])]))
     story.append(footer_block)
-    story.append(image('address.png',usable-12))
+    story.append(Spacer(1, 6))
+    story.append(office_address_pdf(model['office_addresses'], usable))
+    story.append(Spacer(1, 8))
     legal_style=ParagraphStyle('legal_notice',fontName=regular,fontSize=8,leading=10,
         alignment=1,textColor=colors.HexColor('#333333'))
     story.append(Paragraph(escape(model['legal_notice']).replace('\n','<br/>'),legal_style))
@@ -277,6 +467,13 @@ def xlsx(doc):
             scale=w/im.width if name=='header.png' else min(w/im.width,h/im.height)
             dpi=im.info.get('dpi',(96,96))
         data.seek(0);sheet.insert_image(row,col,name,{'image_data':data,'x_scale':scale*dpi[0]/96,'y_scale':scale*dpi[1]/96,'object_position':1})
+    def office_address_image(row):
+        data=office_address_png(model['office_addresses'],sum(int(width*7+5) for width in model['widths']))
+        with PILImage.open(data) as address_image:
+            row_height=address_image.height*.375/5
+        data.seek(0)
+        sheet.insert_image(row,0,'office-addresses.png',{'image_data':data,'x_scale':.5,'y_scale':.5,'object_position':1})
+        return row_height
     for row in range(7):sheet.set_row(row,24)
     image('header.png',0,0,950,125)
     row_index=7
@@ -348,7 +545,7 @@ def xlsx(doc):
     footer_start=row_index
     image('payment_options.jpg',footer_start,0,440,90);image('signature.png',footer_start,5,440,90)
     for offset in range(4):
-        row=footer_start+offset;top=offset==0;bottom_edge=offset==3 and not model['shipping_notice']
+        row=footer_start+offset;top=offset==0;bottom_edge=False
         left=book.add_format({'left':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
         right=book.add_format({'right':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
         edge=book.add_format({'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
@@ -358,9 +555,12 @@ def xlsx(doc):
     if model['shipping_notice']:
         notice_format=book.add_format({'font_name':'Cambria','font_size':10,'bold':True,
             'font_color':'#FF0000','bg_color':'#FFFF00','text_wrap':True,'valign':'vcenter',
-            'left':2,'right':2,'top':1,'bottom':2,'border_color':'#000000'})
+            'left':2,'right':2,'top':1,'bottom':0,'border_color':'#000000'})
         sheet.merge_range(row_index,0,row_index,10,model['shipping_notice'],notice_format);sheet.set_row(row_index,36);row_index+=1
-    image('address.png',row_index,0,950,92);row_index+=6
+    address_row=row_index
+    row_height=office_address_image(address_row)
+    for offset in range(5):sheet.set_row(address_row+offset,row_height)
+    row_index=address_row+5
     legal_format=book.add_format({'font_name':'Cambria','font_size':8,'align':'center','valign':'vcenter','text_wrap':True})
     sheet.merge_range(row_index,0,row_index,10,model['legal_notice'],legal_format)
     sheet.set_row(row_index,28)

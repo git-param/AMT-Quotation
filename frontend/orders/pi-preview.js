@@ -270,7 +270,16 @@ window.createPiPreview = function (host, api, json, onIssued, onSaved = () => {}
       image(signatures,'payment_options.jpg');image(signatures,'signature.png');
       const box=node('div',undefined,'pi-footer-box');box.append(signatures);
       if(includeAddress&&state.layout.shipping_notice)box.append(node('div',state.layout.shipping_notice,'pi-shipping-notice'));
-      if(includeAddress)image(box,'address.png');
+      if(includeAddress){
+        const strip=node('div',undefined,'pi-office-address-strip');
+        const officeAddresses=state.layout.office_addresses||state.document.company?.office_addresses||[];
+        for(const address of officeAddresses.slice(0,3)){
+          const item=node('div',undefined,'pi-office-address');
+          const pin=node('span',undefined,'pi-office-pin');pin.setAttribute('aria-hidden','true');
+          item.append(pin,node('p',address));strip.append(item);
+        }
+        box.append(strip);
+      }
       if(includeLegal)box.append(node('div',state.layout.legal_notice,'pi-legal-notice'));
       parent.append(box);
     }

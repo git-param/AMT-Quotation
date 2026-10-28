@@ -1216,13 +1216,11 @@ body.embedded #detail {
 .pi-paper .pi-grid-header .pi-cell-date_label {
   white-space: nowrap;
 }
+.pi-shipping-notice{font-family:Cambria;font-size:11pt;font-weight:700}
 .pi-paper .pi-shipping-notice {
   padding: 3px;
   background: #ff0;
   color: #f00;
-  font-family: Cambria, Cochin, Georgia, serif;
-  font-size: 10pt;
-  font-weight: 700;
   border-left: 1.5px solid #000;
   border-right: 1.5px solid #000;
   border-top: 1px solid #000;
@@ -1233,6 +1231,7 @@ body.embedded #detail {
   width: 36%;
 }
 .pi-footer-box {
+  width: 100%;
   border: 0;
 }
 .pi-paper .pi-footer-box .pi-signatures {
@@ -1248,12 +1247,60 @@ body.embedded #detail {
 .pi-paper .pi-footer-box .pi-signatures img:last-child {
   width: 44%;
 }
-.pi-footer-box > img {
-  display: block;
+.pi-office-address-strip {
   box-sizing: border-box;
   width: 100%;
-  height: auto;
-  padding: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 140px;
+  padding: 8px 0;
+  border: 0;
+  background: #fff;
+}
+.pi-office-address {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  width: 25%;
+  flex: 0 0 25%;
+  min-height: 100px;
+  min-width: 0;
+  padding: 0;
+  text-align: center;
+}
+.pi-office-address:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 39px;
+  right: -25%;
+  width: 3px;
+  height: 40px;
+  border-radius: 50%;
+  background: #852020;
+  transform: rotate(1deg);
+}
+.pi-office-pin {
+  display: block;
+  width: 27px;
+  height: 31px;
+  flex: 0 0 31px;
+  margin: 0 0 9px;
+  color: #852020;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 42'%3E%3Cpath fill='%23852020' d='M18 1.5C8.9 1.5 2 8.4 2 17.1c0 11.1 16 23.4 16 23.4s16-12.3 16-23.4C34 8.4 27.1 1.5 18 1.5Z'/%3E%3Ccircle cx='18' cy='16.8' r='6.1' fill='white'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.pi-office-address p {
+  margin: 0;
+  font-family: Montserrat, Arial, sans-serif;
+  font-size: clamp(12px, 1.12vw, 15px);
+  line-height: 1.08;
+  font-weight: 700;
+  letter-spacing: -0.25px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 .pi-legal-notice {
   padding: 5px 8px;

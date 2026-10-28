@@ -168,8 +168,8 @@ and failed generation leaves its status unchanged. Users may move an issued
 order back to pending; retrying the same issued preview or downloading its files
 does not complete it again.
 
-Native renderers use `assets/PI-img/header.png`, `address.png`,
-`payment_options.jpg` and `signature.png`. Assets and company settings are frozen
+Native renderers use `assets/PI-img/header.png`, `payment_options.jpg` and
+`signature.png`; office locations come from `COMPANY_PI_PROFILE`. Assets and company settings are frozen
 in each snapshot. No reference workbook, Excel installation, VBA, country lists
 or helper worksheets are needed for native generation. PDF uses A4 margins,
 a single branding/title box and page numbers; long content and up to 50 lines paginate.
@@ -192,6 +192,9 @@ Company seller/bank/payment/tax/terms configuration lives in
 `backend/orders/company_profile.py` as the editable `COMPANY_PI_PROFILE`
 constant. It is company-owned, never a client/order input. Change that file
 and restart the application before generating new PIs.
+The three bottom office locations are configured in its `office_addresses`
+list and are rendered as one horizontal strip in the preview, PDF, and Excel
+exports.
 
 The old database table and import command remain only for compatibility with
 existing deployments and are not read during normal native PI generation. The

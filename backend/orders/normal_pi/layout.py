@@ -93,6 +93,7 @@ def layout(doc):
                  multiline=True,party=True,**({'buyer_country':buyer_country} if path=='delivery.buyer_text' else {}),**extra)
     order,total=doc['order'],doc['totals']
     seller=list(doc['company']['seller'])
+    office_addresses=list(doc['company'].get('office_addresses', []))
     date_parts=re.fullmatch(r'(\d{4})-(\d{2})-(\d{2})',doc['date'])
     date_display='/'.join((date_parts[3],date_parts[2],date_parts[1])) if date_parts else doc['date']
     metadata=[
@@ -199,7 +200,7 @@ def layout(doc):
             field='terms' if index==0 else None, value=term_text if index==0 else None,
             multiline=True, aria='Terms and conditions', preview_hidden=index>0)])
     return {'widths':WIDTHS,'currency':doc['currency'],'shipping_notice':shipping_notice(doc),
-        'legal_notice':LEGAL_NOTICE,'sections':[
+        'office_addresses':office_addresses,'legal_notice':LEGAL_NOTICE,'sections':[
         {'name':'title','rows':[[c(0,11,'PROFORMA INVOICE','title')]]},
         {'name':'header','rows':header},{'name':'parties','rows':parties},
         {'name':'items','rows':items},{'name':'bank','rows':bank_rows},

@@ -17,7 +17,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, PageBreak, NextPageTemplate
 
-from backend.orders.normal_pi.exports import section_borders, rich_required, fonts, _font_lock
+from backend.orders.normal_pi.exports import section_borders, rich_required, fonts, _font_lock, office_address_pdf, office_address_png, FullWidthKeepInFrame
 from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words, WIDTHS
 from backend.orders.terms_config import RETURN_POLICY_LABEL, RETURN_POLICY_URL
 
@@ -164,12 +164,12 @@ def pdf(doc):
                    ('LINEAFTER',(-1,0),(-1,-1),1.2,colors.black)] if section['name']=='annexure' else [])]))
             story.append(table)
     append_sections([section for section in model['sections'] if not section.get('annexure')])
-    footer_rows=[[image('payment_options.jpg',usable*.46),image('signature.png',usable*.44)]]
+    footer_rows=[[image('payment_options.jpg',usable*.43),image('signature.png',usable*.43)]]
     if model['shipping_notice']:
         footer_rows.append([Paragraph(escape(model['shipping_notice']),ParagraphStyle(
             'shipping_notice',fontName=bold,fontSize=10,leading=13,
             textColor=colors.red)),''])
-    footer_block=Table(footer_rows,colWidths=[usable*.5]*2,splitByRow=0)
+    footer_block=Table(footer_rows,colWidths=[usable*.5]*2,splitByRow=0,hAlign='LEFT')
     footer_block.setStyle(TableStyle([
         *([('SPAN',(0,1),(1,1)),('BACKGROUND',(0,1),(-1,1),colors.yellow)]
           if model['shipping_notice'] else []),
@@ -184,11 +184,18 @@ def pdf(doc):
         ('LINEBELOW',(0,-1),(-1,-1),1.2,colors.black),
         *([('LINEABOVE',(0,1),(-1,1),.6,colors.black)] if model['shipping_notice'] else [])]))
     story.append(footer_block)
-    story.append(image('address.png',usable-12))
-    story.extend([NextPageTemplate('Annexure'), PageBreak()])
-    append_sections([section for section in model['sections'] if section.get('annexure')])
+    story.append(Spacer(1, 6))
+    story.append(office_address_pdf(model['office_addresses'], usable))
+    story.append(Spacer(1, 8))
     legal_style=ParagraphStyle('legal_notice',fontName=regular,fontSize=8,leading=10,
         alignment=1,textColor=colors.HexColor('#333333'))
+    story.append(Paragraph(escape(model['legal_notice']).replace('\n','<br/>'),legal_style))
+    first_frame_height=height-2*margin-header_height-2
+    cover_height=sum(flowable.wrap(usable,first_frame_height)[1] for flowable in story)
+    if cover_height > first_frame_height-8:
+        story=[FullWidthKeepInFrame(usable,first_frame_height-4,story,mode='shrink',hAlign='LEFT',vAlign='TOP')]
+    story.extend([NextPageTemplate('Annexure'), PageBreak()])
+    append_sections([section for section in model['sections'] if section.get('annexure')])
     annexure_footer=Table([[image('payment_options.jpg',usable*.46),image('signature.png',usable*.44)]],
                           colWidths=[usable*.5]*2,splitByRow=0)
     annexure_footer.setStyle(TableStyle([
@@ -233,6 +240,13 @@ def xlsx(doc):
             scale=w/im.width if name=='header.png' else min(w/im.width,h/im.height)
             dpi=im.info.get('dpi',(96,96))
         data.seek(0);sheet.insert_image(row,col,name,{'image_data':data,'x_scale':scale*dpi[0]/96,'y_scale':scale*dpi[1]/96,'object_position':1})
+    def office_address_image(row):
+        data=office_address_png(model['office_addresses'],sum(int(width*7+5) for width in model['widths']))
+        with PILImage.open(data) as address_image:
+            row_height=address_image.height*.375/5
+        data.seek(0)
+        sheet.insert_image(row,0,'office-addresses.png',{'image_data':data,'x_scale':.5,'y_scale':.5,'object_position':1})
+        return row_height
     for row in range(7):
         sheet.set_row(row,24)
     image('header.png',0,0,950,125)
@@ -306,7 +320,7 @@ def xlsx(doc):
     footer_start=row_index
     image('payment_options.jpg',footer_start,0,440,90);image('signature.png',footer_start,5,440,90)
     for offset in range(4):
-        row=footer_start+offset;top=offset==0;bottom_edge=offset==3 and not model['shipping_notice']
+        row=footer_start+offset;top=offset==0;bottom_edge=False
         left=book.add_format({'left':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
         right=book.add_format({'right':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
         edge=book.add_format({'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
@@ -316,18 +330,20 @@ def xlsx(doc):
     if model['shipping_notice']:
         notice_format=book.add_format({'font_name':'Cambria','font_size':11,'bold':True,
             'font_color':'#FF0000','bg_color':'#FFFF00','text_wrap':True,'valign':'vcenter',
-            'left':2,'right':2,'top':1,'bottom':2,'border_color':'#000000'})
+            'left':2,'right':2,'top':1,'bottom':0,'border_color':'#000000'})
         sheet.merge_range(row_index,0,row_index,10,model['shipping_notice'],notice_format)
         sheet.set_row(row_index,36);row_index+=1
-    image('address.png',row_index,0,950,92)
-    row_index+=6
+    address_row=row_index
+    row_height=office_address_image(address_row)
+    for offset in range(5):sheet.set_row(address_row+offset,row_height)
+    row_index=address_row+5
     sheet.print_area(0,0,row_index-1,10);sheet.set_footer('&CPage &P of &N')
     annexure_start = row_index + 3
     for gap_row in range(row_index, annexure_start):
         sheet.set_row(gap_row, 15)
     sheet.set_print_scale(70)
     sheet.set_h_pagebreaks([annexure_start])
-    annexure_subtotal = write_annexure(book, doc, coordinates, sheet, annexure_start)
+    annexure_subtotal = write_annexure(book, doc, coordinates, sheet, annexure_start, model['legal_notice'])
     for row,col,fmt,path,cached in formula_cells:
         if path.endswith('.line_total'):
             prefix=path.rsplit('.',1)[0]
@@ -347,7 +363,7 @@ def xlsx(doc):
 
 
 
-def write_annexure(book, doc, cover_coordinates, sheet, start_row):
+def write_annexure(book, doc, cover_coordinates, sheet, start_row, legal_notice):
     """Append the six-column annexure below the cover on the same sheet."""
     import textwrap
     model = annexure_section(doc)
@@ -460,7 +476,7 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row):
     image('payment_options.jpg',row,0,header_width*.5,110)
     image('signature.png',row,6,header_width*.47-10,110)
     legal=book.add_format({'font_name':'Cambria','font_size':8,'align':'center','valign':'vcenter','text_wrap':True})
-    sheet.merge_range(row+5,0,row+5,10,model['legal_notice'],legal)
+    sheet.merge_range(row+5,0,row+5,10,legal_notice,legal)
     sheet.set_row(row+5,28)
     sheet.print_area(0,0,row+5,10)
     return summary

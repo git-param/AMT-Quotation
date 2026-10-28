@@ -1,6 +1,11 @@
 """Editable company-owned values printed on generated proforma invoices."""
 
 COMPANY_PI_PROFILE = {
+    'office_addresses': [
+        'Plot 1149, Vinay Villa,\nSir P Pattani Road, Krishna Nagar,\nBhavnagar-364001.',
+        '106 - 107, Patel Avenue, S.G.Highway,\nNr. Gurudwara, Bodakdev,\nAhmedabad, Gujarat-380054.',
+        '257 Paiki 2/1, 258 Paiki 2/2,\nNr. Nandani Hotel, Tansa,\nDist-Ghogha, Bhavnagar-364120.',
+    ],
     'seller': [
         'Aeliya Marine Tech Private Limited',
         '1149, Sir P Pattani Road, Krishna Nagar',
