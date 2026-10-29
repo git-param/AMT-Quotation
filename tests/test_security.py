@@ -43,18 +43,59 @@ class SecurityTests(unittest.TestCase):
         init_security(self.app)
 
     def login(self, client):
-        response = client.post('/login', data={
-            'username': 'security-user', 'password': 'fixture-password'})
+        with patch('backend.login.routes.hit', return_value=(True, 0, 'test')):
+            response = client.post('/login', data={
+                'username': 'security-user', 'password': 'fixture-password'})
         self.assertEqual(response.status_code, 302, response.get_data(as_text=True))
         return client.get_cookie('amt_csrf_v2').value
 
-    def test_new_login_invalidates_previous_session(self):
+    def test_two_logins_create_independently_valid_sessions(self):
         first, second = self.app.test_client(), self.app.test_client()
         self.login(first)
         self.assertEqual(first.get('/api/me').status_code, 200)
         self.login(second)
         self.assertEqual(second.get('/api/me').status_code, 200)
+        self.assertEqual(first.get('/api/me').status_code, 200)
+
+    def test_logout_revokes_only_the_current_session(self):
+        first, second = self.app.test_client(), self.app.test_client()
+        first_csrf = self.login(first)
+        second_csrf = self.login(second)
+        self.assertEqual(first.post('/logout', headers={
+            'X-CSRF-Token': first_csrf}).status_code, 302)
         self.assertEqual(first.get('/api/me').status_code, 401)
+        self.assertEqual(second.get('/api/me').status_code, 200)
+        self.assertTrue(second_csrf)
+
+    def test_session_expiry_and_revocation_are_independent(self):
+        first, second = self.app.test_client(), self.app.test_client()
+        self.login(first)
+        self.login(second)
+        connection = database.get_db()
+        try:
+            rows = connection.execute(
+                'SELECT id_hash FROM app_sessions ORDER BY created_at,id_hash'
+            ).fetchall()
+            self.assertEqual(len(rows), 2)
+            connection.execute(
+                "UPDATE app_sessions SET expires_at='2000-01-01T00:00:00Z' "
+                'WHERE id_hash=?', (rows[0]['id_hash'],))
+            connection.commit()
+        finally:
+            connection.close()
+        # The expired browser cannot authenticate; the other remains valid.
+        self.assertEqual(first.get('/api/me').status_code, 401)
+        self.assertEqual(second.get('/api/me').status_code, 200)
+        connection = database.get_db()
+        try:
+            connection.execute(
+                "UPDATE app_sessions SET revoked_at='2026-01-01T00:00:00Z', "
+                "revoke_reason='test' WHERE id_hash=(SELECT id_hash FROM app_sessions "
+                'WHERE expires_at > ?) ', ('2000-01-01T00:00:00Z',))
+            connection.commit()
+        finally:
+            connection.close()
+        self.assertEqual(second.get('/api/me').status_code, 401)
 
     def test_csrf_token_is_required_for_authenticated_writes(self):
         client = self.app.test_client()
@@ -79,7 +120,7 @@ class SecurityTests(unittest.TestCase):
         try:
             events = {row[0] for row in connection.execute(
                 'SELECT event_type FROM security_events')}
-            self.assertIn('login_failed', events)
+            self.assertNotIn('login_failed', events)
             self.assertIn('login_succeeded', events)
         finally:
             connection.close()

@@ -62,6 +62,10 @@
 
   <!-- Results -->
   <div class="card" style="padding:14px 16px">
+    <div id="stalePriceNotice" class="stale-price-notice" role="status" style="display:none">
+      <span id="stalePriceNoticeText"></span>
+      <button class="btn btn-ghost" id="copyStalePriceBtn" onclick="copyStalePriceSkus()">Copy stale SKUs</button>
+    </div>
     <div class="results-wrap">
       <table id="resultsTable">
         <thead>

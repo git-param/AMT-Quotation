@@ -65,6 +65,9 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#F3F4F6;color:#111827;mi
 #resultsTable tr.row-ok:hover td{background:#F0F9FF}
 #resultsTable a{color:#1A56DB;text-decoration:underline}
 .empty-state{text-align:center;padding:48px 20px;color:#9CA3AF;font-size:14px}
+.stale-price-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:10px 12px;background:#FFFBEB;border:1px solid #FCD34D;border-radius:6px;color:#92400E;font-size:13px}
+.stale-price-badge{display:inline-block;margin-top:3px;padding:2px 6px;border-radius:4px;background:#FEF3C7;color:#92400E;font-size:10px;font-weight:700;white-space:nowrap}
+@media(max-width:600px){.stale-price-notice{align-items:flex-start;flex-direction:column}}
 
 /* Copy bar */
 #copyStatus{font-size:13px;color:#057A55;font-weight:500;margin-left:8px}

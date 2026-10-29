@@ -30,7 +30,7 @@ lockout safeguard when the app only sees an internal proxy address. Configure
 - Added synchronizer-token CSRF protection for authenticated POST, PUT, PATCH, and DELETE requests. The shared frontend request wrapper sends the token from a strict same-site cookie in `X-CSRF-Token`.
 - Added Redis fixed-window rate limiting when `REDIS_URL` is configured. A bounded in-memory fallback supports local development and a temporary Redis outage on a single web process.
 - Applied limits to source IP traffic, authenticated API traffic, login attempts by IP and account, SKU lookups, and PI mutations. Rejections return HTTP 429 with `Retry-After`.
-- Added append-only `security_events` for login success/failure, throttling, logout, CSRF rejection, password changes, and basic credential-stuffing signals.
+- Added append-only `security_events` for successful and policy-blocked logins, logout, CSRF rejection, and password changes. Login submissions are counted by the Redis or bounded in-memory limiter; failed and throttled submissions do not write per-attempt SQLite events.
 - Added `Secure`/`HttpOnly`/`SameSite` cookie configuration, 2 MiB request limits, clickjacking protection, MIME-sniffing protection, referrer policy, permissions policy, opener isolation, and HSTS when HTTPS mode is enabled.
 - Removed direct trust of client-provided `X-Forwarded-For`. Proxy headers are used only through Werkzeug `ProxyFix` when `AMT_TRUSTED_PROXY_COUNT` is explicitly configured.
 - Removed the hard-coded `manager/admin123` bootstrap. A first admin is created only from an explicit 12+ character bootstrap password environment variable.

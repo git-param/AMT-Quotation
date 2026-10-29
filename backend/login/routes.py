@@ -10,12 +10,12 @@ from backend.common.auth import (
 )
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
-from backend.security.events import detect_login_anomaly, record
+from backend.security.events import record
 from backend.security.limiter import hit
 from backend.security.passwords import error as password_error
 from backend.security.request import client_ip
 from backend.security.pricing_access import access_decision
-from backend.security.sessions import create as create_session, revoke_current
+from backend.security.sessions import create as create_session, revoke, revoke_current
 
 bp = Blueprint('login', __name__)
 
@@ -33,13 +33,8 @@ def login():
         limits = () if current_app.testing else (
                 ('login_ip', ip_key, 20), ('login_account', account_key, 5))
         for scope, identity, limit in limits:
-            allowed, retry, backend = hit(scope, identity, limit, 15 * 60)
+            allowed, retry, _backend = hit(scope, identity, limit, 15 * 60)
             if not allowed:
-                try:
-                    record('login_rate_limited', 'warning', username=username,
-                           details={'scope': scope, 'backend': backend})
-                except Exception:
-                    pass
                 response = jsonify(error='Too many login attempts. Try again later.')
                 response.status_code = 429
                 response.headers['Retry-After'] = str(retry)
@@ -61,13 +56,9 @@ def login():
                                          'Ask an admin if you need access.'), 403
                 create_session(connection, user)
                 record('login_succeeded', user_id=user['id'], username=user['username'],
-                       details={'replaced_previous_session': True}, connection=connection)
+                       details={'session_created': True}, connection=connection)
                 connection.commit()
                 return redirect('/')
-            record('login_failed', 'warning', user['id'] if user else None,
-                   username, {'known_account': bool(user)}, connection=connection)
-            detect_login_anomaly(connection, username)
-            connection.commit()
         finally:
             connection.close()
         return jsonify(error='Invalid username or password'), 401
@@ -130,6 +121,7 @@ def api_change_password():
                 'UPDATE users SET password_hash = ? WHERE id = ?',
                 (generate_password_hash(new_password), session['user_id']),
             )
+            revoke(connection, user['id'], 'password_changed')
             create_session(connection, user)
             record('password_changed', user_id=user['id'], username=user['username'],
                    details={'all_other_sessions_revoked': True}, connection=connection)

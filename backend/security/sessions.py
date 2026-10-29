@@ -1,4 +1,4 @@
-"""One revocable server-side session per account."""
+"""Revocable server-side sessions for account logins."""
 from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
@@ -34,8 +34,6 @@ def create(connection, user):
     token = secrets.token_urlsafe(32)
     csrf = secrets.token_urlsafe(32)
     now = _now()
-    # UNIQUE(user_id) makes the new login the account's only active session.
-    connection.execute('DELETE FROM app_sessions WHERE user_id=?', (user['id'],))
     connection.execute(
         'INSERT INTO app_sessions(id_hash,user_id,created_at,last_seen_at,expires_at,'
         'ip_address,user_agent) VALUES(?,?,?,?,?,?,?)',
@@ -54,7 +52,8 @@ def validate(connection, user_id):
     if not isinstance(token, str):
         return False
     row = connection.execute(
-        'SELECT * FROM app_sessions WHERE user_id=?', (user_id,)
+        'SELECT * FROM app_sessions WHERE id_hash=? AND user_id=?',
+        (token_hash(token), user_id)
     ).fetchone()
     if not row or not hmac.compare_digest(row['id_hash'], token_hash(token)):
         return False

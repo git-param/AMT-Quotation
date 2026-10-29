@@ -53,6 +53,50 @@ function setCopyStatus(msg) {
   setTimeout(() => el.textContent = '', 4000);
 }
 
+function stalePriceRows() {
+  return _rows.filter(row => {
+    if (!row.found || row.price_age_days === null
+        || row.price_age_days === undefined || row.price_age_days === '') return false;
+    const age = Number(row.price_age_days);
+    return Number.isFinite(age) && age > 30;
+  });
+}
+
+function stalePriceSkus() {
+  const seen = new Set();
+  return stalePriceRows().map(row => String(row.sku || row.sku_input || '').trim())
+    .filter(sku => {
+      const key = sku.toUpperCase();
+      if (!sku || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function renderStalePriceNotice() {
+  const notice = document.getElementById('stalePriceNotice');
+  const message = document.getElementById('stalePriceNoticeText');
+  const button = document.getElementById('copyStalePriceBtn');
+  if (!notice || !message || !button) return;
+  const skus = stalePriceSkus();
+  notice.style.display = skus.length ? 'flex' : 'none';
+  message.textContent = skus.length
+    ? `Price history is over 30 days old for ${skus.join(', ')}. Recheck these prices before quoting.`
+    : '';
+  button.textContent = `Copy stale SKUs (${skus.length})`;
+}
+
+async function copyStalePriceSkus() {
+  const skus = stalePriceSkus();
+  if (!skus.length) return;
+  try {
+    await navigator.clipboard.writeText(skus.join('\n'));
+    setCopyStatus(`Copied ${skus.length} stale-price SKU${skus.length === 1 ? '' : 's'}.`);
+  } catch (_) {
+    setCopyStatus('Clipboard access was blocked by the browser.');
+  }
+}
+
 // ── Lookup ──────────────────────────────────────────────────────────────────
 async function lookupSKUs() {
   const raw = document.getElementById('skuInput').value.trim();
@@ -76,6 +120,7 @@ async function lookupSKUs() {
 
   _rows = []; _urlMap = {};
   _hasRecheckRows = false;
+  renderStalePriceNotice();
   updateCopyButtonState();
   toggleImageDownloadButtons(false);
   const btn = document.getElementById('lookupBtn');
@@ -144,6 +189,7 @@ function renderResults() {
     tbody.innerHTML = '<tr><td colspan="12" class="empty-state">No results</td></tr>';
     toggleImageDownloadButtons(false);
     _hasRecheckRows = false;
+    renderStalePriceNotice();
     updateCopyButtonState();
     return;
   }
@@ -191,10 +237,16 @@ function renderResults() {
     const link = r.url ? `<a href="${esc(r.url)}" target="_blank">Click here</a>` : '';
     if (r.url) _urlMap[sr] = r.url;
     const skuVal = r.sku || r.sku_input;
+    const age = Number(r.price_age_days);
+    const isStalePrice = r.price_age_days !== null && r.price_age_days !== undefined
+      && r.price_age_days !== '' && Number.isFinite(age) && age > 30;
+    const stalePriceBadge = isStalePrice
+      ? `<br><span class="stale-price-badge" title="Last recorded pricing: ${esc(r.price_last_updated || 'date unavailable')} (${age} days ago)">Price &gt; 30 days</span>`
+      : '';
     const safeSkuJs = esc(String(skuVal)).replace(/'/g, '&#39;');
     return `<tr class="row-ok" ondblclick="openURL(${sr})">
       <td class="center"><input type="checkbox" class="img-sel img-row-sel" data-sku="${esc(skuVal)}" checked onclick="event.stopPropagation();updateImageSelectionButtons();updateCopyButtonState()"></td>
-      <td class="center">${esc(skuVal)}</td>
+      <td class="center">${esc(skuVal)}${stalePriceBadge}</td>
       <td class="center">${sr}</td>
       <td class="left">${esc(r.title || '')}</td>
       <td class="center">${esc(r.condition || '')}</td>
@@ -207,6 +259,7 @@ function renderResults() {
       <td class="center"><button class="img-mini-btn" onclick="event.stopPropagation();openImgModal('single','${safeSkuJs}')">Download</button></td>
     </tr>`;
   }).join('');
+  renderStalePriceNotice();
   // Show/hide image download buttons
   const hasFound = _rows.some(r => r.found);
   toggleImageDownloadButtons(hasFound);

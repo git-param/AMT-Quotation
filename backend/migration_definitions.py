@@ -855,5 +855,20 @@ MIGRATIONS = (
         'UPDATE order_sku_lines SET policy_price_minor=unit_price_minor, policy_currency=currency',
         "INSERT OR IGNORE INTO app_settings(key,value) VALUES('max_pi_discount_percent','0')",
     )),
+    (40, 'multiple_sessions_per_user', (
+        "CREATE TABLE app_sessions_new ("
+        "id_hash TEXT PRIMARY KEY CHECK(length(id_hash)=64), "
+        "user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+        "created_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, expires_at TEXT NOT NULL, "
+        "ip_address TEXT NOT NULL DEFAULT '', user_agent TEXT NOT NULL DEFAULT '', "
+        "revoked_at TEXT, revoke_reason TEXT NOT NULL DEFAULT '')",
+        "INSERT INTO app_sessions_new(id_hash,user_id,created_at,last_seen_at,expires_at,"
+        "ip_address,user_agent,revoked_at,revoke_reason) "
+        "SELECT id_hash,user_id,created_at,last_seen_at,expires_at,"
+        "ip_address,user_agent,revoked_at,revoke_reason FROM app_sessions",
+        "DROP TABLE app_sessions",
+        "ALTER TABLE app_sessions_new RENAME TO app_sessions",
+        "CREATE INDEX idx_app_sessions_expiry ON app_sessions(expires_at)",
+    )),
 
 )

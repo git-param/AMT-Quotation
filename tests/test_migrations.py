@@ -204,13 +204,15 @@ class MigrationTests(unittest.TestCase):
             connection.execute("UPDATE sqlite_sequence SET seq=100 WHERE name='client_orders'")
             before = {table: connection.execute('SELECT * FROM '+table).fetchall() for table in tables}
             indexes = connection.execute("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").fetchall()
-        self.assertEqual(migrate_database(self.path), [28, 29, 30, 31, 32, 33])
+        self.assertEqual(migrate_database(self.path), list(range(28, len(MIGRATIONS) + 1)))
         with test_connection(self.path) as connection:
             for table in tables:
                 rows = connection.execute('SELECT * FROM '+table).fetchall()
                 if table == 'client_orders':
                     self.assertEqual([row[:-1] for row in rows], before[table])
                     self.assertTrue(all(row[-1] == 0 for row in rows))
+                elif table == 'order_sku_lines':
+                    self.assertEqual([row[:len(before[table][0])] for row in rows], before[table])
                 else:
                     self.assertEqual(rows, before[table])
             current_indexes = connection.execute("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").fetchall()
@@ -425,6 +427,42 @@ class MigrationTests(unittest.TestCase):
             'idx_audit_logs_time', 'idx_enquiry_sources_active_name',
             'idx_role_permissions_permission',
         }.issubset(indexes))
+
+    def test_migration_40_preserves_sessions_and_rebuilds_foreign_key(self):
+        migrate_database(self.path, MIGRATIONS[:39])
+        with test_connection(self.path) as connection:
+            connection.execute(
+                "INSERT INTO users(username,password_hash) VALUES('session-fixture','fixture')"
+            )
+            connection.execute(
+                'INSERT INTO app_sessions(id_hash,user_id,created_at,last_seen_at,expires_at,'
+                'ip_address,user_agent,revoked_at,revoke_reason) '
+                "VALUES(? ,1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z',"
+                "'2026-01-02T00:00:00Z','127.0.0.1','fixture',NULL,'')", ('a' * 64,),
+            )
+            before = connection.execute('SELECT * FROM app_sessions ORDER BY id_hash').fetchall()
+        self.assertEqual(migrate_database(self.path), [40])
+        with test_connection(self.path) as connection:
+            self.assertEqual(connection.execute(
+                'SELECT * FROM app_sessions ORDER BY id_hash').fetchall(), before)
+            self.assertEqual(connection.execute('PRAGMA foreign_key_list(app_sessions)').fetchall()[0][2:5],
+                             ('users', 'user_id', 'id'))
+            self.assertEqual(connection.execute('PRAGMA foreign_key_check').fetchall(), [])
+            self.assertEqual(connection.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
+            indexes = {row[1]: row for row in connection.execute('PRAGMA index_list(app_sessions)')}
+            self.assertIn('idx_app_sessions_expiry', indexes)
+            unique_index_columns = [
+                tuple(column[2] for column in connection.execute(
+                    'PRAGMA index_info(' + repr(index[1]) + ')'))
+                for index in connection.execute('PRAGMA index_list(app_sessions)')
+                if index[2]
+            ]
+            self.assertNotIn(('user_id',), unique_index_columns)
+            connection.execute(
+                'INSERT INTO app_sessions(id_hash,user_id,created_at,last_seen_at,expires_at) '
+                "VALUES(?,1,'now','now','later')", ('c' * 64,))
+            self.assertEqual(connection.execute(
+                'SELECT COUNT(*) FROM app_sessions WHERE user_id=1').fetchone()[0], 2)
 
     def test_status_is_read_only_and_missing_file_is_not_created(self):
         with self.assertRaises(sqlite3.OperationalError):
