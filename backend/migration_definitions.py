@@ -870,5 +870,10 @@ MIGRATIONS = (
         "ALTER TABLE app_sessions_new RENAME TO app_sessions",
         "CREATE INDEX idx_app_sessions_expiry ON app_sessions(expires_at)",
     )),
+    (41, 'client_phone_and_country_defaults', (
+        "ALTER TABLE client_leads ADD COLUMN phone_country_code TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE client_leads ADD COLUMN phone_number TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE client_leads ADD COLUMN country TEXT NOT NULL DEFAULT ''",
+    )),
 
 )

@@ -1,6 +1,6 @@
 (() => {
   const el=id=>document.getElementById(id),node=(tag,text,className)=>{const item=document.createElement(tag);if(text!=null)item.textContent=text;if(className)item.className=className;return item;};
-  const roles={sales_tl:'Sales TL',sales_executive:'Sales Executive',admin:'Admin',manager:'Admin (legacy)',user:'Sales Executive (legacy)'};
+  const roles={sales_tl:'Sales TL',sales_executive:'Sales Executive',admin:'Admin',manager:'Admin (legacy)',user:'Quotation User'};
   let filters={user_id:'',from:'',to:''},lookupPage=1,lookupPages=0,piPage=1,piPages=0,piUser=null,piOpen=false;
   let summaryVersion=0,lookupVersion=0,piVersion=0,filterVersion=0;
   const format=new Intl.DateTimeFormat('en-GB',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Kolkata'});

@@ -7,7 +7,7 @@ from flask import current_app, g, jsonify, redirect, request, session
 from backend.database import get_db
 
 ROLE_LABELS = {
-    'user': 'Sales Executive (legacy)',
+    'user': 'Quotation User',
     'manager': 'Admin (legacy)',
     'sales_executive': 'Sales Executive',
     'sales_tl': 'Sales TL',
@@ -100,6 +100,18 @@ def permission_required(permission, *, allow_api_key=False):
                 if request.path.startswith('/api/'):
                     return jsonify(error='Not logged in'), 401
                 return redirect('/login')
+            if (user['role'] == 'user'
+                    and permission != 'quotation.use'
+                    and request.path not in ('/api/me', '/api/change-password')):
+                if request.path.startswith('/api/'):
+                    return jsonify(error='This account can access only the Quotation Tool.'), 403
+                return (
+                    '<!doctype html><title>Access denied</title>'
+                    '<h1>Access denied</h1>'
+                    '<p>This account can access only the Quotation Tool.</p>'
+                    '<a href="/">Open Quotation Tool</a> | '
+                    '<a href="/logout">Sign out</a>', 403
+                )
             if (permission is not None
                     and permission not in get_permissions(user)):
                 if request.path.startswith('/api/'):

@@ -6,7 +6,7 @@
   let page=1,pages=1,events=[];
   const filterIds={action:'filterAction',user:'filterUser',role:'filterRole',ip:'filterIp',from:'filterFrom',to:'filterTo',q:'filterQuery'};
   const readable=value=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,letter=>letter.toUpperCase());
-  const roleLabel=value=>({admin:'Admin',manager:'Admin (legacy)',sales_tl:'Sales TL',sales_executive:'Sales Executive',user:'Sales Executive (legacy)'})[value]||readable(value);
+  const roleLabel=value=>({admin:'Admin',manager:'Admin (legacy)',sales_tl:'Sales TL',sales_executive:'Sales Executive',user:'Quotation User'})[value]||readable(value);
   function option(select,label,value){const node=document.createElement('option');node.value=value;node.textContent=label;select.append(node);}
   function updateOptions(data){
     for(const [key,values,label]of [['action',data.actions,'All actions'],['user',data.users,'All users'],['role',data.roles,'All roles']]){

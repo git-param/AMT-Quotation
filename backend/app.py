@@ -1,5 +1,5 @@
 import secrets
-from flask import Flask
+from flask import Flask, jsonify, request
 from backend.config import FRONTEND_DIR, SECRET_KEY_PATH
 from backend.database import initialize_database
 from backend.security.middleware import init_security
@@ -36,4 +36,19 @@ def create_app():
             login_bp, manager_bp, quotation_bp, search_bp, price_history_bp, images_bp, sources_bp,
             leads_bp, access_bp, enquiries_bp, lines_bp, orders_bp, settings_bp, audit_bp):
         app.register_blueprint(blueprint)
+
+    @app.before_request
+    def restrict_quotation_user_static_pages():
+        """Keep quotation-only accounts from opening other module shells directly."""
+        path = request.path
+        if not path.startswith('/static/'):
+            return None
+        from backend.common.auth import get_current_user
+        user = get_current_user()
+        if (user and user['role'] == 'user'
+                and not path.startswith(('/static/common/',
+                                         '/static/quotation_tool/'))):
+            return jsonify(error='This account can access only the Quotation Tool.'), 403
+        return None
+
     return app

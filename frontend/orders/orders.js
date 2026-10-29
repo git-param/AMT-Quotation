@@ -210,11 +210,13 @@ async function deleteOrder(order){
 }
 function addressText(address){return addressFields.map(key=>address?.[key]).filter(Boolean).join('\n')||'Not provided';}
 function clientAddress(client,kind='shipping'){
+  const clientCountry=kind==='shipping'?client?.country:'';
   const location=String(client?.location||'').trim();
-  if(location)return window.orderLocations.isCountry(location)?{country:location}:{line1:location};
+  if(location)return window.orderLocations.isCountry(location)?{country:clientCountry||location}:{line1:location,...(clientCountry?{country:clientCountry}:{})};
   const preferred=client?.[kind+'_address']||{};
   const fallback=client?.[kind==='shipping'?'billing_address':'shipping_address']||{};
-  return preferred.line1?preferred:fallback;
+  const address=preferred.line1?preferred:fallback;
+  return clientCountry?{...address,country:clientCountry}:address;
 }
 function formatPartyBlock(party={},address={}){
   const lines=[party.name,...addressFields.filter(key=>key!=='country').map(key=>address?.[key])].filter(Boolean);

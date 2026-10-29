@@ -2,7 +2,13 @@
 
 import json
 from difflib import SequenceMatcher
+from pathlib import Path
 import re
+
+_COMMON = Path(__file__).resolve().parents[2] / 'frontend' / 'common'
+CALLING_CODES = json.loads((_COMMON / 'calling-codes.json').read_text(encoding='utf-8'))
+COUNTRIES = (set(json.loads((_COMMON / 'countries.json').read_text(encoding='utf-8')))
+             | set(CALLING_CODES))
 
 SCALARS = {'name': 150, 'company': 150, 'email': 254, 'phone': 40,
            'notes': 2000, 'business_details': 2000, 'status': 20,
@@ -40,6 +46,32 @@ def phone(value):
     return value
 
 
+def country_for_calling_code(code):
+    """Choose a country for a calling code; shared codes remain user-editable."""
+    preferred = {'+1': 'UNITED STATES', '+7': 'RUSSIA', '+44': 'UNITED KINGDOM'}
+    if code in preferred:
+        return preferred[code]
+    return next((country for country, calling_code in CALLING_CODES.items()
+                 if calling_code == code), '')
+
+
+def client_phone(data, existing):
+    """Validate split optional phone fields and keep the legacy combined value."""
+    code = text(data.get('phone_country_code', existing.get('phone_country_code', '')),
+                5, 'phone country code')
+    number = text(data.get('phone_number', existing.get('phone_number', '')),
+                  40, 'phone number')
+    code = re.sub(r'\s+', '', code)
+    number = re.sub(r'\s+', '', number)
+    if code and not re.fullmatch(r'\+[1-9][0-9]{0,2}', code):
+        raise ValueError('Enter a valid country calling code such as +91.')
+    if code and code not in CALLING_CODES.values():
+        raise ValueError('Choose a recognized country calling code.')
+    if number and not re.fullmatch(r'[0-9]{10}', number):
+        raise ValueError('Enter a 10-digit phone number without a country code.')
+    return code, number, (code + number if code and number else number)
+
+
 def collection(value, label):
     """Bound repeated CRM fields to keep input and storage predictable."""
     if not isinstance(value, list) or len(value) > 20:
@@ -62,7 +94,8 @@ def validated_details(data, existing=None):
     """Preserve omitted fields and forbid ownership/lifecycle overrides."""
     if (not isinstance(data, dict)
             or set(data) - (set(SCALARS) | set(JSON_FIELDS)
-                            | {'enquiry_source_id'})):
+                            | {'enquiry_source_id', 'phone_country_code',
+                               'phone_number', 'country'})):
         raise ValueError('Invalid fields; ownership is server assigned.')
     existing = existing or {}
     result = {}
@@ -75,7 +108,36 @@ def validated_details(data, existing=None):
     if result['status'] not in ('lead', 'prospect', 'customer'):
         raise ValueError('Choose lead, prospect, or customer status.')
     result['email'] = email(result['email'])
-    result['phone'] = phone(result['phone'])
+    if 'phone_country_code' in data or 'phone_number' in data:
+        code, number, combined = client_phone(data, existing)
+        result['phone_country_code'] = code
+        result['phone_number'] = number
+        result['phone'] = phone(combined)
+    else:
+        result['phone'] = phone(result['phone'])
+        code = next((candidate for candidate in sorted(set(CALLING_CODES.values()),
+                                                       key=len, reverse=True)
+                     if result['phone'].startswith(candidate)), '')
+        number = result['phone'][len(code):] if code else result['phone']
+        if number and not re.fullmatch(r'[0-9]{10}', number):
+            code, number = existing.get('phone_country_code', ''), existing.get('phone_number', '')
+        result['phone_country_code'] = code
+        result['phone_number'] = number
+    country = text(data.get('country', existing.get('country', '')), 200,
+                   'country').upper()
+    if country and country not in COUNTRIES:
+        raise ValueError('Choose a valid country.')
+    country = country or country_for_calling_code(result['phone_country_code'])
+    code = result['phone_country_code']
+    number = result['phone_number']
+    if country and not code:
+        code = CALLING_CODES.get(country, '')
+    if (country in CALLING_CODES and code
+            and CALLING_CODES[country] != code):
+        raise ValueError('Client country and calling code must match.')
+    result['phone_country_code'] = code
+    result['phone'] = phone(code + number if code and number else number)
+    result['country'] = country
     for field, validator in (('emails', email), ('phones', phone)):
         values = collection(data.get(field, existing.get(field, [])), field)
         normalized = [validator(item) for item in values]

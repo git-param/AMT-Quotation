@@ -13,7 +13,8 @@ let lastFocus = null;
 let lastOpenedId = null;
 let searchTimer = null;
 let toastTimer = null;
-const scalarFields = ['name', 'email', 'phone'];
+const scalarFields = ['name', 'email'];
+let callingCodes = {};
 const byId = id => document.getElementById(id);
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const scrollBehavior = () => (reduceMotion.matches ? 'auto' : 'smooth');
@@ -410,12 +411,26 @@ function addContact(person = {}) {
 byId('addContact').onclick = () => { formDirty = true; addContact().querySelector('input').focus(); };
 function formDetails() {
   const details = Object.fromEntries(scalarFields.map(field => [field, byId(field).value]));
+  details.phone_country_code = byId('phoneCountryCode').value.replace(/\s+/g, '');
+  details.phone_number = byId('phoneNumber').value.replace(/\s+/g, '');
+  details.country = byId('country').value.trim();
+  byId('phoneCountryCode').value = details.phone_country_code;
+  byId('phoneNumber').value = details.phone_number;
   ['emails', 'phones'].forEach(field => { details[field] = byId(field).value.split(/\n/).map(value => value.trim()).filter(Boolean); });
   details.contact_persons = [...byId('contacts').children].map(row => Object.fromEntries([...row.querySelectorAll('input')].map(input => [input.dataset.field, input.value])));
   details.enquiry_source_id = byId('enquiry_source_id').value ? Number(byId('enquiry_source_id').value) : null;
   return details;
 }
 async function loadOptions() {
+  if (!Object.keys(callingCodes).length) {
+    const [codes, countries] = await Promise.all([
+      fetch('/static/common/calling-codes.json').then(response => response.json()),
+      fetch('/static/common/countries.json').then(response => response.json()),
+    ]);
+    callingCodes = codes;
+    const countryNames = [...new Set([...countries, ...Object.keys(codes)])].sort();
+    byId('clientCountries').replaceChildren(...countryNames.map(country => h('option', { value: country })));
+  }
   const data = await api('/api/leads/options');
   const creator = byId('filterCreator').value;
   byId('filterCreator').replaceChildren(new Option('All accessible creators', ''), ...data.creators.map(u => new Option(u.username, u.id)));
@@ -425,6 +440,29 @@ async function loadOptions() {
   if ([...byId('filterSource').options].some(o => o.value === oldSource)) byId('filterSource').value = oldSource;
   byId('enquiry_source_id').replaceChildren(new Option('Not specified', ''), ...data.sources.map(s => new Option(s.name, s.id)));
 }
+function detectClientCountry() {
+  const code = byId('phoneCountryCode').value.replace(/\s+/g, '');
+  if (!code) {
+    byId('country').value = '';
+    return;
+  }
+  const currentCountry = byId('country').value.trim().toUpperCase();
+  if (callingCodes[currentCountry] === code) return;
+  const preferred = { '+1': 'UNITED STATES', '+7': 'RUSSIA', '+44': 'UNITED KINGDOM' };
+  if (preferred[code]) {
+    byId('country').value = preferred[code];
+    return;
+  }
+  const match = Object.entries(callingCodes).find(([, callingCode]) => callingCode === code);
+  byId('country').value = match ? match[0] : '';
+}
+function syncCallingCodeFromCountry() {
+  const country = byId('country').value.trim().toUpperCase();
+  const code = callingCodes[country];
+  byId('phoneCountryCode').value = code || '';
+}
+byId('phoneCountryCode').addEventListener('input', detectClientCountry);
+byId('country').addEventListener('input', syncCallingCodeFromCountry);
 function setSource(client) {
   const select = byId('enquiry_source_id');
   if (client.enquiry_source_id && ![...select.options].some(o => Number(o.value) === client.enquiry_source_id)) {
@@ -439,6 +477,14 @@ async function editClient(id) {
     readOnly = !current.can_edit;
     editingId = current.id;
     scalarFields.forEach(field => { byId(field).value = current[field]; });
+    const legacyPhone = String(current.phone || '').replace(/[ ()\-.]/g, '');
+    const detectedCode = Object.values(callingCodes).filter(code => legacyPhone.startsWith(code))
+      .sort((a, b) => b.length - a.length)[0] || '';
+    byId('phoneCountryCode').value = current.phone_country_code || detectedCode;
+    byId('phoneNumber').value = current.phone_number || legacyPhone.slice(detectedCode.length).replace(/^\+/, '');
+    byId('country').value = current.country || current.shipping_address?.country || '';
+    if (byId('phoneCountryCode').value) detectClientCountry();
+    else syncCallingCodeFromCountry();
     setSource(current);
     byId('emails').value = (current.emails || []).join('\n');
     byId('phones').value = (current.phones || []).join('\n');

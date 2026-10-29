@@ -1,0 +1,89 @@
+AMT QUOTATION — VPS DEPLOYMENT COMMANDS
+========================================
+
+VPS paths
+---------
+Application source: /opt/aeliya/AMT-Quotation
+Compose directory: /opt/center-tools/deploy
+Dockerfile:         /opt/center-tools/deploy/docker/Dockerfile.amt-quotation
+Image:              deploy-amt-quotation
+Compose service:    amt-quotation
+Container:          deploy-amt-quotation-1
+SQLite database:    /opt/aeliya/AMT-Quotation/database/quotation.db
+
+IMPORTANT
+---------
+Run these commands on the VPS as root (or with appropriate Docker permissions).
+These commands target ONLY the AMT Quotation service.
+Do not run database migrations casually: confirm the migration code is deployed
+and understand whether the migration is safe before applying it.
+
+SCENARIO 1 — Backend or frontend code change (no database migration)
+-------------------------------------------------------------------
+Use when Python, HTML, CSS, JavaScript, assets, or other files copied into the
+image have changed, but the database schema/data does not need a migration.
+
+cd /opt/center-tools/deploy && docker build --no-cache -f docker/Dockerfile.amt-quotation -t deploy-amt-quotation /opt/aeliya/AMT-Quotation && docker compose up -d --no-deps --force-recreate amt-quotation
+
+SCENARIO 2 — A database migration change
+----------------------------------------
+Deploy the updated application code first, then apply the migration, then
+recreate/start the service. Use the project's current migration instructions.
+
+STEP A — Build the image and stop the service
+cd /opt/center-tools/deploy && docker build --no-cache -f docker/Dockerfile.amt-quotation -t deploy-amt-quotation /opt/aeliya/AMT-Quotation && docker compose stop amt-quotation
+
+STEP B — Apply the migration
+Previously used on this VPS:
+cd /opt/aeliya/AMT-Quotation && python3 -m backend.migrations migrate --database /opt/aeliya/AMT-Quotation/database/quotation.db
+
+NOTE: This command runs the migration module from the HOST source tree. Use it
+only when the host source is the intended current release and its dependencies
+and environment are available. If migration instructions or dependencies have
+changed, check the project's current instructions before running it. Never run
+a migration blindly or downgrade/delete migration records to fix a version error.
+
+STEP C — Recreate/start the service
+cd /opt/center-tools/deploy && docker compose up -d --no-deps --force-recreate amt-quotation
+
+STEP D — Check status and logs
+cd /opt/center-tools/deploy && docker compose ps amt-quotation && docker logs --tail 80 deploy-amt-quotation-1
+
+SCENARIO 3 — Only environment variables or Compose configuration changed
+-----------------------------------------------------------------------
+A rebuild is usually not required. Recreate the service to reload its environment
+or Compose settings:
+
+cd /opt/center-tools/deploy && docker compose up -d --no-deps --force-recreate amt-quotation
+
+SCENARIO 4 — Restart only (no code/configuration changes)
+--------------------------------------------------------
+cd /opt/center-tools/deploy && docker compose restart amt-quotation
+
+SCENARIO 5 — Verify after any deployment
+----------------------------------------
+cd /opt/center-tools/deploy && docker compose ps amt-quotation && docker logs --tail 80 deploy-amt-quotation-1
+
+Look for:
+- Container status is Up.
+- No repeated restart loop.
+- No MigrationError or "Database is newer than this application".
+- App is reachable on its normal URL.
+
+QUICK GUIDE
+-----------
+Code change only             -> Scenario 1
+Migration code + DB change   -> Scenario 2 (A, B, C, D in order)
+Environment/Compose change   -> Scenario 3
+Restart only                 -> Scenario 4
+Check deployment             -> Scenario 5
+
+CAUTION
+-------
+- The SQLite database is mounted separately from the image; rebuilding the image
+  does not itself replace the database file.
+- Never downgrade the database or delete migration records just to make an older
+  image start. Deploy code that supports the database's migration version.
+- A migration can be irreversible or data-changing. Follow its documented
+  procedure and test when possible.
+- If a migration fails, stop and inspect the error/logs before restarting blindly.

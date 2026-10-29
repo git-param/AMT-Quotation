@@ -40,7 +40,7 @@
   const nav=document.createElement('nav');nav.setAttribute('aria-label','Main navigation');sidebar.append(nav);
   const original=[...header.querySelectorAll('a[href]')];
   for(const link of original)if(['/leads','/enquiries','/orders'].includes(link.getAttribute('href')))link.remove();
-  const restricted=[];
+  const restricted=[],quotationOnly=[];
   for(const [label,url,path,permission] of entries){
     const link=original.find(item=>item.getAttribute('href')===url)||document.createElement('a');
     link.href=url;link.className='sidebar-link';link.replaceChildren();
@@ -60,6 +60,7 @@
       location.href=response.redirected?response.url:'/login';
     };
     if(permission){row.hidden=true;restricted.push({row,link,permission,url});}
+    if(url!=='/'&&url!=='/logout')quotationOnly.push(row);
   }
   document.body.classList.add('has-sidebar');document.body.prepend(sidebar);
   const toggle=document.createElement('button');toggle.type='button';toggle.className='sidebar-toggle';toggle.textContent='Menu';toggle.setAttribute('aria-label','Open navigation');toggle.setAttribute('aria-controls',sidebar.id);toggle.setAttribute('aria-expanded','false');header.prepend(toggle);
@@ -76,6 +77,7 @@
   fetch('/api/me').then(async response=>{
     if(!response.ok)return;
     const user=await response.json();
+    if(user.role==='user')for(const row of quotationOnly)row.hidden=true;
     for(const item of restricted){
       const roleAllowed=(item.permission!=='leads.share_manage'&&item.url!=='/tl-dashboard')||['admin','manager','sales_tl'].includes(user.role);
       item.row.hidden=!roleAllowed||!(user.permissions||[]).includes(item.permission);

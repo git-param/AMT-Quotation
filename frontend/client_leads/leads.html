@@ -159,10 +159,21 @@
                     <label for="email">Email</label>
                     <input id="email" class="cl-input" name="email" type="email" maxlength="254" placeholder="name@company.com" />
                   </div>
+                </div>
+                <div class="cl-grid2">
                   <div class="cl-field">
-                    <label for="phone">Phone</label>
-                    <input id="phone" class="cl-input" name="phone" type="tel" maxlength="40" placeholder="+91 …" />
+                    <label for="phoneCountryCode">Country calling code</label>
+                    <input id="phoneCountryCode" class="cl-input" name="phone_country_code" type="tel" maxlength="5" placeholder="+91" autocomplete="off" />
                   </div>
+                  <div class="cl-field">
+                    <label for="phoneNumber">Phone number</label>
+                    <input id="phoneNumber" class="cl-input" name="phone_number" type="tel" maxlength="20" placeholder="10 digits" autocomplete="tel-national" />
+                  </div>
+                </div>
+                <div class="cl-field">
+                  <label for="country">Client country</label>
+                  <input id="country" class="cl-input" name="country" list="clientCountries" maxlength="200" placeholder="Choose or enter a country" autocomplete="country-name" />
+                  <datalist id="clientCountries"></datalist>
                 </div>
                 <div class="cl-field">
                   <label for="enquiry_source_id">Enquiry source</label>

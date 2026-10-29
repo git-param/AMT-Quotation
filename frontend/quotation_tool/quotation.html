@@ -64,7 +64,8 @@
   <div class="card" style="padding:14px 16px">
     <div id="stalePriceNotice" class="stale-price-notice" role="status" style="display:none">
       <span id="stalePriceNoticeText"></span>
-      <button class="btn btn-ghost" id="copyStalePriceBtn" onclick="copyStalePriceSkus()">Copy stale SKUs</button>
+      <div id="stalePriceSkuList" class="stale-price-sku-list" style="display:none"></div>
+      <button class="btn btn-ghost" id="copyStalePriceBtn" onclick="copyStalePriceSkus()">Copy message</button>
     </div>
     <div class="results-wrap">
       <table id="resultsTable">
@@ -200,6 +201,8 @@
   </div>
 
 </div>
+
+<div id="copyToast" class="copy-toast" role="status" aria-live="polite" aria-atomic="true" style="display:none"></div>
 
 <div class="footer">Double-click a row to open the product page &nbsp;|&nbsp; Shift+Enter to look up</div>
 

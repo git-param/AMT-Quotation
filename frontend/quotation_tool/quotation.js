@@ -76,25 +76,46 @@ function stalePriceSkus() {
 function renderStalePriceNotice() {
   const notice = document.getElementById('stalePriceNotice');
   const message = document.getElementById('stalePriceNoticeText');
+  const list = document.getElementById('stalePriceSkuList');
   const button = document.getElementById('copyStalePriceBtn');
-  if (!notice || !message || !button) return;
+  if (!notice || !message || !list || !button) return;
   const skus = stalePriceSkus();
   notice.style.display = skus.length ? 'flex' : 'none';
-  message.textContent = skus.length
-    ? `Price history is over 30 days old for ${skus.join(', ')}. Recheck these prices before quoting.`
-    : '';
-  button.textContent = `Copy stale SKUs (${skus.length})`;
+  if (skus.length > 10) {
+    message.textContent = `Price history is over 30 days old for ${skus.length} SKUs. Recheck these prices before quoting.`;
+    list.style.display = 'block';
+    list.innerHTML = `<details><summary>Show affected SKUs</summary><div class="stale-price-sku-items">${skus.map(sku => `<span>${esc(sku)}</span>`).join('')}</div></details>`;
+  } else {
+    message.textContent = skus.length
+      ? `Price history is over 30 days old for ${skus.join(', ')}. Recheck these prices before quoting.`
+      : '';
+    list.style.display = 'none';
+    list.innerHTML = '';
+  }
+  button.textContent = `Copy message (${skus.length})`;
 }
 
 async function copyStalePriceSkus() {
   const skus = stalePriceSkus();
   if (!skus.length) return;
+  const message = `SKU(s)\n${skus.join('\n')}\n\nPlease confirm price`;
   try {
-    await navigator.clipboard.writeText(skus.join('\n'));
-    setCopyStatus(`Copied ${skus.length} stale-price SKU${skus.length === 1 ? '' : 's'}.`);
+    await navigator.clipboard.writeText(message);
+    setCopyStatus(`Copied price confirmation message for ${skus.length} SKU${skus.length === 1 ? '' : 's'}.`);
+    showCopyToast('Message copied');
   } catch (_) {
     setCopyStatus('Clipboard access was blocked by the browser.');
+    showCopyToast('Could not copy message');
   }
+}
+
+function showCopyToast(message) {
+  const toast = document.getElementById('copyToast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.style.display = 'block';
+  clearTimeout(toast._hideTimer);
+  toast._hideTimer = setTimeout(() => { toast.style.display = 'none'; }, 2500);
 }
 
 // ── Lookup ──────────────────────────────────────────────────────────────────

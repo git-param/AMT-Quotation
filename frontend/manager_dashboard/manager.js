@@ -290,7 +290,7 @@ let _users = [];
 let _departments = [];
 let _selectedUserId = null;
 let _savingUser = false;
-const userRoleLabels = {user: 'Sales Executive', manager: 'Admin', sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
+const userRoleLabels = {user: 'Quotation User', manager: 'Admin', sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
 
 async function loadUsers() {
   const resp = await fetch('/api/manager/users').catch(() => null);
@@ -384,7 +384,7 @@ function editSelectedUser() {
   document.getElementById('editPhoneCountryCode').value = user.phone_country_code || '';
   document.getElementById('editPhoneNumber').value = user.phone_number || '';
   const roles = document.getElementById('editRole');
-  const choices = {sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
+  const choices = {sales_executive: 'Sales Executive', user: 'Quotation User', sales_tl: 'Sales TL', admin: 'Admin'};
   if (!Object.hasOwn(choices, user.role)) choices[user.role] = userRoleLabels[user.role] || user.role;
   roles.replaceChildren(...Object.entries(choices).map(([code, label]) => new Option(label, code)));
   roles.value = user.role;

@@ -66,11 +66,16 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#F3F4F6;color:#111827;mi
 #resultsTable a{color:#1A56DB;text-decoration:underline}
 .empty-state{text-align:center;padding:48px 20px;color:#9CA3AF;font-size:14px}
 .stale-price-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:10px 12px;background:#FFFBEB;border:1px solid #FCD34D;border-radius:6px;color:#92400E;font-size:13px}
+.stale-price-sku-list{flex:1;min-width:150px}
+.stale-price-sku-list details{width:100%}
+.stale-price-sku-list summary{cursor:pointer;font-weight:600;white-space:nowrap}
+.stale-price-sku-items{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:6px;max-height:120px;overflow-y:auto;font-family:Consolas,monospace;font-size:12px}
 .stale-price-badge{display:inline-block;margin-top:3px;padding:2px 6px;border-radius:4px;background:#FEF3C7;color:#92400E;font-size:10px;font-weight:700;white-space:nowrap}
-@media(max-width:600px){.stale-price-notice{align-items:flex-start;flex-direction:column}}
+@media(max-width:600px){.stale-price-notice{align-items:flex-start;flex-direction:column}.stale-price-sku-list{width:100%}}
 
 /* Copy bar */
 #copyStatus{font-size:13px;color:#057A55;font-weight:500;margin-left:8px}
+.copy-toast{position:fixed;right:24px;bottom:24px;z-index:9000;padding:12px 18px;border-radius:8px;background:#057A55;color:#fff;font-size:14px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.2)}
 
 /* Header search trigger */
 .hdr-search-btn{display:flex;align-items:center;gap:7px;padding:7px 14px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.3);border-radius:20px;color:#fff;font-size:13px;cursor:pointer;transition:all .15s;white-space:nowrap}
