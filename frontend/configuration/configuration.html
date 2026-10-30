@@ -9,83 +9,234 @@
 <script src="/static/common/sidebar.js" defer></script>
 </head>
 <body>
-<header class="hdr"><div><div class="hdr-logo">Configuration</div><div class="hdr-sub">Shared settings for your team</div></div><nav><a class="back-link" href="/">Quotation Tool</a><a class="back-link" href="/logout">Sign Out</a></nav></header>
+<header class="hdr"><div><div class="hdr-logo">Configuration</div><div class="hdr-sub">Shared settings for your team</div></div><nav aria-label="Main"><a class="back-link" href="/">Quotation Tool</a><a class="back-link" href="/logout">Sign Out</a></nav></header>
 <main class="wrap configuration-wrap">
 <div class="page-head"><div><p class="settings-eyebrow">Administration</p><h1>Workspace settings</h1><p>Manage shared defaults and keep your team organised.</p></div></div>
-<p id="message" role="status" aria-live="polite"></p>
+
+<div class="cfg-layout">
+<nav class="cfg-nav" aria-label="Settings sections">
+  <p class="cfg-nav-title">Settings</p>
+  <ul>
+    <li><a href="#hsnSection" data-cfg-target="hsnSection">HSN code</a></li>
+    <li><a href="#discountLimitSection" data-cfg-target="discountLimitSection">PI discount</a></li>
+    <li><a href="#skuLookupLimitSection" data-cfg-target="skuLookupLimitSection">SKU lookup limit</a></li>
+    <li><a href="#piNumberCounterSection" data-cfg-target="piNumberCounterSection">PI numbering</a></li>
+    <li><a href="#departmentsSection" data-cfg-target="departmentsSection">Departments</a></li>
+    <li><a href="#currencyRatesSection" data-cfg-target="currencyRatesSection">Currency rates</a></li>
+  </ul>
+</nav>
+
 <div class="settings-panels">
-<section class="panel settings-card" aria-labelledby="hsnTitle">
-  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true">#</span><div><h2 id="hsnTitle">HSN code</h2><p>A shared classification code for all SKU items.</p></div></div>
-  <form id="settingsForm">
-    <div class="settings-input-row"><div class="form-field"><label for="hsnCode">Shared HSN code</label><input id="hsnCode" name="hsn_code" inputmode="numeric" pattern="[0-9]{4}|[0-9]{6}|[0-9]{8}" maxlength="8" required aria-describedby="hsnHint"></div><button id="save" class="btn-sm btn-add" disabled>Save changes</button></div>
-    <p id="hsnHint" class="field-hint">Enter 4, 6 or 8 digits.</p>
+
+<div class="cfg-group-title"><h2>Quotation &amp; invoice defaults</h2><span>Applied across the whole team</span></div>
+<div class="cfg-tiles">
+
+<section class="panel settings-card cfg-tile" id="hsnSection" aria-labelledby="hsnTitle">
+  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg></span><div><h2 id="hsnTitle">HSN code</h2><p>A shared classification code for all SKU items.</p></div></div>
+  <form id="settingsForm" class="cfg-tile-form">
+    <div class="form-field"><label for="hsnCode">Shared HSN code</label><input id="hsnCode" name="hsn_code" inputmode="numeric" pattern="[0-9]{4}|[0-9]{6}|[0-9]{8}" maxlength="8" required aria-describedby="hsnHint"><p id="hsnHint" class="field-hint">Enter 4, 6 or 8 digits.</p></div>
+    <button id="save" class="btn-sm btn-add" disabled>Save changes</button>
   </form>
+  <p id="message" role="status" aria-live="polite"></p>
   <div class="settings-note"><span aria-hidden="true">i</span><p>Applies to order items and new PI previews. Existing previews and issued invoices keep their saved code.</p></div>
 </section>
-<section class="panel settings-card" id="piNumberCounterSection" hidden aria-labelledby="piNumberCounterTitle">
-  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true">№</span><div><h2 id="piNumberCounterTitle">PI number sequence</h2><p>Set the last number used. Each successfully generated PI confirms the next number with its generator’s department prefix.</p></div></div>
-  <form id="piNumberCounterForm">
-    <div class="settings-input-row"><div class="form-field"><label for="piNumberLastUsed">Last PI number used</label><input id="piNumberLastUsed" type="number" min="0" max="2000000000" step="1" required aria-describedby="piNumberCounterHint"></div><button id="savePiNumberCounter" class="btn-sm btn-add" type="submit">Save PI number</button></div>
-    <p id="piNumberCounterHint" class="field-hint">For example, enter 100 and the next PI will use 101. The sequence is shared across departments.</p>
-  </form>
-  <p id="piNumberCounterMessage" role="status" aria-live="polite"></p>
+
+<section class="panel settings-card cfg-tile" id="discountLimitSection" hidden aria-labelledby="discountTitle">
+  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5 5 19"/><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/></svg></span><div><h2 id="discountTitle">Maximum PI discount</h2><p>Applies to percentage discounts, fixed amounts and invoice price reductions for all users. Until configured, the limit is 0%.</p></div></div>
+  <form id="discountLimitForm" class="cfg-tile-form"><div class="form-field"><label for="discountLimit">Maximum discount</label><div class="cfg-affix"><input id="discountLimit" type="number" min="0" max="100" step="0.01" required><span aria-hidden="true">%</span></div></div><button type="submit" class="btn-sm btn-add">Save discount limit</button></form>
+  <p id="discountLimitMessage" role="status" aria-live="polite"></p>
 </section>
-<section class="panel settings-card" id="discountLimitSection" hidden>
-  <div class="settings-card-heading"><div><h2>Maximum PI discount</h2><p>Applies to percentage discounts, fixed amounts and invoice price reductions for all users. Until configured, the limit is 0%.</p></div></div>
-  <form id="discountLimitForm"><div class="settings-input-row"><div class="form-field"><label for="discountLimit">Maximum discount (%)</label><input id="discountLimit" type="number" min="0" max="100" step="0.01" required></div><button type="submit" class="btn-sm btn-add">Save discount limit</button></div></form>
-  <p id="discountLimitMessage" role="status"></p>
-</section>
-<section class="panel settings-card" id="skuLookupLimitSection" aria-labelledby="skuLookupLimitTitle" hidden>
-  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true">#</span><div><h2 id="skuLookupLimitTitle">SKU lookup limit</h2><p>Maximum SKUs in one quotation, enquiry, or stock check request.</p></div></div>
-  <form id="skuLookupLimitForm">
-    <div class="settings-input-row"><div class="form-field"><label for="skuLookupLimit">Maximum SKUs per request</label><input id="skuLookupLimit" type="number" min="1" max="500" step="1" required></div><button id="saveSkuLookupLimit" class="btn-sm btn-add" type="submit">Save limit</button></div>
-    <p class="field-hint">Choose 1 to 500. Requests above the limit are rejected before any SKU lookup.</p>
+
+<section class="panel settings-card cfg-tile" id="skuLookupLimitSection" aria-labelledby="skuLookupLimitTitle" hidden>
+  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><div><h2 id="skuLookupLimitTitle">SKU lookup limit</h2><p>Maximum SKUs in one quotation, enquiry, or stock check request.</p></div></div>
+  <form id="skuLookupLimitForm" class="cfg-tile-form">
+    <div class="form-field"><label for="skuLookupLimit">Maximum SKUs per request</label><div class="cfg-affix"><input id="skuLookupLimit" type="number" min="1" max="500" step="1" required aria-describedby="skuLimitHint"><span aria-hidden="true">SKUs</span></div><p id="skuLimitHint" class="field-hint">Choose 1 to 500. Requests above the limit are rejected before any SKU lookup.</p></div>
+    <button id="saveSkuLookupLimit" class="btn-sm btn-add" type="submit">Save limit</button>
   </form>
   <p id="skuLookupLimitMessage" role="status" aria-live="polite"></p>
 </section>
-<section class="panel settings-card" aria-labelledby="departmentsTitle">
-  <div class="settings-card-heading"><span class="settings-icon settings-icon-team" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.87M15 3.13a4 4 0 0 1 0 7.75"/><circle cx="9" cy="7" r="4"/></svg></span><div><h2 id="departmentsTitle">Departments</h2><p>Organise your team with consistent department names.</p></div></div>
-  <form id="departmentForm" hidden>
-    <div class="settings-input-row">
-      <div class="form-field"><label for="departmentName">Department name</label><input id="departmentName" maxlength="100" placeholder="e.g. Sales" required></div>
-      <div class="form-field"><label for="departmentPrefix">PI prefix (optional)</label><input id="departmentPrefix" maxlength="20" placeholder="e.g. AMT"></div>
-      <button id="addDepartment" class="btn-sm btn-add" type="submit">Add department</button>
-    </div>
+
+<section class="panel settings-card cfg-tile" id="piNumberCounterSection" hidden aria-labelledby="piNumberCounterTitle">
+  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/></svg></span><div><h2 id="piNumberCounterTitle">PI number sequence</h2><p>Set the last number used. Each successfully generated PI confirms the next number with its generator’s department prefix.</p></div></div>
+  <form id="piNumberCounterForm" class="cfg-tile-form">
+    <div class="form-field"><label for="piNumberLastUsed">Last PI number used</label><input id="piNumberLastUsed" type="number" min="0" max="2000000000" step="1" required aria-describedby="piNumberCounterHint"><p id="piNumberCounterHint" class="field-hint">For example, enter 100 and the next PI will use 101. The sequence is shared across departments.</p></div>
+    <button id="savePiNumberCounter" class="btn-sm btn-add" type="submit">Save PI number</button>
   </form>
+  <p id="piNumberCounterMessage" role="status" aria-live="polite"></p>
+</section>
+
+</div>
+
+<section class="panel settings-card" id="departmentsSection" aria-labelledby="departmentsTitle">
+  <div class="settings-card-heading"><span class="settings-icon settings-icon-team" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.87M15 3.13a4 4 0 0 1 0 7.75"/><circle cx="9" cy="7" r="4"/></svg></span><div><h2 id="departmentsTitle">Departments</h2><p>Organise your team with consistent department names.</p></div></div>
   <p id="departmentMessage" role="status" aria-live="polite"></p>
   <div class="department-list-heading">Available departments<span>Used in user profiles</span></div>
   <ul id="departmentsList" aria-label="Configured departments"></ul>
-  <form id="departmentPrefixForm" class="department-prefix-form" hidden>
-    <h3>Department PI prefixes</h3>
-    <p>Choose a department and set its invoice prefix. For example, PIs generated by a user in the AMT department use AMT/ followed by the next number in the shared sequence.</p>
-    <div class="settings-input-row">
+  <div class="cfg-subgrid">
+    <form id="departmentForm" class="cfg-subcard" hidden>
+      <h3>Add a department</h3>
+      <div class="form-field"><label for="departmentName">Department name</label><input id="departmentName" maxlength="100" placeholder="e.g. Sales" required></div>
+      <div class="form-field"><label for="departmentPrefix">PI prefix (optional)</label><input id="departmentPrefix" maxlength="20" placeholder="e.g. AMT"></div>
+      <button id="addDepartment" class="btn-sm btn-add" type="submit">Add department</button>
+    </form>
+    <form id="departmentPrefixForm" class="cfg-subcard department-prefix-form" hidden>
+      <h3>Department PI prefixes</h3>
+      <p>Choose a department and set its invoice prefix. For example, PIs generated by a user in the AMT department use AMT/ followed by the next number in the shared sequence.</p>
       <div class="form-field"><label for="prefixDepartment">Department</label><select id="prefixDepartment" required></select></div>
       <div class="form-field"><label for="piPrefix">PI prefix</label><input id="piPrefix" maxlength="20" placeholder="e.g. AMT or PUC" aria-describedby="prefixHint"></div>
+      <p id="prefixHint" class="field-hint">Leave blank to remove the default. Saved orders and issued invoices keep their existing numbers.</p>
       <button id="saveDepartmentPrefix" class="btn-sm btn-add" type="submit">Save prefix</button>
-    </div>
-    <p id="prefixHint" class="field-hint">Leave blank to remove the default. Saved orders and issued invoices keep their existing numbers.</p>
-    <p id="prefixMessage" role="status" aria-live="polite"></p>
-  </form>
+      <p id="prefixMessage" role="status" aria-live="polite"></p>
+    </form>
+  </div>
 </section>
-<section class="panel settings-card" id="currencyRatesSection" hidden>
-  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true">&#8596;</span><div><h2>Currency conversion rates</h2><p>Reference rates per 1 USD for new quotations and PI conversions.</p></div></div>
+
+<section class="panel settings-card" id="currencyRatesSection" hidden aria-labelledby="currencyTitle">
+  <div class="settings-card-heading"><span class="settings-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h12l-3-3M17 17H5l3 3"/></svg></span><div><h2 id="currencyTitle">Currency conversion rates</h2><p>Reference rates per 1 USD for new quotations and PI conversions.</p></div></div>
   <div class="currency-source-bar"><div><span class="currency-eyebrow">Rate source</span><a id="currencyRateSource" href="https://frankfurter.dev/" target="_blank" rel="noopener noreferrer">Frankfurter (central banks and official sources)</a></div><span id="currencyRateHealth" class="currency-rate-health" role="status">Loading rates</span></div>
-  <div class="currency-rates-grid" aria-label="Current USD exchange rates">
-    <article class="currency-rate-card"><div class="currency-rate-title"><strong>INR</strong><span>Indian rupee</span></div><span class="currency-rate-base">1 USD =</span><strong class="currency-rate-value" id="rateINR">--</strong><small id="rateDateINR">Waiting for rate</small></article>
-    <article class="currency-rate-card"><div class="currency-rate-title"><strong>AED</strong><span>UAE dirham</span></div><span class="currency-rate-base">1 USD =</span><strong class="currency-rate-value" id="rateAED">--</strong><small id="rateDateAED">Waiting for rate</small></article>
-    <article class="currency-rate-card"><div class="currency-rate-title"><strong>GBP</strong><span>British pound</span></div><span class="currency-rate-base">1 USD =</span><strong class="currency-rate-value" id="rateGBP">--</strong><small id="rateDateGBP">Waiting for rate</small></article>
-    <article class="currency-rate-card"><div class="currency-rate-title"><strong>EUR</strong><span>Euro</span></div><span class="currency-rate-base">1 USD =</span><strong class="currency-rate-value" id="rateEUR">--</strong><small id="rateDateEUR">Waiting for rate</small></article>
+  <div class="currency-rates-grid" role="group" aria-label="Current USD exchange rates">
+    <article class="currency-rate-card"><span class="cfg-cur-sym" aria-hidden="true">₹</span><div class="currency-rate-title"><strong>INR</strong><span>Indian rupee</span></div><span class="currency-rate-base">1 USD =</span><strong class="currency-rate-value" id="rateINR">--</strong><small id="rateDateINR">Waiting for rate</small></article>
+    <article class="currency-rate-card"><span class="cfg-cur-sym" aria-hidden="true">د.إ</span><div class="currency-rate-title"><strong>AED</strong><span>UAE dirham</span></div><span class="currency-rate-base">1 USD =</span><strong class="currency-rate-value" id="rateAED">--</strong><small id="rateDateAED">Waiting for rate</small></article>
+    <article class="currency-rate-card"><span class="cfg-cur-sym" aria-hidden="true">£</span><div class="currency-rate-title"><strong>GBP</strong><span>British pound</span></div><span class="currency-rate-base">1 USD =</span><strong class="currency-rate-value" id="rateGBP">--</strong><small id="rateDateGBP">Waiting for rate</small></article>
+    <article class="currency-rate-card"><span class="cfg-cur-sym" aria-hidden="true">€</span><div class="currency-rate-title"><strong>EUR</strong><span>Euro</span></div><span class="currency-rate-base">1 USD =</span><strong class="currency-rate-value" id="rateEUR">--</strong><small id="rateDateEUR">Waiting for rate</small></article>
   </div>
   <div class="currency-rate-meta"><p id="currencyRateUpdated">Waiting for the first live refresh.</p><p>Rates are published on working days. Existing PIs keep their saved amounts.</p></div>
   <form id="currencyRatesForm" class="currency-refresh-form">
     <div class="currency-refresh-controls">
-      <div class="form-field"><label for="rateRefreshHours">Automatic refresh (hours)</label><input id="rateRefreshHours" type="number" min="1" max="168" step="1" required aria-describedby="rateRefreshHint"></div>
+      <div class="form-field"><label for="rateRefreshHours">Automatic refresh</label><div class="cfg-affix"><input id="rateRefreshHours" type="number" min="1" max="168" step="1" required aria-describedby="rateRefreshHint"><span aria-hidden="true">hours</span></div></div>
       <div class="currency-refresh-actions"><button id="saveCurrencyRates" class="btn-sm btn-add" type="submit">Save interval</button><button id="refreshCurrencyRates" class="btn-sm" type="button">Refresh now</button></div>
     </div>
     <p id="rateRefreshHint" class="field-hint">Choose 1 to 168 hours. Refresh now fetches the latest published rate.</p>
   </form>
-  <p class="field-hint">If Frankfurter is unavailable, the last fetched rates stay visible. Each refresh uses the latest available rate from the provider.</p>
+  <p class="field-hint currency-rates-foot">If Frankfurter is unavailable, the last fetched rates stay visible. Each refresh uses the latest available rate from the provider.</p>
   <p id="currencyRatesMessage" role="status" aria-live="polite"></p>
-</section></div></main>
+</section>
+
+</div>
+</div>
+</main>
 <script src="/static/configuration/configuration.js"></script>
+<script>
+/* UI-only helpers (no settings logic). Kept inline so no extra file has to be deployed.
+   1) Section navigator: blue mark on the section you are in, links hidden for sections you cannot see.
+   2) Department cards: adds an initial and a prefix badge to each department.
+   3) Brief green highlight on a card after a successful save. */
+(() => {
+  const layout = document.querySelector('.cfg-layout');
+  const nav = document.querySelector('.cfg-nav');
+  if (!layout || !nav) return;
+  layout.classList.add('cfg-js');
+
+  const list = nav.querySelector('ul');
+  const items = [...nav.querySelectorAll('a[data-cfg-target]')]
+    .map(link => ({ link, item: link.closest('li'), section: document.getElementById(link.dataset.cfgTarget) }))
+    .filter(entry => entry.section);
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let active = null;
+  let pinned = null;     // section the user just clicked; stays marked while it is on screen
+  let pinnedAt = 0;
+  let ticking = false;
+
+  items.forEach(entry => entry.section.setAttribute('tabindex', '-1'));
+  const visible = () => items.filter(entry => !entry.section.hidden);
+  const syncVisibility = () => items.forEach(entry => { entry.item.hidden = entry.section.hidden; });
+
+  function mark(entry) {
+    if (!entry || entry === active) return;
+    active = entry;
+    items.forEach(other => {
+      const on = other === entry;
+      other.link.classList.toggle('is-active', on);
+      if (on) other.link.setAttribute('aria-current', 'location');
+      else other.link.removeAttribute('aria-current');
+    });
+    if (list && list.scrollWidth > list.clientWidth) {   // mobile pill bar: keep the active pill in view
+      const left = entry.link.offsetLeft - (list.clientWidth - entry.link.offsetWidth) / 2;
+      list.scrollTo({ left, behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+    }
+  }
+
+  function spy() {
+    ticking = false;
+    const shown = visible();
+    if (!shown.length) return;
+    const line = window.innerHeight * 0.35;
+
+    if (pinned && !pinned.section.hidden) {
+      const top = pinned.section.getBoundingClientRect().top;
+      const travelling = performance.now() - pinnedAt < 1200;   // smooth scroll still in progress
+      if (travelling || (top > -40 && top < window.innerHeight * 0.7)) { mark(pinned); return; }
+    }
+    pinned = null;
+
+    let current = shown[0];
+    for (const entry of shown) {
+      if (entry.section.getBoundingClientRect().top <= line) current = entry;
+    }
+    // cards sitting side by side share the same top: choose the first of that row
+    const rowTop = current.section.getBoundingClientRect().top;
+    current = shown.find(entry => Math.abs(entry.section.getBoundingClientRect().top - rowTop) < 6) || current;
+
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+      current = shown[shown.length - 1];
+    }
+    mark(current);
+  }
+  const queueSpy = () => { if (!ticking) { ticking = true; requestAnimationFrame(spy); } };
+
+  // configuration.js reveals sections once permissions are known.
+  const watcher = new MutationObserver(() => { syncVisibility(); active = null; queueSpy(); });
+  items.forEach(entry => watcher.observe(entry.section, { attributes: true, attributeFilter: ['hidden'] }));
+
+  items.forEach(entry => entry.link.addEventListener('click', () => {
+    pinned = entry;
+    pinnedAt = performance.now();
+    mark(entry);
+    window.setTimeout(() => entry.section.focus({ preventScroll: true }), 0);
+  }));
+  window.addEventListener('scroll', queueSpy, { passive: true });
+  window.addEventListener('resize', queueSpy);
+
+  // Department cards
+  const deptList = document.getElementById('departmentsList');
+  function decorateDepartments() {
+    deptList.querySelectorAll('li:not([data-cfg])').forEach(li => {
+      const text = li.textContent;
+      const match = text.match(/^(.*?)(?: · (.+))?$/);
+      const name = (match && match[1] || text).trim();
+      const prefix = match && match[2];
+      li.dataset.cfg = '1';
+      const avatar = document.createElement('span'); avatar.className = 'cfg-dept-avatar'; avatar.setAttribute('aria-hidden', 'true'); avatar.textContent = name.charAt(0) || '?';
+      const label = document.createElement('span'); label.className = 'cfg-dept-name'; label.textContent = name;
+      const badge = document.createElement('span'); badge.className = 'cfg-dept-prefix' + (prefix ? '' : ' is-none'); badge.textContent = prefix ? 'PI ' + prefix : 'No prefix';
+      li.replaceChildren(avatar, label, badge);
+    });
+  }
+  if (deptList) {
+    new MutationObserver(decorateDepartments).observe(deptList, { childList: true });
+    decorateDepartments();
+  }
+
+  // Success highlight
+  const flashTimers = new WeakMap();
+  const statusObserver = new MutationObserver(records => {
+    for (const record of records) {
+      const target = record.target.nodeType === 1 ? record.target : record.target.parentElement;
+      const status = target && target.closest('p[role="status"]');
+      if (!status || status.classList.contains('error')) continue;
+      if (!/saved|added|refreshed/i.test(status.textContent)) continue;
+      const card = status.closest('.settings-card');
+      if (!card) continue;
+      card.classList.add('is-flash');
+      clearTimeout(flashTimers.get(card));
+      flashTimers.set(card, setTimeout(() => card.classList.remove('is-flash'), 1400));
+    }
+  });
+  document.querySelectorAll('.settings-card p[role="status"]').forEach(status =>
+    statusObserver.observe(status, { childList: true, characterData: true, subtree: true }));
+
+  syncVisibility();
+  queueSpy();
+})();
+</script>
 </body></html>
