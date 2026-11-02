@@ -99,10 +99,10 @@ def layout(doc):
     metadata=[
         [c(5,2,'Proforma Invoice No:'),editable(7,4,'',doc['reference'],'order.pi_reference','bold',aria='Proforma Invoice No.')],
         [c(5,2,'Proforma Invoice Date:','date_label'),editable(7,4,'',doc['date'],'date',type='date',aria='Proforma Invoice Date',display_text=date_display)],
-        [c(5,2,'Purchase PI:'),editable(7,4,'',order['po_reference'],'order.po_reference',aria='Purchase PI')],
+        [c(5,2,'Purchase Order:'),editable(7,4,'',order['po_reference'],'order.po_reference',aria='Purchase Order')],
         [c(5,2,'Prepared By: '+doc['prepared_by']),editable(7,4,'Tel: ',doc.get('prepared_phone',''),'prepared_phone',type='tel',aria='Tel')],
         [editable(5,6,'Payment Terms: ',order['payment_terms'],'order.payment_terms','bold',line_top=True)],
-        [editable(5,6,'Delivery Terms: DAP basis from ',order['destination'],'order.destination',aria='DAP basis country')]]
+        [editable(5,6,'Delivery Terms: DAP basis ',order['destination'],'order.destination',aria='DAP basis country')]]
     header=[]
     for index in range(7):
         left=c(0,5,'Supplier','bold') if index==0 else c(0,5,seller[index-1] if index<=len(seller) else '')
@@ -149,6 +149,8 @@ def layout(doc):
         if line.get('net_unit_price'):
             items[-1][-2]['text'] = line['net_unit_price']
             items[-1][-2]['display_text'] = line['net_unit_price']
+            items[-1][-2]['value'] = line['net_unit_price']
+            items[-1][-2]['discounted_rate'] = True
         if Decimal(line.get('discount_amount', '0')):
             items[-1][-1]['readonly'] = True
     # Every normal PI starts its item list with the default description heading.

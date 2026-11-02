@@ -90,6 +90,8 @@ def annexure_section(doc):
         if line.get('net_unit_price'):
             rows[-1][4]['text'] = line['net_unit_price']
             rows[-1][4]['display_text'] = line['net_unit_price']
+            rows[-1][4]['value'] = line['net_unit_price']
+            rows[-1][4]['discounted_rate'] = True
         if Decimal(line.get('discount_amount', '0')):
             rows[-1][5]['readonly'] = True
     totals = doc['totals']

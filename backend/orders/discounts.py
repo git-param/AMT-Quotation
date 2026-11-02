@@ -61,10 +61,8 @@ def apply(lines, discount, convert_amount, currency):
     for index, line in enumerate(selected):
         gross = Decimal(line['line_total'])
         if discount['scope'] == 'total':
-            # Visible total discounts remain in the summary; hidden ones are
-            # distributed over goods so the printed lines still reconcile.
-            if discount['show_on_pi']:
-                continue
+            # Allocate order discounts over item rates so every PI format
+            # shows the reduced per-item price and reconciles at the line level.
             cumulative = sum((Decimal(item['gross_total']) for item in selected[:index+1]), Decimal(0))
             amount = ((total_discount * cumulative / base).quantize(CENT, rounding=ROUND_HALF_UP) - allocated
                       if base else Decimal(0))
@@ -76,10 +74,9 @@ def apply(lines, discount, convert_amount, currency):
             amount = deduction(gross)
         line['discount_amount'] = format(amount, '.2f')
         line['line_total'] = format(gross - amount, '.2f')
+        line['net_unit_price'] = format((gross-amount)/Decimal(line['quantity']), '.8f')
         if discount['show_on_pi']:
             label = discount['value'] + '%' if discount['type'] == 'percent' else currency + ' ' + format(amount, '.2f')
             line['discount_label'] = 'Discount: ' + label + ' (-' + format(amount, '.2f') + ')'
-        else:
-            line['net_unit_price'] = format((gross-amount)/Decimal(line['quantity']), '.8f')
     line_discount = sum((Decimal(line['discount_amount']) for line in result), Decimal(0))
-    return result, total_discount if discount['scope'] == 'total' and discount['show_on_pi'] else Decimal(0), total_discount if discount['scope'] == 'total' else line_discount
+    return result, Decimal(0), total_discount if discount['scope'] == 'total' else line_discount

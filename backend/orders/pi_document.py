@@ -153,9 +153,9 @@ def prepare(state, user, currency, rate, bulk_description=None):
     consignee = destination.get('consignee_text',party_block(destination.get('consignee'),destination.get('shipping_address')))
     buyer = destination.get('buyer_text') or party_block(destination.get('buyer'),destination.get('billing_address')) or consignee
     notify = destination.get('notify_text') or party_block(destination.get('notify_party'),destination.get('notify_party',{}).get('address')) or consignee
-    if buyer == consignee or (address_only(buyer)==address_only(consignee) and not any(COPIED_CONTACT.match(line) for line in buyer.splitlines()[1:])):
+    if buyer == consignee:
         buyer = address_only(buyer)
-    if notify == consignee or (address_only(notify)==address_only(consignee) and not any(COPIED_CONTACT.match(line) for line in notify.splitlines()[1:])):
+    if notify == consignee:
         notify = address_only(notify)
     assets = {}
     for name in ASSETS:

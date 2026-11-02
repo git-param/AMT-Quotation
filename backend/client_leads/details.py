@@ -62,12 +62,15 @@ def client_phone(data, existing):
     number = text(data.get('phone_number', existing.get('phone_number', '')),
                   40, 'phone number')
     code = re.sub(r'\s+', '', code)
+    # Keep national dialing notation such as (0) in storage, but validate its
+    # digit count independently of formatting.
     number = re.sub(r'\s+', '', number)
+    digits = re.sub(r'[()]', '', number)
     if code and not re.fullmatch(r'\+[1-9][0-9]{0,2}', code):
         raise ValueError('Enter a valid country calling code such as +91.')
     if code and code not in CALLING_CODES.values():
         raise ValueError('Choose a recognized country calling code.')
-    if number and not re.fullmatch(r'[0-9]{10}', number):
+    if digits and not re.fullmatch(r'[0-9]{10}', digits):
         raise ValueError('Enter a 10-digit phone number without a country code.')
     return code, number, (code + number if code and number else number)
 

@@ -247,62 +247,14 @@ el('buyerCountry').onchange=()=>{
   const recoded=window.orderLocations.phoneBlockForCountry(el('buyer_text').value,oldCountry,country);
   const lines=recoded.split('\n').filter((line,index)=>!index||(!/^\s*Country\s*:/i.test(line)&&!window.orderLocations.isCountry(line.trim())));
   const contact=lines.findIndex((line,index)=>index>0&&/^\s*(?:Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:/i.test(line));
-  if(country)lines.splice(contact<0?lines.length:contact,0,'Country: '+country);
+  if(country)lines.splice(contact<0?lines.length:contact,0,country);
   el('buyer_text').value=lines.join('\n');
   el('buyer_same').checked=false;
   showPartyFields('buyer');updateComposer();
 };
-function shippingDetailsFromBlock(value){
-  const lines=value.split('\n');
-  const read=label=>lines.slice(1).map(line=>line.match(label)).find(Boolean)?.[1]?.trim()||'';
-  return {name:lines[0]?.trim()||'',phone:read(/^\s*(?:Tel\/Phone|Tel|Telephone|Phone)\s*:\s*(.*)$/i),
-    email:read(/^\s*E-?mail\s*:\s*(.*)$/i),
-    address:lines.slice(1).filter(line=>line.trim()&&!/^\s*(?:Country|Tel\/Phone|Tel|Telephone|Phone|PIC|E-?mail|GST(?:IN|\s*(?:No\.?|Number))?)\s*:/i.test(line)&&!window.orderLocations.isCountry(line.trim())&&line.trim().toUpperCase()!==el('destination').value.trim().toUpperCase()).join('\n').trim()};
-}
-function setShippingMode(same,focus=false){
-  el('shippingSame').checked=same;
-  el('shippingContactFields').hidden=same;
-  for(const key of ['Name','Phone','Email'])el('shipping'+key).required=!same;
-  el('consigneeDetailsField').hidden=!same;
-  el('consigneePrimaryLabel').textContent=same?'Company & delivery address':'Shipping address only';
-  el('consignee_primary').placeholder=same?'Company or recipient details\nStreet address\nCity, state, postal code':'Street address\nCity, state, postal code';
-  if(!same&&focus)el('shippingName').focus();
-}
-function composeSeparateConsignee(){
-  const country=el('destination').value.trim().toUpperCase();
-  const name=el('shippingName').value.trim();
-  const address=el('consignee_primary').value.split('\n');
-  while(address.length&&name&&address[0].trim().toLocaleLowerCase()===name.toLocaleLowerCase())address.shift();
-  const block=[name,address.join('\n').trim(),country?'Country: '+country:'',
-    'Tel/Phone: '+el('shippingPhone').value.trim(),'PIC: '+el('shippingName').value.trim(),'Email: '+el('shippingEmail').value.trim()].filter(Boolean).join('\n');
-  el('consignee_text').value=window.orderLocations.phoneBlock(block,country);
-  el('consignee_text').oninput();
-}
-el('shippingSame').onchange=()=>{
-  const same=el('shippingSame').checked;
-  setShippingMode(same,!same);
-  if(same){
-    const client=clientData?.lead||{},contact=client.contact_persons?.[0]||{};
-    const saved=clientAddress(client);
-    el('consignee_text').value=window.orderLocations.phoneBlock(formatPartyBlock({name:client.company||client.name,email:client.email||client.emails?.[0]||contact.email,phone:client.phone||client.phones?.[0]||contact.phone,pic:contact.name},saved),saved.country||el('destination').value);
-    showPartyFields('consignee');el('buyer_same').checked=true;syncConsignee();
-  }else{
-    const details=shippingDetailsFromBlock(el('consignee_text').value);
-    for(const key of ['name','phone','email'])el('shipping'+key[0].toUpperCase()+key.slice(1)).value=key==='name'?'':details[key];
-    el('consignee_primary').value='';
-    const client=clientData?.lead||{},contact=client.contact_persons?.[0]||{};
-    const saved=clientAddress(client,'billing');
-    el('buyer_text').value=window.orderLocations.phoneBlock(formatPartyBlock({name:client.company||client.name,email:client.email||client.emails?.[0]||contact.email,phone:client.phone||client.phones?.[0]||contact.phone,pic:contact.name},saved),saved.country||'');
-    el('buyer_same').checked=false;showPartyFields('buyer');openPartyEditor('buyer',true);
-    composeSeparateConsignee();
-  }
-  updateComposer();
-};
-for(const key of ['Name','Phone','Email'])el('shipping'+key).oninput=composeSeparateConsignee;
 function syncConsignee(){for(const prefix of ['buyer','notify'])if(el(prefix+'_same').checked){el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);showPartyFields(prefix);}updateComposer();}
 for(const prefix of ['consignee','buyer','notify']){
   const changed=()=>{
-    if(prefix==='consignee'&&!el('shippingSame').checked){composeSeparateConsignee();return;}
     el(prefix+'_text').value=prefix==='consignee'?window.orderLocations.joinParty(el(prefix+'_primary').value,el(prefix+'_details').value):el(prefix+'_primary').value;
     el(prefix+'_text').oninput();
     if(prefix==='buyer')el('buyerCountry').value=buyerCountryFromText(el('buyer_text').value);
@@ -326,7 +278,7 @@ el('consigneeGst').oninput=()=>{
   showPartyFields('consignee');syncConsignee();
 };
 for(const prefix of ['buyer','notify']){
-  el(prefix+'_text').oninput=()=>{el(prefix+'_same').checked=el(prefix+'_text').value===window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);refreshConsigneeGst();updateComposer();};
+  el(prefix+'_text').oninput=()=>{refreshConsigneeGst();updateComposer();};
   el(prefix+'_same').onchange=()=>{if(el(prefix+'_same').checked)el(prefix+'_text').value=window.orderLocations.addressOnly(el('consignee_text').value,el('destination').value);showPartyFields(prefix);refreshConsigneeGst();openPartyEditor(prefix,!el(prefix+'_same').checked);updateComposer();if(!el(prefix+'_same').checked)el(prefix+'_primary').focus();};
 }
 el('consignee_text').oninput=()=>{syncConsignee();refreshConsigneeGst();};
@@ -416,19 +368,11 @@ async function prepareClient(clientId,delivery=null,version=formVersion) {
     ['notify','notify_text',delivery?.notify_party,delivery?.notify_party?.address],
   ]){
     let value=delivery?.[key]??(party?.name?formatPartyBlock(party,address):window.orderLocations.addressOnly(consignee,el('destination').value));
-    if(value===consignee||(window.orderLocations.addressOnly(value)===window.orderLocations.addressOnly(consignee,el('destination').value)&&
-      !/^\s*(?:GST(?:IN|\s*(?:No\.?|Number))?|Tel(?:\/Phone)?|Telephone|Phone|PIC|E-?mail)\s*:/im.test(value)))value=window.orderLocations.addressOnly(value);
+    if(value===consignee)value=window.orderLocations.addressOnly(value);
     el(prefix+'_text').value=value;el(prefix+'_same').checked=value===window.orderLocations.addressOnly(consignee,el('destination').value);
   }
   for(const prefix of ['consignee','buyer','notify'])showPartyFields(prefix);
   if(!delivery)el('destination').value=saved.country||'';
-  const separate=Boolean(delivery&&delivery.buyer_text&&delivery.buyer_text!==window.orderLocations.addressOnly(consignee,el('destination').value));
-  setShippingMode(!separate);
-  if(separate){
-    const details=shippingDetailsFromBlock(consignee);
-    for(const key of ['name','phone','email'])el('shipping'+key[0].toUpperCase()+key.slice(1)).value=details[key];
-    el('consignee_primary').value=details.address;
-  }
   setIndiaCurrency();refreshConsigneeGst();
   return true;
 }
@@ -467,7 +411,6 @@ el('orderForm').onsubmit=async event=>{
   try {
     if(!clientData)throw new Error('Choose a client before saving.');
     el('destination').value=el('destination').value.trim().toUpperCase();setIndiaCurrency();
-    if(!el('shippingSame').checked)composeSeparateConsignee();
     el('consignee_text').value=window.orderLocations.countryBlock(el('consignee_text').value,el('destination').value);
     el('consignee_text').value=window.orderLocations.withGst(el('consignee_text').value,window.orderLocations.gstNumber(el('consignee_text').value));
     syncConsignee();

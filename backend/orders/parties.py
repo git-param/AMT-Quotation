@@ -3,7 +3,7 @@
 import re
 
 from backend.client_leads.details import email, phone, text
-from backend.orders.locations import without_gst, phone_block, CALLING_CODES
+from backend.orders.locations import without_gst, phone_block, CALLING_CODES, COUNTRIES
 
 TEXT_FIELDS = ('consignee_text', 'buyer_text', 'notify_text')
 LABELS = {'tel': 'phone', 'tel/phone': 'phone', 'telephone': 'phone', 'phone': 'phone',
@@ -31,6 +31,9 @@ def parse_block(value, country=''):
         party['name'] = text(re.sub(r'^(?:name|company)\s*:\s*', '', lines[0], flags=re.I),
                              200, 'legal party name')
     for line in lines[1:]:
+        if line.strip().upper() in COUNTRIES:
+            explicit_country = line.strip()
+            continue
         match = re.fullmatch(r'([^:]+):\s*(.*)', line)
         key = LABELS.get(match[1].strip().lower()) if match else None
         if key == 'country':

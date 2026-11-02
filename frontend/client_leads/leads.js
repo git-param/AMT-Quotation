@@ -462,6 +462,11 @@ function syncCallingCodeFromCountry() {
   byId('phoneCountryCode').value = code || '';
 }
 byId('phoneCountryCode').addEventListener('input', detectClientCountry);
+
+byId('phoneNumber').addEventListener('input', () => {
+  const input = byId('phoneNumber');
+  input.value = input.value.replace(/[^0-9()]/g, '');
+});
 byId('country').addEventListener('input', syncCallingCodeFromCountry);
 function setSource(client) {
   const select = byId('enquiry_source_id');
