@@ -258,6 +258,7 @@ document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 let _currentUserId = null;
+let _currentUserRole = null;
 function showAccessError(status) {
   document.getElementById('accessStatus').textContent = status === 401
     ? 'Session ended. Please sign in again.' : 'Access denied for your role.';
@@ -271,6 +272,9 @@ fetch('/api/me').then(async response => {
   document.getElementById('sourcesLink').style.display = user.permissions.includes('sources.manage') ? 'inline-flex' : 'none';
   document.getElementById('accessLink').style.display = user.permissions.includes('leads.share_manage') ? 'inline-flex' : 'none';
   _currentUserId = user.id;
+  _currentUserRole = user.role;
+  const rolesLink = document.getElementById('rolesLink');
+  if (rolesLink) rolesLink.hidden = !user.permissions.includes('roles.manage');
   const manage = user.permissions.includes('users.manage');
   document.getElementById('dashboardContent').hidden = false;
   document.getElementById('tabs').hidden = !manage;        // tabs only make sense with 2+ views
@@ -288,9 +292,10 @@ window.addEventListener('resize', () => {
 // ── User management ───────────────────────────────────────────────────────────
 let _users = [];
 let _departments = [];
+let _roles = {};
 let _selectedUserId = null;
 let _savingUser = false;
-const userRoleLabels = {user: 'Quotation User', manager: 'Admin', sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
+const userRoleLabels = {user: 'Quotation User', manager: 'Manager', sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
 
 async function loadUsers() {
   const resp = await fetch('/api/manager/users').catch(() => null);
@@ -299,6 +304,13 @@ async function loadUsers() {
   const data = await resp.json();
   _users = data.users || [];
   _departments = data.departments || [];
+  _roles = data.roles || userRoleLabels;
+  const roleOptions = Object.entries(_roles).filter(([code]) =>
+    _currentUserRole === 'admin' || (code !== 'admin' && code !== 'manager'));
+  const newRole = document.getElementById('newRole');
+  const selectedNewRole = newRole.value;
+  newRole.replaceChildren(...roleOptions.map(([code, label]) => new Option(label, code)));
+  if (roleOptions.some(([code]) => code === selectedNewRole)) newRole.value = selectedNewRole;
   const departmentInput = document.getElementById('newDepartment');
   const currentDepartment = departmentInput.value;
   fillDepartmentOptions(departmentInput, currentDepartment);
@@ -316,7 +328,7 @@ async function loadUsers() {
     button.setAttribute('aria-haspopup', 'dialog');
     name.append(button);
     const role = document.createElement('td');
-    role.textContent = userRoleLabels[user.role] || user.role;
+    role.textContent = _roles[user.role] || userRoleLabels[user.role] || user.role;
     const status = document.createElement('td');
     const badge = document.createElement('span');
     badge.className = `account-status ${user.is_active ? 'is-active' : 'is-inactive'}`;
@@ -361,7 +373,7 @@ function openUserDetails(id) {
   const values = [
     ['User ID', user.id], ['Name / username', user.username],
     ['Department', user.department || 'Not assigned'],
-    ['Role', userRoleLabels[user.role] || user.role],
+    ['Role', _roles[user.role] || userRoleLabels[user.role] || user.role],
     ['Supervisor', supervisor ? supervisor.username : user.supervisor_user_id ? 'Unavailable supervisor' : 'Unassigned'],
     ['Created', Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleString('en-GB')],
     ['Status', user.is_active ? 'Active' : 'Inactive'],
@@ -384,8 +396,9 @@ function editSelectedUser() {
   document.getElementById('editPhoneCountryCode').value = user.phone_country_code || '';
   document.getElementById('editPhoneNumber').value = user.phone_number || '';
   const roles = document.getElementById('editRole');
-  const choices = {sales_executive: 'Sales Executive', user: 'Quotation User', sales_tl: 'Sales TL', admin: 'Admin'};
-  if (!Object.hasOwn(choices, user.role)) choices[user.role] = userRoleLabels[user.role] || user.role;
+  const choices = Object.fromEntries(Object.entries(_roles).filter(([code]) =>
+    _currentUserRole === 'admin' || (code !== 'admin' && code !== 'manager')));
+  if (!Object.hasOwn(choices, user.role)) choices[user.role] = _roles[user.role] || userRoleLabels[user.role] || user.role;
   roles.replaceChildren(...Object.entries(choices).map(([code, label]) => new Option(label, code)));
   roles.value = user.role;
   roles.disabled = user.id === _currentUserId;
@@ -394,7 +407,7 @@ function editSelectedUser() {
   status.disabled = user.id === _currentUserId;
   const supervisor = document.getElementById('editSupervisor');
   supervisor.replaceChildren(new Option('Unassigned', ''), ..._users
-    .filter(u => u.id !== user.id && u.role === 'sales_tl' && u.is_active)
+    .filter(u => u.id !== user.id && (user.role === 'sales_tl' ? u.role === 'manager' : ['sales_tl','manager'].includes(u.role)) && u.is_active)
     .map(u => new Option(u.username, u.id)));
   if (user.supervisor_user_id && ![...supervisor.options].some(o => Number(o.value) === user.supervisor_user_id)) {
     supervisor.add(new Option('Unavailable supervisor', user.supervisor_user_id));
@@ -409,7 +422,7 @@ function editSelectedUser() {
 
 function updateEditSupervisor() {
   const disabled = document.getElementById('editStatus').value !== '1' ||
-    !['user', 'sales_executive'].includes(document.getElementById('editRole').value);
+    !['user', 'sales_executive', 'sales_tl'].includes(document.getElementById('editRole').value);
   const supervisor = document.getElementById('editSupervisor');
   supervisor.disabled = disabled;
   if (disabled) supervisor.value = '';

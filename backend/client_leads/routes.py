@@ -64,8 +64,13 @@ def delete_scope(user):
 
 def management_edit_scope(user):
     """Authorize management by ownership and supervision, not shared access."""
-    if user['role'] in ('admin', 'manager'):
+    if user['role'] == 'admin':
         return '1 = 1', []
+    if user['role'] == 'manager':
+        return ('''l.created_by IN (WITH RECURSIVE team(id) AS (
+            SELECT id FROM users WHERE id=? UNION
+            SELECT u.id FROM users u JOIN team t ON u.supervisor_user_id=t.id
+        ) SELECT id FROM team)''', [user['id']])
     predicate = 'l.created_by = ?'
     parameters = [user['id']]
     if (user['role'] == 'sales_tl'

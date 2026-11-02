@@ -4,7 +4,7 @@ from functools import wraps
 import json
 
 from flask import jsonify, request, send_file
-from backend.common.auth import get_current_user, get_permissions, manager_required
+from backend.common.auth import get_current_user, get_permissions, managed_user_ids, manager_required
 from backend.client_leads.discovery import integer
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
@@ -39,10 +39,14 @@ def valid_date(value):
 
 def context(connection):
     user = get_current_user()
-    admin = user['role'] in ('admin', 'manager')
+    admin = user['role'] == 'admin'
     query = 'SELECT id,username,role,is_active FROM users'
     parameters = []
-    if not admin:
+    if user['role'] == 'manager':
+        ids = managed_user_ids(connection, user) or {user['id']}
+        query += ' WHERE id IN (' + ','.join('?' for _ in ids) + ')'
+        parameters.extend(sorted(ids))
+    elif not admin:
         query += ' WHERE id=?'
         parameters.append(user['id'])
         if 'leads.view_team' in get_permissions(user):

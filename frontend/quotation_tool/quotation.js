@@ -24,14 +24,28 @@ window.addEventListener('load', () => {
   }).catch(() => { document.getElementById('skuLookupLimitHint').textContent = ''; });
   // Load current user info
   fetch('/api/me').then(r => {
-    if (!r.ok) throw new Error('Access denied');
+    if (r.status === 401) {
+      window.location.replace('/login');
+      return null;
+    }
+    if (!r.ok) {
+      const error = new Error(`Could not load account details (HTTP ${r.status}).`);
+      error.status = r.status;
+      throw error;
+    }
     return r.json();
   }).then(u => {
+    if (!u) return;
     document.getElementById('hdrUser').textContent = '👤 ' + u.username;
     document.getElementById('sourcesLink').style.display = (u.permissions || []).includes('sources.manage') ? 'inline-block' : 'none';
     document.getElementById('accessLink').style.display = (u.permissions || []).includes('leads.share_manage') ? 'inline-block' : 'none';
     if ((u.permissions || []).includes('management.view')) document.getElementById('mgrLink').style.display = 'inline';
-  }).catch(() => { window.location.href = '/login'; });
+  }).catch(error => {
+    setStatus(error.status === 403
+      ? 'Your account is signed in, but account details are unavailable. Contact an administrator.'
+      : 'Could not reach the account service. Your quotation session is still open; retry by refreshing the page.',
+      'status-err');
+  });
 });
 
 function loadRate() {
@@ -255,7 +269,8 @@ function renderResults() {
     const usd = fmtDualUsd(r);
     const inr = fmtDualInr(r, _rate);
     const Quantity = r.Quantity !== '' && r.Quantity != null ? `${r.Quantity} Pcs` : '';
-    const link = r.url ? `<a href="${esc(r.url)}" target="_blank">Click here</a>` : '';
+    // QUOTE_NO_EXT_LINKS_31OCT: the server blanks every non-Aeliya link; partner rows say Attached.
+    const link = r.photos_attached ? 'Attached' : r.url ? `<a href="${esc(r.url)}" target="_blank">Click here</a>` : '';
     if (r.url) _urlMap[sr] = r.url;
     const skuVal = r.sku || r.sku_input;
     const age = Number(r.price_age_days);
@@ -475,7 +490,7 @@ ${hasDiscount ? `<td style="${tdD}">—</td><td style="${tdC}">—</td>` : ''}
     }
 
     const Quantity  = (r.Quantity !== '' && r.Quantity != null) ? `${r.Quantity} Pcs` : '';
-    const link = r.url ? `<a href="${escH(r.url)}" style="color:#1155CC;text-decoration:underline;">Click here</a>` : '';
+    const link = r.photos_attached ? 'Attached' : r.url ? `<a href="${escH(r.url)}" style="color:#1155CC;text-decoration:underline;">Click here</a>` : '';
     html += `<tr>
 <td style="${tdC}">${escH(r.sku || r.sku_input)}</td>
 <td style="${tdC}">${sr}</td>
@@ -629,7 +644,7 @@ Greetings from Aeliya Marine Tech!
 Based on your request we are pleased to offer you the below product.
 
 *Product Name:* ${r.title}
-Product Details/Photos ${r.url || ''}
+Product Details/Photos ${r.photos_attached ? 'Attached' : (r.url || '')}
 
 *Price: ${priceStr}*
 Available Quantity: ${r.Quantity ?? ''}

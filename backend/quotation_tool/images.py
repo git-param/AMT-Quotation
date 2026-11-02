@@ -7,7 +7,7 @@ import re
 import sqlite3
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, unquote, urljoin, urlparse
 
 import requests
 from flask import Blueprint, jsonify, make_response, request, send_file
@@ -150,9 +150,40 @@ def _catalog_images(skus):
         hits = list(pool.map(lookup_ref, missing))
     for sku, hit in zip(missing, hits):
         if hit and hit.get('images'):
-            urls = hit['images']
+            # The browser only ever sees our own path; the partner's photo URL
+            # stays on the server (QUOTE_NO_EXT_LINKS_31OCT).
+            urls = [f'/api/partner-image/{quote(sku, safe="")}/{index}'
+                    for index in range(1, len(hit['images']) + 1)]
             images.append({'sku': sku, 'image': urls[0], 'images': urls, 'source': 'blog'})
     return images
+
+
+def _fetch_partner_image(url):
+    match = re.fullmatch(r'/api/partner-image/([^/]{1,100})/(\d{1,2})', url)
+    if not match:
+        raise ValueError('Invalid partner image')
+    hit = lookup_ref(unquote(match.group(1)))
+    urls = (hit or {}).get('images') or []
+    index = int(match.group(2))
+    if not 1 <= index <= len(urls):
+        raise ValueError('Partner image not found')
+    return _fetch_public_image(urls[index - 1])
+
+
+@bp.route('/api/partner-image/<path:sku>/<int:index>')
+@login_required
+def api_partner_image(sku, index):
+    try:
+        data, content_type = _fetch_partner_image(
+            f'/api/partner-image/{quote(sku, safe="")}/{index}')
+    except ValueError as error:
+        return jsonify(error=str(error)), 404
+    except requests.RequestException:
+        return jsonify(error='Could not fetch that image'), 502
+    response = make_response(data)
+    response.headers['Content-Type'] = content_type
+    response.headers['Cache-Control'] = 'private, max-age=3600'
+    return response
 
 
 @bp.route('/api/images', methods=['POST'])
@@ -226,6 +257,8 @@ def api_download_images_zip():
                 try:
                     data, content_type = (_fetch_zoho_image(url)
                                           if url.startswith('/api/zoho-image/')
+                                          else _fetch_partner_image(url)
+                                          if url.startswith('/api/partner-image/')
                                           else _fetch_public_image(url))
                     if total_bytes + len(data) > 100 * 1024 * 1024 or added >= 200:
                         break

@@ -7,6 +7,7 @@ from backend.common.skus import duplicate_skus, enforce_sku_lookup_limit
 from backend.database import log_search, log_copy
 from backend.quotation_tool.shopify import fetch_sku, fetch_skus_batch, get_inr_rate, _sku_cache, _sku_lock, _token_cache, _token_lock
 from backend.quotation_tool.blog_lookup import fill_missing
+from backend.quotation_tool.link_policy import scrub_row
 from backend.quotation_tool.quote_builder import _q_build_table, _q_strip_tags
 from backend.quotation_tool.price_history import price_age_map
 from backend.quotation_tool.quote_lines import log_quote_lines
@@ -91,6 +92,7 @@ def _lookup_rows(skus_raw):
         age = ages.get(row['sku_input'].upper())
         row['price_last_updated'] = age['last_priced'] if age else None
         row['price_age_days'] = age['days'] if age else None
+        scrub_row(row)
     return results
 
 

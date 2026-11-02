@@ -875,5 +875,24 @@ MIGRATIONS = (
         "ALTER TABLE client_leads ADD COLUMN phone_number TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE client_leads ADD COLUMN country TEXT NOT NULL DEFAULT ''",
     )),
+    (42, 'configurable_roles_and_managers', (
+        "UPDATE users SET role='admin' WHERE role='manager'",
+        "UPDATE roles SET description='Team Manager' WHERE code='manager'",
+        "UPDATE roles SET description='Administrator' WHERE code='admin'",
+        "INSERT OR IGNORE INTO role_permissions(role_code,permission_code) "
+        "SELECT 'admin',permission_code FROM role_permissions WHERE role_code='manager'",
+        "DELETE FROM role_permissions WHERE role_code='manager'",
+        "INSERT OR IGNORE INTO role_permissions(role_code,permission_code) VALUES "
+        "('manager','quotation.use'),('manager','account.self'),"
+        "('manager','management.view'),('manager','users.manage'),"
+        "('manager','leads.view_team'),('manager','leads.share_manage'),"
+        "('manager','sources.manage'),('manager','settings.manage')",
+        "INSERT OR IGNORE INTO permissions(code,description) VALUES "
+        "('roles.manage','Manage roles and module permissions')",
+        "INSERT OR IGNORE INTO role_permissions(role_code,permission_code) VALUES('admin','roles.manage')",
+        "DELETE FROM role_permissions WHERE role_code='manager' AND permission_code IN ('devices.manage','audit.view','audit.delete')",
+        "INSERT OR IGNORE INTO role_permissions(role_code,permission_code) "
+        "SELECT 'admin',code FROM permissions WHERE code IN ('devices.manage','audit.view','audit.delete')",
+    )),
 
 )

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Roles &amp; permissions | AMT</title>
+  <link rel="stylesheet" href="/static/manager_dashboard/manager.css">
+  <link rel="stylesheet" href="/static/manager_dashboard/roles.css">
+</head>
+<body>
+  <header class="hdr">
+    <div class="hdr-brand"><div class="hdr-mark" aria-hidden="true">⚙</div><div><div class="hdr-logo">Access management</div><div class="hdr-sub">Roles and module permissions</div></div></div>
+    <nav class="hdr-nav" aria-label="Main"><a class="nav-link" href="/manager">Dashboard</a><a class="nav-link is-signout" href="/logout">Sign out</a></nav>
+  </header>
+
+  <main class="roles-wrap">
+    <section class="roles-heading"><div><p class="roles-eyebrow">ADMINISTRATION</p><h1>Roles &amp; permissions</h1><p>Choose which parts of AMT each role can access. Updates take effect immediately.</p></div><div class="roles-heading-icon" aria-hidden="true">♙</div></section>
+
+    <section class="roles-section" aria-labelledby="rolesTitle">
+      <div class="roles-section-head"><div><h2 id="rolesTitle">Workspace roles</h2><p>Review the roles in use and adjust their access.</p></div><span class="roles-count" id="rolesCount">Loading…</span></div>
+      <div id="roleList" class="roles-grid" aria-live="polite"><div class="roles-loading"><span class="roles-spinner" aria-hidden="true"></span>Loading roles…</div></div>
+    </section>
+
+    <section class="role-editor" aria-labelledby="formTitle">
+      <div class="editor-heading"><div class="editor-icon" aria-hidden="true">＋</div><div><p class="roles-eyebrow">ROLE SETUP</p><h2 id="formTitle">Create a role</h2><p id="formDescription">Give the role a clear name, then select the modules it can use.</p></div></div>
+      <form id="roleForm">
+        <div class="role-fields">
+          <div class="role-field"><label for="code">Role code</label><input id="code" required pattern="[a-z][a-z0-9_]{1,39}" maxlength="40" placeholder="e.g. purchase_manager" autocomplete="off"><small>Lowercase letters, numbers, and underscores.</small></div>
+          <div class="role-field"><label for="description">Role name</label><input id="description" required maxlength="80" placeholder="e.g. Purchase Manager"></div>
+        </div>
+        <fieldset class="permission-fieldset"><div class="permission-heading"><div><legend>Module permissions</legend><p>Select the features available to this role.</p></div><span id="permissionCount" class="permission-count">0 selected</span></div><div id="permissionList" class="permission-groups"><div class="permission-empty">Permissions will appear here.</div></div></fieldset>
+        <div class="editor-footer"><p id="status" class="role-status" role="status" aria-live="polite"></p><div class="editor-actions"><button type="button" class="role-button role-button-secondary" id="cancel" hidden>Cancel</button><button type="submit" class="role-button role-button-primary" id="saveRole">Create role</button></div></div>
+      </form>
+    </section>
+  </main>
+  <script src="/static/manager_dashboard/roles.js"></script>
+</body>
+</html>

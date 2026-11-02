@@ -1,4 +1,5 @@
 """Quotation table rendering shared with the production letter API."""
+from backend.quotation_tool.link_policy import PARTNER_LINK_TEXT, is_partner, own_url
 
 Q_MIN_DISC_PCT = 5     # under this, a gap is not presented as a discount at all
 Q_MAX_DISC_PCT = 7     # over this, it is a pricing error rather than an offer
@@ -40,7 +41,7 @@ def _q_eff_price(r):
 
 
 def _q_is_partner(r):
-    return str((r or {}).get('source') or '') in ('atlas', 'alreza')
+    return is_partner(r)
 
 
 def _q_esc(v):
@@ -154,12 +155,14 @@ def _q_build_table(rows, currency, rate):
 
         Quantity = r.get('Quantity')
         qty_s = ('%s Pcs' % Quantity) if (Quantity not in (None, '')) else ''
-        # Partner rows say Attached - never hand the customer the partner's link.
+        # Partner rows say Attached - never hand the customer the partner's link,
+        # and no other outside domain either (QUOTE_NO_EXT_LINKS_31OCT).
+        url = own_url(r.get('url'))
         if _q_is_partner(r):
-            link = 'Attached'
-        elif r.get('url'):
+            link = PARTNER_LINK_TEXT
+        elif url:
             link = ('<a href="%s" style="color:#1155CC;text-decoration:underline;">Click here</a>'
-                    % _q_esc(r.get('url')))
+                    % _q_esc(url))
         else:
             link = ''
         out.append('<tr>')

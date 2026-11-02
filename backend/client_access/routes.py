@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request, send_file
 
 from backend.client_leads.routes import management_edit_scope
 from backend.common.auth import (
-    get_current_user, get_permissions, permission_required,
+    get_current_user, get_permissions, managed_user_ids, permission_required,
 )
 from backend.config import FRONTEND_DIR
 from backend.database import get_db
@@ -54,10 +54,16 @@ def sharing_options():
         return jsonify(error='Access denied'), 403
     connection = get_db()
     try:
-        executives = connection.execute(
+        scope = managed_user_ids(connection, user)
+        executive_sql = (
             "SELECT id, username FROM users WHERE is_active = 1 "
-            "AND role IN ('user', 'sales_executive') ORDER BY username"
-        ).fetchall()
+            "AND role IN ('user', 'sales_executive')"
+        )
+        params = []
+        if scope is not None:
+            executive_sql += ' AND id IN (' + ','.join('?' for _ in scope) + ')'
+            params.extend(sorted(scope))
+        executives = connection.execute(executive_sql + ' ORDER BY username', params).fetchall()
         return jsonify(
             leads=managed_leads(connection, user), username=user['username'],
             executives=[dict(row) for row in executives],

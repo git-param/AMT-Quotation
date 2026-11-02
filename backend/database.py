@@ -22,7 +22,7 @@ def init_db():
 
 def _seed_users():
     con = get_db()
-    if not con.execute("SELECT 1 FROM users WHERE role IN ('manager', 'admin') LIMIT 1").fetchone():
+    if not con.execute("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1").fetchone():
         password = os.getenv('AMT_BOOTSTRAP_ADMIN_PASSWORD', '')
         if password:
             from backend.security.passwords import error
@@ -32,7 +32,7 @@ def _seed_users():
                 raise RuntimeError('Invalid AMT_BOOTSTRAP_ADMIN_PASSWORD: ' + problem)
             con.execute("INSERT OR IGNORE INTO users (username,password_hash,role) VALUES (?,?,?)",
                         (os.getenv('AMT_BOOTSTRAP_ADMIN_USERNAME', 'manager'),
-                         generate_password_hash(password), 'manager'))
+                         generate_password_hash(password), 'admin'))
             con.commit()
     con.close()
 

@@ -63,7 +63,7 @@ def access_decision(username, role, ip):
     policy = load_policy()
     if not _enabled(policy, 'ip_enforce'):
         return True, 'disabled'
-    if role in ('admin', 'manager') and _enabled(policy, 'admin_anywhere', '1'):
+    if role == 'admin' and _enabled(policy, 'admin_anywhere', '1'):
         return True, 'admin_anywhere'
     try:
         address = ipaddress.ip_address(str(ip or '').strip())

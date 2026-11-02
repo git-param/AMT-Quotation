@@ -8,11 +8,46 @@ from backend.database import get_db
 
 ROLE_LABELS = {
     'user': 'Quotation User',
-    'manager': 'Admin (legacy)',
+    'manager': 'Manager',
     'sales_executive': 'Sales Executive',
     'sales_tl': 'Sales TL',
     'admin': 'Admin',
 }
+
+
+def managed_user_ids(connection, user):
+    """Return the manager and every active descendant in the supervisor tree."""
+    if user['role'] == 'admin':
+        return None
+    if user['role'] not in ('manager', 'sales_tl'):
+        return {user['id']}
+    rows = connection.execute('''WITH RECURSIVE team(id) AS (
+        SELECT id FROM users WHERE id=?
+        UNION
+        SELECT u.id FROM users u JOIN team t ON u.supervisor_user_id=t.id
+    ) SELECT id FROM team''', (user['id'],)).fetchall()
+    return {row['id'] for row in rows}
+
+
+def may_manage_user(connection, actor, target_id):
+    if actor['role'] == 'admin':
+        return True
+    if actor['role'] != 'manager':
+        return False
+    return target_id in (managed_user_ids(connection, actor) or set())
+
+
+def admin_required(function):
+    """Require the actual administrator role; managers are team scoped."""
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        user = get_current_user()
+        if not user:
+            return jsonify(error='Not logged in'), 401
+        if user['role'] != 'admin':
+            return jsonify(error='Only administrators can manage roles.'), 403
+        return function(*args, **kwargs)
+    return wrapped
 
 
 def get_current_user():

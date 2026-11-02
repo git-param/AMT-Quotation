@@ -84,9 +84,9 @@ def logout():
 
 
 @bp.route('/api/me')
-@permission_required('account.self', allow_api_key=True)
+@permission_required(None, allow_api_key=True)
 def api_me():
-    """Expose current database grants for permission-aware navigation."""
+    """Expose the signed-in identity and grants for app boot and navigation."""
     user = get_current_user()
     if not user:
         return jsonify(username='api-key', role='api', auth='api_key')
