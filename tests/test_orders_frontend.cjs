@@ -225,7 +225,7 @@ test('related order summaries preserve client scope and read-only navigation',as
   await fixture.context.window.renderRelatedOrders(host,{client_id:9},false);
   const section=host.children[0];
   assert.equal(section.children[0].children[0].textContent,'Proforma Invoices');
-  assert.equal(section.children[0].children.length,1); // VIEW has no Add order.
+  assert.equal(section.children[0].children.length,1); // VIEW has no Add PI.
   assert.equal(section.children[2].children[0].children[0].textContent,'Pending PI');
   assert.equal(section.children[2].children[0].children[1].textContent,'1');
   assert.equal(section.children[3].children[0].children[0].textContent,'Completed PI');
