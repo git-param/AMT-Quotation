@@ -56,8 +56,8 @@ def layout(doc):
 
 
 def annexure_words(doc):
-    # The words sit beside Total(currency), so they describe that subtotal.
-    words = amount_words(Decimal(doc['totals']['subtotal']), doc['currency'])
+    # The words sit beside the annexure's grand total.
+    words = amount_words(Decimal(doc['totals']['grand_total']), doc['currency'])
     words = words.removesuffix(' Only').replace(' US Dollars', ' dollars').lower()
     return doc['currency']+' '+words[:1].upper()+words[1:]+' Only'
 
@@ -95,45 +95,51 @@ def annexure_section(doc):
         if Decimal(line.get('discount_amount', '0')):
             rows[-1][5]['readonly'] = True
     totals = doc['totals']
-    # Two ruled blank rows precede the words/quantity/total row in the reference.
-    rows.extend([blanks(), blanks()])
+    # Keep a spacer before the subtotal and charges, as on the cover PI.
+    rows.append(blanks())
+    heights = [22.5,36]+[21.95]*len(doc['totals']['lines'])+[14.1]
     if Decimal(totals.get('summary_discount', '0')):
         discount_row = blanks()
         discount_row[4] = cell(4, 'Discount', 'bold')
         discount_row[5] = cell(5, '-'+totals['summary_discount'], 'amount', accounting=True)
-        rows.insert(len(rows)-2, discount_row)
+        rows.append(discount_row)
+        heights.append(14.1)
+    subtotal = blanks()
+    subtotal[2] = cell(2, 'Total', 'bold_center')
+    subtotal[3] = cell(3, quantity_summary(doc), 'bold_center', field='annexure_quantity', value=quantity_summary(doc), aria='Total quantity', calculated='annexure_quantity', auto_quantity=True)
+    subtotal[4] = cell(4, 'Subtotal')
+    subtotal[5] = cell(5, totals['subtotal'], 'amount', accounting=True, calculated='subtotal')
+    rows.append(subtotal)
+    heights.append(14.1)
     if Decimal(totals.get('bank_charges', '0')):
         bank_row = blanks()
-        bank_row[4] = cell(4, 'Bank Charges', 'bold')
+        bank_row[4] = cell(4, 'Bank charge')
         bank_row[5] = cell(5, totals['bank_charges'], 'amount', accounting=True, calculated='bank_charges')
-        rows.insert(len(rows)-2, bank_row)
-    # Retain these reserved rows even when charges apply; no extra borders.
+        rows.append(bank_row)
+        heights.append(14.1)
     if Decimal(totals['shipping']):
-        rows[-2][4] = cell(4, 'Shipping', 'bold')
-        rows[-2][5] = cell(5, totals['shipping'], 'amount', accounting=True, calculated='shipping')
+        shipping_row = blanks()
+        shipping_row[4] = cell(4, 'Shipping charge')
+        shipping_row[5] = cell(5, totals['shipping'], 'amount', accounting=True, calculated='shipping')
+        rows.append(shipping_row)
+        heights.append(14.1)
     if Decimal(totals['tax']):
-        rows[-1][4] = cell(4, f'GST {Decimal(totals["tax_rate"])*100:g}%', 'bold')
-        rows[-1][5] = cell(5, totals['tax'], 'amount', accounting=True, calculated='tax')
+        tax_row = blanks()
+        tax_row[4] = cell(4, f'GST {Decimal(totals["tax_rate"])*100:g}%', 'bold')
+        tax_row[5] = cell(5, totals['tax'], 'amount', accounting=True, calculated='tax')
+        rows.append(tax_row)
+        heights.append(14.1)
     summary_row = len(rows)
     rows.append([cell(0, 'Amount\nin\nWords', 'bold', nowrap=True),
                  cell(1, annexure_words(doc), 'bold', calculated='annexure_amount_in_words'),
-                 cell(2, 'Total', 'bold_center'),
-                 cell(3, quantity_summary(doc), 'bold_center', field='annexure_quantity', value=quantity_summary(doc), aria='Total quantity', calculated='annexure_quantity', auto_quantity=True),
+                 cell(2),
+                 cell(3),
                  cell(4, 'Total ('+doc['currency']+')', 'bold_center'),
-                 cell(5, totals['subtotal'], 'bold_amount', accounting=True, calculated='subtotal')])
+                 cell(5, totals['grand_total'], 'bold_amount', accounting=True, calculated='grand_total')])
+    heights.append(40.9)
     for total_cell in rows[-1]:
         total_cell.update(total_cell=True)
     rows.append(blanks())
-    final = blanks()
-    final[4] = cell(4, 'Final Price', 'bold_center')
-    final[5] = cell(5, totals['grand_total'], 'bold_amount', accounting=True, calculated='grand_total')
-    for total_cell in final[4:]:
-        total_cell.update(total_cell=True, rowspan=2)
-    rows.extend([final, blanks()[:4]])
-    heights = [22.5,36]+[21.95]*len(doc['totals']['lines'])+[14.1,14.1,40.9,14.1,14.1,14.1]
-    if Decimal(totals.get('summary_discount', '0')):
-        heights.insert(2+len(doc['totals']['lines']),14.1)
-    if Decimal(totals.get('bank_charges', '0')):
-        heights.insert(2+len(doc['totals']['lines']),14.1)
+    heights.append(14.1)
     return dict(name='annexure', annexure=True, widths=ANNEXURE_WIDTHS,
                 rows=rows, row_heights=heights, summary_row=summary_row)

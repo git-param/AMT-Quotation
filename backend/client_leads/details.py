@@ -115,14 +115,15 @@ def validated_details(data, existing=None):
         code, number, combined = client_phone(data, existing)
         result['phone_country_code'] = code
         result['phone_number'] = number
-        result['phone'] = phone(combined)
+        result['phone'] = combined
     else:
-        result['phone'] = phone(result['phone'])
+        formatted_phone = result['phone']
+        normalized_phone = phone(formatted_phone)
         code = next((candidate for candidate in sorted(set(CALLING_CODES.values()),
                                                        key=len, reverse=True)
-                     if result['phone'].startswith(candidate)), '')
-        number = result['phone'][len(code):] if code else result['phone']
-        if number and not re.fullmatch(r'[0-9]{10}', number):
+                     if normalized_phone.startswith(candidate)), '')
+        number = formatted_phone[len(code):] if code and formatted_phone.startswith(code) else formatted_phone
+        if number and len(re.sub(r'\D', '', number)) != 10:
             code, number = existing.get('phone_country_code', ''), existing.get('phone_number', '')
         result['phone_country_code'] = code
         result['phone_number'] = number
@@ -139,7 +140,7 @@ def validated_details(data, existing=None):
             and CALLING_CODES[country] != code):
         raise ValueError('Client country and calling code must match.')
     result['phone_country_code'] = code
-    result['phone'] = phone(code + number if code and number else number)
+    result['phone'] = code + number if code and number else number
     result['country'] = country
     for field, validator in (('emails', email), ('phones', phone)):
         values = collection(data.get(field, existing.get(field, [])), field)
@@ -204,6 +205,9 @@ def record_addresses(connection, client_id, values, actor):
 def decode(row):
     """Expose structured fields without rewriting legacy contact values."""
     result = dict(row)
+    if result.get('phone_number'):
+        result['phone'] = (result.get('phone_country_code', '') +
+                           result['phone_number'])
     for field in JSON_FIELDS:
         result[field] = json.loads(result.pop(field + '_json'))
     return result

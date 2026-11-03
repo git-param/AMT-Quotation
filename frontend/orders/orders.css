@@ -2010,8 +2010,7 @@ body.embedded #orderForm .consignee-editor textarea {
   font-family: "Times New Roman", Times, serif;
   font-size: 12px;
   line-height: 1.15;
-  border: 1.5px solid #000;
-  border-top-width: 1px;
+  border: 0;
 }
 .pi-paper .pi-grid-annexure td {
   border: 1px solid #000;
@@ -2024,7 +2023,8 @@ body.embedded #orderForm .consignee-editor textarea {
     sans-serif;
   text-align: center;
   vertical-align: bottom;
-  border-bottom: 1px solid #000;
+  border: 0;
+  border-bottom: 2px solid #000;
 }
 .pi-paper .pi-grid-annexure .pi-cell-head {
   border-top: 1px solid #000;

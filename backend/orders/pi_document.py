@@ -41,6 +41,19 @@ def party_block(party, address):
           ('email','Email: '),('gst_number','GST: ')) if party.get(key)]]))
 
 
+def apply_client_phone_format(value, formatted_phone):
+    """Restore client phone formatting in older saved orders when digits match."""
+    if not formatted_phone:
+        return value
+    pattern = re.compile(r'^(\s*(?:Tel(?:/Phone)?|Telephone|Phone)\s*:\s*)(.*)$', re.I | re.M)
+    digits = lambda phone_value: re.sub(r'\D', '', phone_value)
+    for line in value.splitlines():
+        match = pattern.match(line)
+        if match and digits(match[2]) == digits(formatted_phone):
+            return pattern.sub(lambda found: found[1] + formatted_phone, value, count=1)
+    return value
+
+
 def required_consignee_contacts(value, country=''):
     """Keep missing contact prompts in the editable PI text itself."""
     india = country.strip().casefold() == 'india'
@@ -126,6 +139,13 @@ def prepare(state, user, currency, rate, bulk_description=None):
             (user['id'],),
         ).fetchone()
         prepared_phone = phone(account['phone_country_code'] + account['phone_number']) if account and account['phone_number'] else ''
+        client_phone_row = connection.execute(
+            'SELECT phone_country_code, phone_number FROM client_leads WHERE id = ?',
+            (state['order'].get('client_id'),),
+        ).fetchone() if state['order'].get('client_id') else None
+        client_phone = (' '.join(part for part in (
+            client_phone_row['phone_country_code'], client_phone_row['phone_number']) if part)
+            if client_phone_row else '')
     finally:
         connection.close()
     if currency not in CURRENCIES:
@@ -151,6 +171,7 @@ def prepare(state, user, currency, rate, bulk_description=None):
     order['payment_terms'] = order['payment_terms'] or company['payment_terms'][currency]
     destination = state['delivery'] or {}
     consignee = destination.get('consignee_text',party_block(destination.get('consignee'),destination.get('shipping_address')))
+    consignee = apply_client_phone_format(consignee, client_phone)
     buyer = destination.get('buyer_text') or party_block(destination.get('buyer'),destination.get('billing_address')) or consignee
     notify = destination.get('notify_text') or party_block(destination.get('notify_party'),destination.get('notify_party',{}).get('address')) or consignee
     if buyer == consignee:

@@ -148,17 +148,17 @@ def pdf(doc):
                     content=cell['_paragraph'];row[col]=content
                     end_row=index+cell.get('rowspan',1)-1
                     if span>1 or end_row>index:commands.append(('SPAN',(col,index),(col+span-1,end_row)))
-                    if section.get('annexure'):
+                    if section.get('annexure') and index != 0:
                         commands.append(('LINEBELOW',(col,end_row),(col+span-1,end_row),.6,colors.black))
                     if cell.get('total_cell'):
                         total_commands.extend([('BOX',(col,index),(col+span-1,end_row),.6,colors.black),
                                                ('VALIGN',(col,index),(col+span-1,end_row),'MIDDLE')])
                     if cell.get('bottom_aligned'):commands.append(('VALIGN',(col,index),(col+span-1,index),'BOTTOM'))
-                    if section['name']!='title' and not cell.get('open_left'):commands.append(('LINEBEFORE',(col,index),(col,index),1.2 if col==0 else .6,colors.black))
-                    if section['name']!='title' and not cell.get('open_right'):commands.append(('LINEAFTER',(col+span-1,index),(col+span-1,index),1.2 if col+span==len(section_columns) else .6,colors.black))
+                    if section['name']!='title' and not (section.get('annexure') and index==0) and not cell.get('open_left'):commands.append(('LINEBEFORE',(col,index),(col,index),1.2 if col==0 else .6,colors.black))
+                    if section['name']!='title' and not (section.get('annexure') and index==0) and not cell.get('open_right'):commands.append(('LINEAFTER',(col+span-1,index),(col+span-1,index),1.2 if col+span==len(section_columns) else .6,colors.black))
                     if kind=='warning':commands.append(('BACKGROUND',(col,index),(col+span-1,index),colors.yellow))
                     if kind=='final_term':commands.append(('BACKGROUND',(col,index),(col+span-1,index),colors.HexColor('#FFF2CC')))
-                    if section['name']!='title' and cell.get('line_top'):commands.append(('LINEABOVE',(col,index),(col+span-1,index),.6,colors.black))
+                    if section['name']!='title' and not (section.get('annexure') and index==0) and cell.get('line_top'):commands.append(('LINEABOVE',(col,index),(col+span-1,index),.6,colors.black))
                     if section['name']!='title' and cell.get('line_bottom'):commands.append(('LINEBELOW',(col,index),(col+span-1,index),.6,colors.black))
                     _,h=content.wrap(sum(section_columns[col:col+span])-6,10000)
                     min_height=max(min_height,h+3)
@@ -179,11 +179,13 @@ def pdf(doc):
                 ('LEFTPADDING',(0,0),(-1,-1),3),('RIGHTPADDING',(0,0),(-1,-1),3),
                 ('TOPPADDING',(0,0),(-1,-1),1.5),('BOTTOMPADDING',(0,0),(-1,-1),1.5),
                 *[rule for rule in section_borders(section['name'])
-                  if not (section['name']=='annexure' and rule[0]=='LINEABOVE')],*commands,*total_commands,
+                  if not (section['name']=='annexure' and rule[0] in ('LINEABOVE','LINEBEFORE','LINEAFTER'))],*commands,*total_commands,
                 *([('LINEBELOW',(0,0),(-1,0),.6,colors.black)] if section['name']=='items' else []),
                 *([('LINEABOVE',(0,-1),(-1,-1),.6,colors.black)] if section['name']=='bank' else []),
-                *([('LINEBEFORE',(0,0),(0,-1),1.2,colors.black),
-                   ('LINEAFTER',(-1,0),(-1,-1),1.2,colors.black)] if section['name']=='annexure' else [])]))
+                *([('LINEBELOW',(0,0),(-1,0),1.2,colors.black),
+                   ('LINEBEFORE',(0,1),(0,-1),1.2,colors.black),
+                   ('LINEAFTER',(-1,1),(-1,-1),1.2,colors.black),
+                   ('LINEABOVE',(0,1),(-1,1),.6,colors.black)] if section['name']=='annexure' else [])]))
             story.append(table)
     append_sections([section for section in model['sections'] if not section.get('annexure')])
     footer_rows=[[image('payment_options.jpg',usable*.43),image('signature.png',usable*.43)]]
@@ -405,7 +407,7 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row, legal_notice)
             if kind in ('head','center','bold_center','annexure_title'):
                 options['align']='center'
             if kind=='annexure_title':
-                options.update(font_name='Arial',font_size=12,valign='vcenter',top=0)
+                options.update(font_name='Arial',font_size=12,valign='vcenter',border=0,left=0,right=0,top=0,bottom=2)
             if cell.get('accounting'):
                 options.update(num_format='"'+symbol+'" #,##0.00',align='center')
             if cell.get('total_cell'):
