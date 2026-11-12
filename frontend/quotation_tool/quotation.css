@@ -28,6 +28,22 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#F3F4F6;color:#111827;mi
 .rate-display{font-size:18px;font-weight:700;color:#1A56DB;padding:7px 10px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;text-align:center;min-width:110px}
 .hint{font-size:11px;color:#6B7280;margin-top:3px}
 
+/* Optional quotation discount */
+.quotation-discount-control{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px;padding:10px 12px;border:1px solid #DBEAFE;border-radius:8px;background:#F8FAFC}
+.quotation-discount-toggle{display:inline-flex;align-items:center;gap:9px;min-height:32px;color:#1E3A5F;font-size:13px;font-weight:700;cursor:pointer}
+.quotation-discount-toggle input{position:absolute;width:1px;height:1px;opacity:0}
+.quotation-discount-switch{position:relative;width:36px;height:20px;flex:0 0 36px;border-radius:999px;background:#CBD5E1;transition:background .18s ease}
+.quotation-discount-switch:after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0003;transition:transform .18s ease}
+.quotation-discount-toggle input:checked+.quotation-discount-switch{background:#057A55}
+.quotation-discount-toggle input:checked+.quotation-discount-switch:after{transform:translateX(16px)}
+.quotation-discount-toggle input:focus-visible+.quotation-discount-switch{outline:3px solid #93C5FD;outline-offset:2px}
+.quotation-discount-choice{display:flex;align-items:center;gap:7px;padding-left:14px;border-left:1px solid #D1D5DB;color:#4B5563;font-size:12px;font-weight:600}
+.quotation-discount-choice select{min-width:76px;padding:6px 26px 6px 9px;border:1px solid #CBD5E1;border-radius:6px;background:#fff;color:#1F2937;font:600 13px 'Segoe UI',Arial,sans-serif}
+.quotation-discount-choice select:focus{outline:2px solid #93C5FD;border-color:#1A56DB}
+.quotation-discount-choice select:disabled{background:#F1F5F9;color:#94A3B8;cursor:not-allowed}
+.quotation-discount-note{color:#64748B;font-size:11px;line-height:1.4}
+@media(max-width:600px){.quotation-discount-control{gap:8px 12px}.quotation-discount-choice{padding-left:0;border-left:0}.quotation-discount-note{flex-basis:100%;padding-left:45px}}
+
 /* Buttons */
 .btn-row{display:flex;align-items:center;gap:10px;margin-top:12px}
 /* Copy bar groups */

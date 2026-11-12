@@ -1,7 +1,5 @@
 // ── State ───────────────────────────────────────────────────────────────────
 let _rows     = [];
-const MAX_DISC_PCT = 7;
-let _hasRecheckRows = false;
 let _rate     = null;
 let _urlMap   = {};   // sr -> url
 let _imgSkus  = [];
@@ -53,6 +51,28 @@ function loadRate() {
     _rate = d.rate;
     document.getElementById('rateDisplay').textContent = _rate ? `₹ ${_rate.toFixed(2)}` : 'N/A';
   }).catch(() => {});
+}
+
+function quotationDiscountPercent() {
+  return document.getElementById('quotationDiscountToggle')?.checked
+    ? Number(document.getElementById('quotationDiscountPercent')?.value || 5) : 0;
+}
+
+function quotationFinalPrice(row) {
+  const percent = quotationDiscountPercent();
+  if (percent && row.price != null) return row.price * (1 - percent / 100);
+  return row.sale_price != null && row.price != null && row.sale_price < row.price
+    ? row.sale_price : row.price;
+}
+
+function updateQuotationDiscount() {
+  const enabled = document.getElementById('quotationDiscountToggle').checked;
+  const select = document.getElementById('quotationDiscountPercent');
+  select.disabled = !enabled;
+  document.getElementById('quotationDiscountHint').textContent = enabled
+    ? `${select.value}% off original price${_rows.some(r => r.found && r.sale_price != null) ? '; replaces Shopify sale price.' : '; no stacking.'}`
+    : 'Optional: choose 5%, 6%, or 7% off the original price.';
+  if (_rows.length) renderResults();
 }
 
 function setStatus(msg, cls) {
@@ -154,7 +174,6 @@ async function lookupSKUs() {
   }
 
   _rows = []; _urlMap = {};
-  _hasRecheckRows = false;
   renderStalePriceNotice();
   updateCopyButtonState();
   toggleImageDownloadButtons(false);
@@ -223,7 +242,6 @@ function renderResults() {
   if (!_rows.length) {
     tbody.innerHTML = '<tr><td colspan="12" class="empty-state">No results</td></tr>';
     toggleImageDownloadButtons(false);
-    _hasRecheckRows = false;
     renderStalePriceNotice();
     updateCopyButtonState();
     return;
@@ -248,18 +266,22 @@ function renderResults() {
     }
     function fmtDualUsd(r) {
       if (r.price == null) return 'N/A';
-      if (r.sale_price != null) {
+      if (quotationDiscountPercent()) return `<span style="text-decoration:line-through;color:#9ca3af;font-size:10px;">$ ${r.price.toFixed(2)}</span><br><strong>$ ${quotationFinalPrice(r).toFixed(2)}</strong><br><span style="color:#16a34a;font-size:10px;font-weight:600;">${quotationDiscountPercent()}% off</span>`;
+      if (r.sale_price != null && r.sale_price < r.price) {
         const pct = Math.round((1 - r.sale_price / r.price) * 100);
-        if (pct > MAX_DISC_PCT) return `$ ${r.price.toFixed(2)} <span style="color:#92400E;font-size:10px;">&#9888; recheck</span>`;
         return `<span style="text-decoration:line-through;color:#9ca3af;font-size:10px;">$ ${r.price.toFixed(2)}</span><br><strong>$ ${r.sale_price.toFixed(2)}</strong><br><span style="color:#16a34a;font-size:10px;font-weight:600;">${pct}% off</span>`;
       }
       return `$ ${r.price.toFixed(2)}`;
     }
     function fmtDualInr(r, rate) {
       if (!rate || r.price == null) return '—';
-      if (r.sale_price != null) {
+      if (quotationDiscountPercent()) {
+        const caInr = (r.price * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+        const finalInr = (quotationFinalPrice(r) * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+        return `<span style="text-decoration:line-through;color:#9ca3af;font-size:10px;">₹ ${caInr}</span><br><strong>₹ ${finalInr}</strong><br><span style="color:#16a34a;font-size:10px;font-weight:600;">${quotationDiscountPercent()}% off</span>`;
+      }
+      if (r.sale_price != null && r.sale_price < r.price) {
         const pct = Math.round((1 - r.sale_price / r.price) * 100);
-        if (pct > MAX_DISC_PCT) return `₹ ${(r.price*rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="color:#92400E;font-size:10px;">&#9888; recheck</span>`;
         const caInr = (r.price * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
         const spInr = (r.sale_price * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
         return `<span style="text-decoration:line-through;color:#9ca3af;font-size:10px;">₹ ${caInr}</span><br><strong>₹ ${spInr}</strong><br><span style="color:#16a34a;font-size:10px;font-weight:600;">${pct}% off</span>`;
@@ -299,9 +321,6 @@ function renderResults() {
   // Show/hide image download buttons
   const hasFound = _rows.some(r => r.found);
   toggleImageDownloadButtons(hasFound);
-  // Disable copy buttons if any row has discount > MAX_DISC_PCT
-  _hasRecheckRows = _rows.some(r => r.found && r.sale_price != null && r.price != null
-    && r.sale_price < r.price && Math.round((1 - r.sale_price / r.price) * 100) > MAX_DISC_PCT);
   updateCopyButtonState();
 }
 
@@ -309,17 +328,13 @@ function updateCopyButtonState() {
   const warn = document.getElementById('recheckWarningBar');
   const rows = copyRows();
   const hasZeroQuantity = rows.some(r => r.found && (r.Quantity === 0 || String(r.Quantity).trim() === '0'));
-  const hasRecheckRows = rows.some(r => r.found && r.sale_price != null && r.price != null
-    && r.sale_price < r.price && Math.round((1 - r.sale_price / r.price) * 100) > MAX_DISC_PCT);
-  const copyBlocked = hasRecheckRows || hasZeroQuantity;
+  const copyBlocked = hasZeroQuantity;
   document.querySelectorAll('.copy-action').forEach(function(btn) {
     btn.disabled = copyBlocked;
   });
   if (warn) {
     warn.style.display = copyBlocked ? 'block' : 'none';
-    warn.innerHTML = hasZeroQuantity
-      ? '<strong>&#9888; Copy Unavailable</strong> — Copying is disabled because one or more SKUs has zero available quantity.'
-      : '<strong>&#9888; Price Recheck Needed</strong> — One or more SKUs have a discount greater than 7%. Copy buttons are disabled. Please correct the price in the Pricing App first.';
+    warn.innerHTML = '<strong>&#9888; Copy Unavailable</strong> — Copying is disabled because one or more SKUs has zero available quantity.';
   }
 }
 
@@ -333,12 +348,6 @@ function copyRows() {
 function copyBlocked() {
   const rows = copyRows();
   const hasZeroQuantity = rows.some(r => r.found && (r.Quantity === 0 || String(r.Quantity).trim() === '0'));
-  const hasRecheckRows = rows.some(r => r.found && r.sale_price != null && r.price != null
-    && r.sale_price < r.price && Math.round((1 - r.sale_price / r.price) * 100) > MAX_DISC_PCT);
-  if (hasRecheckRows) {
-    setCopyStatus('Copying is disabled until the price recheck is resolved.');
-    return true;
-  }
   if (hasZeroQuantity) {
     setCopyStatus('Copying is disabled because one or more SKUs has zero available quantity.');
     return true;
@@ -396,15 +405,16 @@ function buildHTMLTable(currency) {
   const thw = (w, extra) => `${th}width:${w}%;${extra||''}`;
 
   // Only treat as discount when sale_price < price (markup is not a discount)
-  const hasDiscount = rows.some(r => r.found && r.sale_price != null && r.price != null && r.sale_price < r.price);
+  const manualDiscount = quotationDiscountPercent();
+  const hasDiscount = !!manualDiscount || rows.some(r => r.found && r.sale_price != null && r.price != null && r.sale_price < r.price);
   // Separate valid discounts (≤7%) from error discounts (>7%)
   const _discPcts = rows.filter(r => r.found && r.sale_price != null && r.price != null && r.sale_price < r.price)
                          .map(r => Math.round((1 - r.sale_price / r.price) * 100));
-  const _validPcts = _discPcts.filter(p => p <= MAX_DISC_PCT);
-  const _hasRecheckRows = _discPcts.some(p => p > MAX_DISC_PCT);
-  const _discMaxPct = _validPcts.length ? Math.max(..._validPcts) : 0;
-  const _multiDiscount = _validPcts.length > 1 && new Set(_validPcts).size > 1;
-  const _discHeaderPct = _discMaxPct > 0 ? (_multiDiscount ? 'up to ' + _discMaxPct + '%' : _discMaxPct + '%') : '';
+  const _discMaxPct = _discPcts.length ? Math.max(..._discPcts) : 0;
+  const _multiDiscount = _discPcts.length > 1 && new Set(_discPcts).size > 1;
+  const _discHeaderPct = manualDiscount
+    ? `${manualDiscount}%`
+    : (_discMaxPct > 0 ? (_multiDiscount ? 'up to ' + _discMaxPct + '%' : _discMaxPct + '%') : '');
   const priceHdr = isINR ? 'Rate/Pcs (INR)' : 'Rate/Pcs (USD)';
 
   let html = `<table style="border-collapse:collapse;width:100%;">
@@ -445,18 +455,20 @@ ${hasDiscount ? `<td style="${tdD}">—</td><td style="${tdC}">—</td>` : ''}
     }
 
     let rateTd, discTd = '', finalTd = '';
-    if (hasDiscount) {
+    if (manualDiscount && r.price != null) {
+      const final = quotationFinalPrice(r), gap = r.price - final;
+      const base = isINR && rate ? r.price * rate : r.price;
+      const amount = isINR && rate ? gap * rate : gap;
+      const finalAmount = isINR && rate ? final * rate : final;
+      const sym = isINR ? '&#8377;&nbsp;' : '$&nbsp;';
+      const fmt = value => isINR ? value.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}) : value.toFixed(2);
+      rateTd = `<td style="${tdC}">${sym}${fmt(base)}</td>`;
+      discTd = `<td style="${tdD}"><strong>${sym}${fmt(amount)}</strong></td>`;
+      finalTd = `<td style="${tdC}"><strong>${sym}${fmt(finalAmount)}</strong></td>`;
+    } else if (hasDiscount) {
       // Only show actual discount (sale_price < price); markup rows show — in discount/final
       if (r.sale_price != null && r.price != null && r.sale_price < r.price) {
-        const rowPct = Math.round((1 - r.sale_price / r.price) * 100);
-        if (rowPct > MAX_DISC_PCT) {
-          // Discount exceeds max allowed — pricing error, show recheck warning
-          const tdWarn = `font-family:Calibri,Arial,sans-serif;font-size:10pt;color:#92400E;padding:6px 10px;border:1px solid #E0E0E0;vertical-align:middle;text-align:center;background:#FEF3C7;`;
-          let priceFmt = isINR && rate ? `&#8377;&nbsp;${(r.price*rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}` : `$&nbsp;${r.price.toFixed(2)}`;
-          rateTd  = `<td style="${tdC}">${priceFmt}</td>`;
-          discTd  = `<td style="${tdWarn}">&#9888; Price recheck needed</td>`;
-          finalTd = `<td style="${tdC}">—</td>`;
-        } else if (isINR && rate) {
+        if (isINR && rate) {
           const caI  = (r.price * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
           const spI  = (r.sale_price * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
           const dscI = ((r.price - r.sale_price) * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -555,7 +567,7 @@ async function copyFormal(currency) {
       })
     ]);
     setCopyStatus(`✓ Formal ${currency} quotation copied — paste into Gmail / Outlook!`);
-    logCopy('formal_' + currency.toLowerCase(), copyRows().length);
+    logCopy('formal_' + currency.toLowerCase(), copyRows());
   } catch(e) {
     // Fallback: plain text
     navigator.clipboard.writeText(stripTags(html)).catch(()=>{});
@@ -575,9 +587,12 @@ async function copyFormalLetter(currency) {
   const isINR = currency === 'INR';
   const tableHtml = buildHTMLTable(currency);
 
-  const save5Line = !isINR
-    ? `<p style="${F}margin:12px 0 8px 0;"><span style="background:#FFE0A0;padding:5px 14px;border-radius:3px;display:inline-block;"><strong>Save up to 7% instantly by ordering through our e-Store. Simply click the product link(s) in the quotation table and complete your purchase today to enjoy this exclusive online discount.</strong></span></p>`
-    : '';
+  const manualDiscount = quotationDiscountPercent();
+  const save5Line = manualDiscount
+    ? `<p style="${F}margin:12px 0 8px 0;"><strong>The prices shown above include a ${manualDiscount}% discount calculated from the original price.</strong></p>`
+    : (!isINR
+      ? `<p style="${F}margin:12px 0 8px 0;"><span style="background:#FFE0A0;padding:5px 14px;border-radius:3px;display:inline-block;"><strong>Save up to 7% instantly by ordering through our e-Store. Simply click the product link(s) in the quotation table and complete your purchase today to enjoy this exclusive online discount.</strong></span></p>`
+      : '');
 
   const html = `<div style="${F}">
 <p style="margin:0 0 10px 0;">Dear Sir/Madam,</p>
@@ -599,7 +614,7 @@ ${save5Line}
       })
     ]);
     setCopyStatus(`✓ Full letter (${currency}) copied — paste into Gmail / Outlook!`);
-    logCopy('letter_' + currency.toLowerCase(), copyRows().length);
+    logCopy('letter_' + currency.toLowerCase(), copyRows());
   } catch(e) {
     navigator.clipboard.writeText(stripTags(html)).catch(()=>{});
     setCopyStatus('Copied as plain text (browser blocked HTML clipboard)');
@@ -619,7 +634,11 @@ function copyWA(currency) {
       return `Dear Sir/Madam,\nGreetings from Aeliya Marine Tech!\nBased on your request we are pleased to offer you the below product.\n\n*Product Name:* SKU ${r.sku_input} — NOT FOUND`;
     }
     let priceStr;
-    if (isINR && rate && r.price != null) {
+    if (quotationDiscountPercent() && r.price != null) {
+      const original = isINR && rate ? `₹ ${(r.price * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}` : `$ ${r.price.toFixed(2)}`;
+      const final = isINR && rate ? `₹ ${(quotationFinalPrice(r) * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}` : `$ ${quotationFinalPrice(r).toFixed(2)}`;
+      priceStr = `~${original}~ *${final}* (${quotationDiscountPercent()}% off)`;
+    } else if (isINR && rate && r.price != null) {
       if (r.sale_price != null) {
         const pct = Math.round((1 - r.sale_price / r.price) * 100);
         const caI = (r.price * rate).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -661,15 +680,18 @@ Thank you for showing your interest in our products.`;
   });
   const divider = '\n\n' + '─'.repeat(40) + '\n\n';
   navigator.clipboard.writeText(blocks.join(divider))
-    .then(() => { setCopyStatus(`✓ WhatsApp ${currency} message copied!`); logCopy('wa_' + currency.toLowerCase(), rows.length); })
+    .then(() => { setCopyStatus(`✓ WhatsApp ${currency} message copied!`); logCopy('wa_' + currency.toLowerCase(), rows); })
     .catch(() => setCopyStatus('Copy failed — try again'));
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function logCopy(type, count) {
+function logCopy(type, rows) {
+  const discountPercent = quotationDiscountPercent();
+  const skus = rows.map(row => String(row.sku || row.sku_input || '').trim()).filter(Boolean);
   fetch('/api/log-copy', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({copy_type: type, sku_count: count})
+    body: JSON.stringify({copy_type: type, sku_count: rows.length, skus,
+      ...(discountPercent ? {discount_percent: discountPercent} : {})})
   }).catch(()=>{});
 }
 

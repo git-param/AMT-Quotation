@@ -18,7 +18,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, Image, LongTable, PageBreak, NextPageTemplate
 
-from backend.orders.normal_pi.exports import section_borders, rich_required, fonts, _font_lock, office_address_pdf, office_address_png, FullWidthKeepInFrame, legal_notice_pdf, merge_export_words
+from backend.orders.normal_pi.exports import section_borders, rich_required, fonts, inr_font, _font_lock, office_address_pdf, office_address_png, FullWidthKeepInFrame, legal_notice_pdf, merge_export_words
 from backend.orders.bulk_pi.layout import layout, terms, quantity_summary, annexure_section, ANNEXURE_WIDTHS, annexure_words, WIDTHS
 from backend.orders.terms_config import RETURN_POLICY_LABEL, RETURN_POLICY_URL
 
@@ -104,11 +104,22 @@ def pdf(doc):
             leading=size+2,alignment=alignment,textColor=colors.red if kind=='warning' else colors.black)
         if cell.get('accounting') and not cell.get('total_cell'):
             amount=format(Decimal(text),',.2f')
+            if str(doc['currency']).upper()=='INR':
+                glyph_font=inr_font(is_bold)
+                return Paragraph(f'<font name="{glyph_font}">{escape(symbol)}</font> {amount}',style)
             return Paragraph(escape(symbol+' '+amount),style)
         if cell.get('accounting'):
             text=format(Decimal(text),',.2f')
+            if str(doc['currency']).upper()=='INR':
+                glyph_font=inr_font(is_bold)
+                return Paragraph(f'<font name="{glyph_font}">{escape(symbol)}</font> {text}',style)
         if 'uom' in cell:text+=' '+cell['uom']
-        if 'amount' in kind and not cell.get('free'):text=symbol+' '+text
+        if 'amount' in kind and not cell.get('free'):
+            if str(doc['currency']).upper()=='INR':
+                glyph_font=inr_font(is_bold)
+                amount=format(Decimal(text),',.2f')
+                return Paragraph(f'<font name="{glyph_font}">{escape(symbol)}</font> {amount}',style)
+            text=symbol+' '+text
         content=escape(text).replace('\n','<br/>')
         if kind in ('terms','final_term') and RETURN_POLICY_LABEL in text:
             content=content.replace(RETURN_POLICY_LABEL, f'<link href="{RETURN_POLICY_URL}" color="#0563C1">{RETURN_POLICY_LABEL}</link>')

@@ -412,7 +412,7 @@ byId('addContact').onclick = () => { formDirty = true; addContact().querySelecto
 function formDetails() {
   const details = Object.fromEntries(scalarFields.map(field => [field, byId(field).value]));
   details.phone_country_code = byId('phoneCountryCode').value.replace(/\s+/g, '');
-  details.phone_number = byId('phoneNumber').value.replace(/\s+/g, '');
+  details.phone_number = byId('phoneNumber').value.replace(/\s+/g, ' ').trim();
   details.country = byId('country').value.trim();
   byId('phoneCountryCode').value = details.phone_country_code;
   byId('phoneNumber').value = details.phone_number;
@@ -465,7 +465,10 @@ byId('phoneCountryCode').addEventListener('input', detectClientCountry);
 
 byId('phoneNumber').addEventListener('input', () => {
   const input = byId('phoneNumber');
-  input.value = input.value.replace(/[^0-9()]/g, '');
+  input.value = input.value.replace(/[^0-9()\- ]/g, '').replace(/ {2,}/g, ' ');
+});
+byId('phoneNumber').addEventListener('blur', () => {
+  byId('phoneNumber').value = byId('phoneNumber').value.replace(/\s+/g, ' ').trim();
 });
 byId('country').addEventListener('input', syncCallingCodeFromCountry);
 function setSource(client) {
@@ -482,11 +485,14 @@ async function editClient(id) {
     readOnly = !current.can_edit;
     editingId = current.id;
     scalarFields.forEach(field => { byId(field).value = current[field]; });
-    const legacyPhone = String(current.phone || '').replace(/[ ()\-.]/g, '');
-    const detectedCode = Object.values(callingCodes).filter(code => legacyPhone.startsWith(code))
+    const legacyPhone = String(current.phone || '').trim();
+    const compactLegacyPhone = legacyPhone.replace(/[ ()\-.]/g, '');
+    const detectedCode = Object.values(callingCodes).filter(code => compactLegacyPhone.startsWith(code))
       .sort((a, b) => b.length - a.length)[0] || '';
     byId('phoneCountryCode').value = current.phone_country_code || detectedCode;
-    byId('phoneNumber').value = current.phone_number || legacyPhone.slice(detectedCode.length).replace(/^\+/, '');
+    byId('phoneNumber').value = current.phone_number || (detectedCode
+      ? legacyPhone.slice(detectedCode.length).trim()
+      : legacyPhone.replace(/^\+/, ''));
     byId('country').value = current.country || current.shipping_address?.country || '';
     if (byId('phoneCountryCode').value) detectClientCountry();
     else syncCallingCodeFromCountry();

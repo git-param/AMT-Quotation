@@ -50,6 +50,20 @@
       </div>
     </div>
 
+    <div class="quotation-discount-control">
+      <label class="quotation-discount-toggle" for="quotationDiscountToggle">
+        <input type="checkbox" id="quotationDiscountToggle" onchange="updateQuotationDiscount()">
+        <span class="quotation-discount-switch" aria-hidden="true"></span>
+        <span class="quotation-discount-title">Offer a discount</span>
+      </label>
+      <div class="quotation-discount-choice">
+        <label for="quotationDiscountPercent">Discount</label>
+        <select id="quotationDiscountPercent" aria-label="Quotation discount percentage" onchange="updateQuotationDiscount()" disabled>
+          <option value="5">5%</option><option value="6">6%</option><option value="7">7%</option>
+        </select>
+      </div>
+      <span class="quotation-discount-note" id="quotationDiscountHint">Optional: choose 5%, 6%, or 7% off the original price.</span>
+    </div>
     <div class="btn-row">
       <button class="btn btn-primary" id="lookupBtn" onclick="lookupSKUs()">▶&nbsp; Look Up SKUs</button>
       <button class="btn btn-ghost" onclick="clearCache()">Clear Cache</button>

@@ -159,9 +159,21 @@ def api_log_copy():
     user_name = request_actor_name()
     copy_type = data.get('copy_type', '')
     sku_count = int(data.get('sku_count', 0))
+    discount_percent = data.get('discount_percent')
+    if discount_percent is not None:
+        try:
+            discount_percent = int(discount_percent)
+        except (TypeError, ValueError):
+            return jsonify(error='Invalid quotation discount.'), 400
+        if discount_percent not in (5, 6, 7):
+            return jsonify(error='Invalid quotation discount.'), 400
+    submitted_skus = data.get('skus', [])
+    if not isinstance(submitted_skus, list):
+        return jsonify(error='Invalid copied SKU list.'), 400
+    skus = [str(sku).strip()[:100] for sku in submitted_skus[:50] if str(sku).strip()]
     threading.Thread(
         target=log_copy,
-        args=(user_name, _get_ip(), copy_type, sku_count),
+        args=(user_name, _get_ip(), copy_type, sku_count, discount_percent, skus),
         daemon=True
     ).start()
     return jsonify({'ok': True})

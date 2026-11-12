@@ -42,6 +42,17 @@ class FullWidthKeepInFrame(KeepInFrame):
             canv.restoreState()
 
 
+def inr_font(bold=False):
+    """Register the bundled Arial face used for the rupee glyph in PDFs."""
+    name='PIINRBold' if bold else 'PIINR'
+    with _font_lock:
+        if name not in pdfmetrics.getRegisteredFontNames():
+            filename='arialbd.ttf' if bold else 'arial.ttf'
+            path=Path(__file__).with_name('fonts')/filename
+            pdfmetrics.registerFont(TTFont(name,str(path)))
+    return name
+
+
 def merge_export_words(model):
     """Combine the wording label and value while keeping adjacent totals fixed."""
     for section in model['sections']:
@@ -344,6 +355,9 @@ def pdf(doc):
             leading=size+2,alignment=alignment,textColor=colors.red if kind=='warning' else colors.black)
         if 'amount' in kind and not cell.get('free'):
             amount=format(Decimal(cell['text']),',.2f')
+            if str(doc['currency']).upper()=='INR':
+                glyph_font=inr_font(is_bold)
+                return Paragraph(f'<font name="{glyph_font}">{escape(symbol)}</font> {amount}',style)
             return Paragraph(escape(symbol+' '+amount),style)
         if 'uom' in cell:text+=' '+cell['uom']
         content=escape(text).replace('\n','<br/>')

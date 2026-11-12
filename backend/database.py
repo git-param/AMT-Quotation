@@ -67,7 +67,7 @@ def log_search(user_name, user_ip, skus, found, not_found):
                 con.close()
 
 
-def log_copy(user_name, user_ip, copy_type, sku_count):
+def log_copy(user_name, user_ip, copy_type, sku_count, discount_percent=None, skus=None):
     with _db_lock:
         try:
             con = get_db()
@@ -84,7 +84,9 @@ def log_copy(user_name, user_ip, copy_type, sku_count):
                  actor['role'] if actor else ('api' if (user_name or '').startswith('API') else ''),
                  user_ip or '', 'sku_copy',
                  'copy', copy_type or '', json.dumps({'copy_type': copy_type,
-                    'sku_count': sku_count})),
+                    'sku_count': sku_count,
+                    **({'discount_percent': discount_percent} if discount_percent is not None else {}),
+                    **({'skus': skus} if skus else {})})),
             )
             con.commit()
             con.close()

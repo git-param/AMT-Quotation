@@ -62,17 +62,19 @@ def client_phone(data, existing):
     number = text(data.get('phone_number', existing.get('phone_number', '')),
                   40, 'phone number')
     code = re.sub(r'\s+', '', code)
-    # Keep national dialing notation such as (0) in storage, but validate its
-    # digit count independently of formatting.
-    number = re.sub(r'\s+', '', number)
-    digits = re.sub(r'[()]', '', number)
+    # Preserve national formatting while removing extra whitespace.
+    number = re.sub(r'\s+', ' ', number).strip()
     if code and not re.fullmatch(r'\+[1-9][0-9]{0,2}', code):
         raise ValueError('Enter a valid country calling code such as +91.')
     if code and code not in CALLING_CODES.values():
         raise ValueError('Choose a recognized country calling code.')
-    if digits and not re.fullmatch(r'[0-9]{10}', digits):
-        raise ValueError('Enter a 10-digit phone number without a country code.')
-    return code, number, (code + number if code and number else number)
+    if number and not re.fullmatch(r'[0-9() -]+', number):
+        raise ValueError('Use only digits, spaces, hyphens and parentheses in the phone number.')
+    digits = re.sub(r'\D', '', number)
+    if digits and not 7 <= len(digits) <= 15:
+        raise ValueError('Enter a phone number with 7 to 15 digits, without the country calling code.')
+    combined = (code + ' ' + number if code and number else code or number)
+    return code, number, combined
 
 
 def collection(value, label):
@@ -123,7 +125,8 @@ def validated_details(data, existing=None):
                                                        key=len, reverse=True)
                      if normalized_phone.startswith(candidate)), '')
         number = formatted_phone[len(code):] if code and formatted_phone.startswith(code) else formatted_phone
-        if number and len(re.sub(r'\D', '', number)) != 10:
+        number = re.sub(r'\s+', ' ', number).strip()
+        if number and not 7 <= len(re.sub(r'\D', '', number)) <= 15:
             code, number = existing.get('phone_country_code', ''), existing.get('phone_number', '')
         result['phone_country_code'] = code
         result['phone_number'] = number
@@ -140,7 +143,7 @@ def validated_details(data, existing=None):
             and CALLING_CODES[country] != code):
         raise ValueError('Client country and calling code must match.')
     result['phone_country_code'] = code
-    result['phone'] = code + number if code and number else number
+    result['phone'] = code + ' ' + number if code and number else code or number
     result['country'] = country
     for field, validator in (('emails', email), ('phones', phone)):
         values = collection(data.get(field, existing.get(field, [])), field)
@@ -206,8 +209,8 @@ def decode(row):
     """Expose structured fields without rewriting legacy contact values."""
     result = dict(row)
     if result.get('phone_number'):
-        result['phone'] = (result.get('phone_country_code', '') +
-                           result['phone_number'])
+        code = result.get('phone_country_code', '')
+        result['phone'] = (code + ' ' if code else '') + result['phone_number']
     for field in JSON_FIELDS:
         result[field] = json.loads(result.pop(field + '_json'))
     return result

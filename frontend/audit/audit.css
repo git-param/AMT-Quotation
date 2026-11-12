@@ -161,3 +161,7 @@ td[colspan]{text-align:center;color:var(--muted);padding:36px 14px;box-shadow:no
   .cleanup-controls input,.cleanup-controls button,#confirmCleanup{width:100%}
 }
 #auditRows tr.audit-discount-blocked td { background: #fee2e2; }
+#auditRows tr.audit-discount-offered td { background: #fff4df; }
+#auditRows tr.audit-discount-offered:nth-child(even) td { background: #ffefd2; }
+#auditRows tr.audit-discount-offered:hover td { background: #ffe6b8; }
+#auditRows tr.audit-discount-offered td:first-child { box-shadow: inset 3px 0 0 #e89420; }

@@ -23,6 +23,8 @@
     if(detail.not_found!=null&&Number(detail.not_found))parts.push(`${detail.not_found} not found`);
     if(detail.maximum_percent!=null)parts.push(`Discount limit ${detail.maximum_percent}%`);
     if(detail.attempted_percent!=null)parts.push(`Attempted ${detail.attempted_percent}%`);
+    if(detail.discount_percent!=null)parts.push(`Discount offered: ${detail.discount_percent}%`);
+    if(Array.isArray(detail.skus)&&detail.skus.length)parts.push(`SKUs: ${detail.skus.join(', ')}`);
     if(detail.reduction!=null)parts.push(`Attempted reduction ${detail.reduction} from ${detail.base_amount}`);
     if(detail.sku)parts.push(`SKU ${detail.sku}`);
     if(detail.reference)parts.push(`Reference ${detail.reference}`);
@@ -47,6 +49,8 @@
     for(const event of events){
       const row=document.createElement('tr'),parts=localParts(event.created_at);
       if(event.action==='discount_limit_exceeded')row.classList.add('audit-discount-blocked');
+      let detailData={};try{detailData=JSON.parse(event.details||'{}');}catch{}
+      if(detailData.discount_percent!=null)row.classList.add('audit-discount-offered');
       for(const value of [readable(event.action),event.username||'Unknown',event.role?roleLabel(event.role):'—',parts[0],parts[1],event.ip_address||'—']){const cell=document.createElement('td');cell.textContent=value;row.append(cell);}
       const detail=document.createElement('td');detail.className='audit-detail';detail.textContent=detailText(event);row.append(detail);rowHost.append(row);
     }
