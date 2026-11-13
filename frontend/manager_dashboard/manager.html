@@ -8,6 +8,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AMT Manager Dashboard</title>
 <link rel="stylesheet" href="/static/manager_dashboard/manager.css">
+<link rel="stylesheet" href="/static/manager_dashboard/roles.css">
 <link rel="stylesheet" href="/static/common/sidebar.css"><script src="/static/common/sidebar.js" defer></script></head>
 <body>
 
@@ -24,7 +25,6 @@
     <a class="nav-link" id="accessLink" href="/client-access" style="display:none">Client Access / Sharing</a>
     <a class="nav-link" href="/clients-orders">Clients &amp; PI</a>
     <a class="nav-link" id="sourcesLink" href="/sources" style="display:none">Enquiry Sources</a>
-    <a class="nav-link" id="rolesLink" href="/admin/roles" hidden>Roles &amp; Permissions</a>
     <a class="nav-link" href="/">← Quotation Tool</a>
     <a class="nav-link is-signout" href="/logout">Sign Out</a>
   </nav>
@@ -41,14 +41,15 @@
     </div>
     <div class="page-actions" id="activityActions">
       <span class="last-updated" id="lastUpdated"></span>
-      <button class="refresh-btn" type="button" onclick="loadStats()">↻ Refresh</button>
+      <button class="refresh-btn" id="refreshBtn" type="button" onclick="loadStats()"><span class="refresh-ico" aria-hidden="true">↻</span> Refresh</button>
     </div>
   </div>
 
-  <!-- Tabs (only shown to people who can manage users) -->
-  <div class="tabs" id="tabs" role="tablist" hidden>
+  <!-- Tabs (only shown to people who can manage users or roles) -->
+  <div class="tabs" id="tabs" role="tablist" aria-label="Dashboard sections" hidden>
     <button class="tab is-active" type="button" role="tab" data-tab="overview" aria-selected="true">Activity</button>
-    <button class="tab" type="button" role="tab" data-tab="users" aria-selected="false">Team &amp; Access</button>
+    <button class="tab" type="button" role="tab" data-tab="users" aria-selected="false" hidden>Team &amp; Access</button>
+    <button class="tab" type="button" role="tab" data-tab="roles" aria-selected="false" hidden>Roles &amp; Permissions</button>
   </div>
 
   <!-- ================= ACTIVITY ================= -->
@@ -121,7 +122,7 @@
     <div class="panel">
       <div class="panel-title">User activity</div>
       <div class="panel-sub">All time, per person</div>
-      <div class="table-scroll is-flat">
+      <div class="table-scroll mg-tall">
         <table class="tbl">
           <thead><tr><th>User</th><th>Searches</th><th>SKUs Looked Up</th><th>SKUs Found</th><th>Hit Rate</th><th>Last Active</th></tr></thead>
           <tbody id="tblUsers"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
@@ -132,71 +133,112 @@
 
   <!-- ================= TEAM & ACCESS ================= -->
   <section id="viewUsers" hidden>
+    <div class="mg-team" id="userManagement">
 
-    <div class="user-grid" id="userManagement">
-      <div class="panel account-editor">
-        <div class="panel-title">Add a new user</div>
-        <div class="panel-sub">They can sign in right away with these details.</div>
-        <div class="form-row user-create-fields">
-          <div class="form-field">
-            <label for="newUsername">Username</label>
-            <input type="text" id="newUsername" placeholder="e.g. priya" maxlength="40">
+      <!-- Directory: the list scrolls inside its own box -->
+      <section class="panel mg-directory" id="userListPanel" aria-labelledby="mgTeamTitle">
+        <div class="mg-dir-head">
+          <div>
+            <h2 class="mg-dir-title" id="mgTeamTitle">Team members <span class="mg-count" id="activeUserCount">0</span></h2>
+            <p class="mg-dir-sub">Select a person to view their details or edit their account.</p>
           </div>
-          <div class="form-field">
-            <label for="newPassword">Password</label>
-            <input type="password" id="newPassword" placeholder="min 12 characters" minlength="12" maxlength="128">
-          </div>
-          <div class="form-field">
-            <label for="newDepartment">Department <span class="required-mark" aria-label="required">*</span></label>
-            <select id="newDepartment" required><option value="">Choose department</option></select>
-          </div>
-          <div class="form-field">
-            <label for="newRole">Role</label>
-            <select id="newRole">
-              <option value="sales_executive">Sales Executive</option>
-              <option value="user">Quotation User</option>
-              <option value="sales_tl">Sales TL</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
+          <button type="button" class="btn-sm btn-neutral" id="showInactiveUsers" aria-haspopup="dialog" aria-controls="inactiveUsersDialog">Inactive users <span class="inactive-count" id="inactiveUserCount">0</span></button>
         </div>
-        <div class="form-field user-phone-field">
-          <label for="newPhoneNumber">Phone number <span class="optional-label">(optional)</span></label>
-          <div class="user-phone-inputs"><input type="tel" id="newPhoneCountryCode" aria-label="Country calling code" placeholder="+91" autocomplete="tel-country-code" maxlength="4"><input type="tel" id="newPhoneNumber" placeholder="98765 43210" autocomplete="tel-national" maxlength="40"></div>
-          <small>Include a country code when adding a phone number.</small>
+        <div class="mg-dir-tools">
+          <div class="mg-search"><label class="mg-sr" for="userSearch">Search users</label><input id="userSearch" type="search" placeholder="Search by name, role or department" autocomplete="off" maxlength="60"></div>
+          <div class="mg-filter"><label class="mg-sr" for="userRoleFilter">Filter by role</label><select id="userRoleFilter"><option value="">All roles</option></select></div>
         </div>
-        <div class="account-editor-footer"><p>Manage departments in <a href="/configuration">Configuration</a>.</p><button class="btn-sm btn-add" type="button" onclick="addUser()">Add user</button></div>
-        <div class="msg" id="addMsg"></div>
-      </div>
+        <div class="table-scroll mg-user-scroll" tabindex="0" role="region" aria-label="Active users, scrollable">
+          <table class="tbl mg-user-table">
+            <thead><tr><th>User</th><th>Role</th><th class="mg-col-dept">Department</th><th class="mg-col-go"><span class="mg-sr">Open</span></th></tr></thead>
+            <tbody id="usersList"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="mg-dir-foot"><span id="userCountNote" role="status"></span></div>
+        <div class="msg" id="deleteMsg"></div>
+      </section>
 
-      <div class="panel account-editor">
-        <div class="panel-title">Reset a password</div>
-        <div class="panel-sub">Pick a person and set a new password for them.</div>
-        <div class="form-row user-reset-fields">
-          <div class="form-field">
-            <label for="resetUserId">User</label>
-            <select id="resetUserId"></select>
-          </div>
-          <div class="form-field">
-            <label for="resetPassword">New password</label>
-            <input type="password" id="resetPassword" placeholder="min 12 characters" minlength="12" maxlength="128">
-          </div>
+      <!-- Account tools: add a user / reset a password -->
+      <aside class="panel mg-side" aria-label="Account tools">
+        <div class="mg-seg" role="tablist" aria-label="Account tools">
+          <button type="button" class="mg-seg-btn is-active" role="tab" id="segAdd" aria-selected="true" aria-controls="paneAdd">Add user</button>
+          <button type="button" class="mg-seg-btn" role="tab" id="segReset" aria-selected="false" aria-controls="paneReset">Reset password</button>
         </div>
-        <div class="account-editor-footer"><p>Use 12 to 128 characters.</p><button class="btn-sm btn-pwd" type="button" onclick="resetPassword()">Reset password</button></div>
-        <div class="msg" id="resetMsg"></div>
-      </div>
+
+        <div id="paneAdd" role="tabpanel" aria-labelledby="segAdd" class="account-editor mg-pane">
+          <div class="panel-title">Add a new user</div>
+          <div class="panel-sub">They can sign in right away with these details.</div>
+          <div class="form-row user-create-fields">
+            <div class="form-field">
+              <label for="newUsername">Username</label>
+              <input type="text" id="newUsername" placeholder="e.g. priya" maxlength="40">
+            </div>
+            <div class="form-field">
+              <label for="newPassword">Password</label>
+              <input type="password" id="newPassword" placeholder="min 12 characters" minlength="12" maxlength="128">
+            </div>
+            <div class="form-field">
+              <label for="newDepartment">Department <span class="required-mark" aria-label="required">*</span></label>
+              <select id="newDepartment" required><option value="">Choose department</option></select>
+            </div>
+            <div class="form-field">
+              <label for="newRole">Role</label>
+              <select id="newRole">
+                <option value="sales_executive">Sales Executive</option>
+                <option value="user">Quotation User</option>
+                <option value="sales_tl">Sales TL</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-field user-phone-field">
+            <label for="newPhoneNumber">Phone number <span class="optional-label">(optional)</span></label>
+            <div class="user-phone-inputs"><input type="tel" id="newPhoneCountryCode" aria-label="Country calling code" placeholder="+91" autocomplete="tel-country-code" maxlength="4"><input type="tel" id="newPhoneNumber" placeholder="98765 43210" autocomplete="tel-national" maxlength="40"></div>
+            <small>Include a country code when adding a phone number.</small>
+          </div>
+          <div class="account-editor-footer"><p>Manage departments in <a href="/configuration">Configuration</a>.</p><button class="btn-sm btn-add" type="button" onclick="addUser()">Add user</button></div>
+          <div class="msg" id="addMsg"></div>
+        </div>
+
+        <div id="paneReset" role="tabpanel" aria-labelledby="segReset" class="account-editor mg-pane" hidden>
+          <div class="panel-title">Reset a password</div>
+          <div class="panel-sub">Pick a person and set a new password for them.</div>
+          <div class="form-row user-reset-fields">
+            <div class="form-field">
+              <label for="resetUserId">User</label>
+              <select id="resetUserId"></select>
+            </div>
+            <div class="form-field">
+              <label for="resetPassword">New password</label>
+              <input type="password" id="resetPassword" placeholder="min 12 characters" minlength="12" maxlength="128">
+            </div>
+          </div>
+          <div class="account-editor-footer"><p>Use 12 to 128 characters.</p><button class="btn-sm btn-pwd" type="button" onclick="resetPassword()">Reset password</button></div>
+          <div class="msg" id="resetMsg"></div>
+        </div>
+      </aside>
     </div>
+  </section>
 
-    <div class="panel" id="userListPanel">
-      <div class="panel-title user-list-title"><span>Active users</span><button type="button" class="btn-sm btn-neutral" id="showInactiveUsers" aria-haspopup="dialog" aria-controls="inactiveUsersDialog">Inactive users <span class="inactive-count" id="inactiveUserCount">0</span></button></div>
-      <div class="panel-sub">Click a user to view full details and edit their account.</div>
-      <div class="table-scroll is-flat">
-        <table class="tbl">
-          <thead><tr><th>Name</th><th>Role</th></tr></thead>
-          <tbody id="usersList"><tr><td colspan="2" class="empty">Loading…</td></tr></tbody>
-        </table>
-      </div>
-      <div class="msg" id="deleteMsg"></div>
+  <!-- ================= ROLES & PERMISSIONS ================= -->
+  <section id="viewRoles" hidden>
+    <div class="roles-layout">
+      <section class="panel roles-list-panel" aria-labelledby="rolesTitle">
+        <div class="roles-section-head"><div><h2 id="rolesTitle">Workspace roles</h2><p>Review the roles in use and adjust their access.</p></div><span class="roles-count" id="rolesCount">Loading…</span></div>
+        <div id="roleList" class="roles-grid" aria-live="polite"><div class="roles-loading"><span class="roles-spinner" aria-hidden="true"></span>Loading roles…</div></div>
+      </section>
+
+      <section class="panel role-editor" aria-labelledby="formTitle">
+        <div class="editor-heading"><div class="editor-icon" aria-hidden="true">＋</div><div><p class="roles-eyebrow">ROLE SETUP</p><h2 id="formTitle">Create a role</h2><p id="formDescription">Give the role a clear name, then select the modules it can use.</p></div></div>
+        <form id="roleForm">
+          <div class="role-fields">
+            <div class="role-field"><label for="code">Role code</label><input id="code" required pattern="[a-z][a-z0-9_]{1,39}" maxlength="40" placeholder="e.g. purchase_manager" autocomplete="off"><small>Lowercase letters, numbers, and underscores.</small></div>
+            <div class="role-field"><label for="description">Role name</label><input id="description" required maxlength="80" placeholder="e.g. Purchase Manager"></div>
+          </div>
+          <fieldset class="permission-fieldset"><div class="permission-heading"><div><legend>Module permissions</legend><p>Select the features available to this role.</p></div><span id="permissionCount" class="permission-count">0 selected</span></div><div id="permissionList" class="permission-groups" tabindex="0" role="region" aria-label="Permissions, scrollable"><div class="permission-empty">Permissions will appear here.</div></div></fieldset>
+          <div class="editor-footer"><p id="status" class="role-status" role="status" aria-live="polite"></p><div class="editor-actions"><button type="button" class="role-button role-button-secondary" id="cancel" hidden>Cancel</button><button type="submit" class="role-button role-button-primary" id="saveRole">Create role</button></div></div>
+        </form>
+      </section>
     </div>
   </section>
 
@@ -208,8 +250,8 @@
     <button type="button" class="btn-sm btn-neutral" id="closeInactiveUsers" aria-label="Close inactive users">Close</button>
   </div>
   <p class="inactive-users-hint">Select a user to view details or reactivate their account.</p>
-  <div class="table-scroll is-flat">
-    <table class="tbl"><thead><tr><th>Name</th><th>Role</th></tr></thead><tbody id="inactiveUsersList"></tbody></table>
+  <div class="table-scroll mg-dialog-scroll">
+    <table class="tbl mg-user-table"><thead><tr><th>User</th><th>Role</th><th class="mg-col-dept">Department</th><th class="mg-col-go"><span class="mg-sr">Open</span></th></tr></thead><tbody id="inactiveUsersList"></tbody></table>
   </div>
 </dialog>
 
@@ -237,6 +279,9 @@
   <div class="msg" id="userDetailsMsg" role="status" aria-live="polite"></div>
 </dialog>
 
+<!-- Roles load on demand (first time the Roles & Permissions tab is opened). -->
+<script>window.AMT_ROLES_LAZY = true;</script>
+<script src="/static/manager_dashboard/roles.js" defer></script>
 <script src="/static/manager_dashboard/manager.js"></script>
 </body>
 </html>

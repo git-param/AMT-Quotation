@@ -58,8 +58,8 @@ body{
 .refresh-btn:hover{background:var(--brand-soft);border-color:#BFD3FB;color:var(--brand-dark)}
 
 /* Tabs */
-.tabs{display:inline-flex;gap:4px;padding:4px;margin-bottom:22px;background:#E6ECF6;border-radius:12px}
-.tab{border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;padding:9px 20px;border-radius:9px;cursor:pointer;transition:all .15s}
+.tabs{display:flex;width:max-content;max-width:100%;gap:4px;padding:4px;margin-bottom:20px;background:#E6ECF6;border-radius:12px;overflow-x:auto;scrollbar-width:none}
+.tab{flex:none;min-height:40px;border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;padding:0 20px;border-radius:9px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s,box-shadow .15s}
 .tab:hover{color:var(--ink)}
 .tab.is-active{background:#fff;color:var(--brand-dark);box-shadow:0 1px 3px rgba(15,23,42,.14)}
 
@@ -86,6 +86,7 @@ body{
 .cards>*,.charts-row>*,.tables-row>*,.user-grid>*{min-width:0}
 .table-scroll{overflow:auto;max-height:340px;border-radius:10px}
 .table-scroll.is-flat{max-height:none}
+.table-scroll.mg-tall{max-height:min(480px,60dvh)}
 
 /* ---------- Tables ---------- */
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
@@ -222,4 +223,87 @@ body{
   .user-dialog-actions{padding:16px 20px;flex-wrap:wrap}
   #editUserForm .user-dialog-actions{margin:20px -20px 0}
   #userDetailsMsg:not(:empty){margin:0 20px 16px}
+}
+
+/* ==========================================================================
+   Dashboard redesign (mg-) — refresh button, Team & Access, scroll areas
+   ========================================================================== */
+.mg-sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+.tab:focus-visible,.mg-seg-btn:focus-visible{outline:3px solid #BFDBFE;outline-offset:2px}
+.refresh-ico{display:inline-block}
+.refresh-btn.is-loading .refresh-ico{animation:mg-spin .8s linear infinite}
+.refresh-btn:disabled{cursor:progress;opacity:.75}
+@keyframes mg-spin{to{transform:rotate(360deg)}}
+.table-scroll{scrollbar-width:thin;scrollbar-color:#C5CFDE transparent;overscroll-behavior:contain}
+.table-scroll:focus-visible{outline:3px solid #BFDBFE;outline-offset:2px}
+.card{transition:transform .15s,box-shadow .15s}
+.card:hover{transform:translateY(-1px)}
+.chart-box{height:230px}
+
+/* Team & Access layout */
+.mg-team{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+.mg-team>*{min-width:0}
+.mg-directory{padding:20px 22px}
+.mg-dir-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.mg-dir-title{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:800;letter-spacing:-.01em}
+.mg-count{display:inline-grid;place-items:center;min-width:26px;height:24px;padding:0 8px;border-radius:999px;background:var(--brand-soft);color:var(--brand-dark);font-size:12px;font-weight:700}
+.mg-dir-sub{margin-top:3px;color:var(--muted);font-size:12.5px}
+.mg-dir-tools{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 12px}
+.mg-search{flex:1 1 240px;position:relative}
+.mg-search input,.mg-filter select{width:100%;min-height:42px;padding:0 12px;border:1px solid #CBD5E1;border-radius:10px;background:#fff;color:var(--ink);font:inherit;font-size:13px}
+.mg-search input{padding-left:38px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px 50%/16px}
+.mg-filter{flex:0 1 200px}
+.mg-search input:focus-visible,.mg-filter select:focus-visible{outline:3px solid #BFDBFE;outline-offset:1px;border-color:var(--brand)}
+/* The list scrolls inside this box: ~12 rows visible, the rest on scroll */
+.mg-user-scroll{max-height:clamp(320px,calc(100dvh - 350px),680px);border:1px solid var(--line);border-radius:12px}
+.mg-dialog-scroll{max-height:min(60dvh,520px);margin:0 18px;border:1px solid var(--line);border-radius:12px}
+.mg-user-table{min-width:0}
+.mg-user-table td{padding:6px 14px}
+.mg-user-table .user-row{cursor:pointer}
+.mg-user-table .user-row:hover td{background:#F4F8FF}
+.mg-user-cell{display:flex;align-items:center;gap:12px;min-width:0}
+.mg-avatar{--h:214;display:grid;place-items:center;flex:none;width:32px;height:32px;border-radius:10px;background:hsl(var(--h) 80% 93%);color:hsl(var(--h) 55% 28%);font-size:12px;font-weight:800;letter-spacing:.02em}
+.mg-user-cell .user-name-button{min-height:32px;color:var(--ink);overflow-wrap:anywhere}
+.mg-role{display:inline-block;padding:3px 10px;border-radius:999px;background:#F1F5F9;color:#475569;font-size:11.5px;font-weight:700;white-space:nowrap}
+.mg-role-admin{background:#EDE9FE;color:#5B21B6}
+.mg-role-manager{background:#FEF3C7;color:#92400E}
+.mg-role-sales_tl{background:#DBEAFE;color:#1E40AF}
+.mg-role-sales_executive{background:#DCFCE7;color:#166534}
+.mg-dept{color:var(--muted);font-size:12.5px}
+.mg-col-go{width:36px;text-align:right;color:#94A3B8;font-size:20px;line-height:1}
+.user-row:hover .mg-col-go{color:var(--brand)}
+.mg-dir-foot{padding:10px 2px 0;font-size:12px;color:var(--muted)}
+.mg-dir-foot:has(#userCountNote:empty){display:none}
+
+/* Side tools */
+.mg-side{padding:16px;position:sticky;top:16px}
+.mg-seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin-bottom:16px;background:#EEF2F7;border-radius:12px}
+.mg-seg-btn{min-height:40px;border:0;border-radius:9px;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s}
+.mg-seg-btn:hover{color:var(--ink)}
+.mg-seg-btn.is-active{background:#fff;color:var(--brand-dark);box-shadow:0 1px 3px rgba(15,23,42,.14)}
+.mg-pane{padding:4px 6px 6px}
+.mg-pane .panel-title{font-size:15px}
+.mg-pane .panel-sub{margin:4px 0 16px}
+.mg-pane.account-editor .user-create-fields{gap:14px 12px}
+.mg-pane .account-editor-footer{flex-wrap:wrap;margin-top:18px;padding-top:14px}
+.mg-pane .account-editor-footer p{flex:1 1 140px}
+
+@media(max-width:1100px){
+  .mg-team{grid-template-columns:1fr}
+  .mg-side{position:static}
+  .mg-user-scroll{max-height:min(62dvh,560px)}
+}
+@media(max-width:650px){
+  .mg-directory{padding:16px}
+  .mg-filter{flex:1 1 100%}
+  .mg-col-dept{display:none}
+  .mg-user-table td{padding:8px 10px}
+  .mg-dialog-scroll{margin:0 10px}
+  .mg-seg-btn,.tab,.role-select{min-height:44px}
+  .tab{padding:0 12px;font-size:12.5px}
+  .mg-side{padding:12px}
+  .chart-box{height:220px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }

@@ -43,7 +43,7 @@
 
     $('roleList').replaceChildren(...roles.map(role => {
       const card = document.createElement('article');
-      card.className = 'role-card';
+      card.className = 'role-card' + (editing && editing.code === role.code ? ' is-editing' : '');
       const top = document.createElement('div');
       top.className = 'role-card-top';
       const identity = document.createElement('div');
@@ -119,7 +119,11 @@
       const group = document.createElement('section');
       group.className = 'permission-group';
       const heading = document.createElement('h3');
-      heading.textContent = name.replaceAll('_', ' ');
+      const headingText = document.createElement('span');
+      headingText.textContent = name.replaceAll('_', ' ');
+      const headingCount = document.createElement('small');
+      headingCount.className = 'permission-group-count';
+      heading.append(headingText, headingCount);
       group.append(heading);
       for (const permission of items) {
         const label = document.createElement('label');
@@ -147,6 +151,13 @@
   function updatePermissionCount() {
     const count = $('permissionList').querySelectorAll('input:checked').length;
     $('permissionCount').textContent = `${count} selected`;
+    $('permissionList').querySelectorAll('.permission-group').forEach(group => {
+      const total = group.querySelectorAll('input').length;
+      const on = group.querySelectorAll('input:checked').length;
+      const badge = group.querySelector('.permission-group-count');
+      if (badge) badge.textContent = `${on}/${total}`;
+      group.classList.toggle('has-selection', on > 0);
+    });
   }
 
   function beginEdit(role) {
@@ -159,7 +170,8 @@
     $('saveRole').textContent = 'Save changes';
     $('cancel').hidden = false;
     renderPermissions(role.permissions);
-    $('roleForm').scrollIntoView({behavior: 'smooth', block: 'start'});
+    renderRoles();
+    $('roleForm').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'nearest'});
     $('description').focus({preventScroll: true});
   }
 
@@ -172,6 +184,7 @@
     $('saveRole').textContent = 'Create role';
     $('cancel').hidden = true;
     renderPermissions([]);
+    renderRoles();
     setStatus('');
   }
 
@@ -220,13 +233,23 @@
     }
   });
 
-  load().catch(error => {
-    $('rolesCount').textContent = 'Unavailable';
-    const message = document.createElement('div');
-    message.className = 'roles-loading';
-    message.textContent = error.message;
-    $('roleList').replaceChildren(message);
-    renderPermissions([]);
-    setStatus(error.message, 'error');
-  });
+  // Loads once. The dashboard tab calls AMTRoles.load() the first time it is opened;
+  // the standalone page (no AMT_ROLES_LAZY flag) loads straight away.
+  let started = false;
+  const start = () => {
+    if (started) return Promise.resolve();
+    started = true;
+    return load().catch(error => {
+      started = false;                       // allow a retry the next time the tab opens
+      $('rolesCount').textContent = 'Unavailable';
+      const message = document.createElement('div');
+      message.className = 'roles-loading';
+      message.textContent = error.message;
+      $('roleList').replaceChildren(message);
+      renderPermissions([]);
+      setStatus(error.message, 'error');
+    });
+  };
+  window.AMTRoles = {load: start};
+  if (!window.AMT_ROLES_LAZY) start();
 })();

@@ -146,15 +146,26 @@ function drawPieChart(canvasId, labels, values) {
 }
 
 // ── Load stats ───────────────────────────────────────────────────────────────
-async function loadStats() {
+let _loadingStats = false, _statsAt = 0, _cacheKey = null;
+async function loadStats(prefetch) {
+  if (_loadingStats) return;
+  _loadingStats = true;
+  const button = document.getElementById('refreshBtn');
+  if (button) { button.classList.add('is-loading'); button.disabled = true; }
   try {
-    const resp = await fetch('/api/manager/stats');
+    let resp = prefetch && typeof prefetch.then === 'function' ? await prefetch : null;
+    if (!resp) resp = await fetch('/api/manager/stats');
     if (!resp.ok) { showAccessError(resp.status); return; }
     _lastStats = await resp.json();
+    _statsAt = Date.now();
     renderStats(_lastStats);
+    try { if (_cacheKey) sessionStorage.setItem(_cacheKey, JSON.stringify(_lastStats)); } catch (_) {}
     document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   } catch (e) {
     console.error(e);
+  } finally {
+    _loadingStats = false;
+    if (button) { button.classList.remove('is-loading'); button.disabled = false; }
   }
 }
 
@@ -239,7 +250,15 @@ function esc(s) {
 }
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
-function showTab(name) {
+const TAB_META = {
+  overview: ['Team activity at a glance', 'See how your team is using the quotation tool today.'],
+  users: ['Team & access', 'Find people, manage accounts, departments and passwords.'],
+  roles: ['Roles & permissions', 'Choose which parts of AMT each role can access. Updates take effect immediately.'],
+};
+const _tabLoaded = {};
+function showTab(name, options = {}) {
+  const button = document.querySelector(`.tab[data-tab="${name}"]`);
+  if (!TAB_META[name] || !button || button.hidden) name = 'overview';
   document.querySelectorAll('.tab').forEach(tab => {
     const on = tab.dataset.tab === name;
     tab.classList.toggle('is-active', on);
@@ -247,14 +266,48 @@ function showTab(name) {
   });
   document.getElementById('viewOverview').hidden = name !== 'overview';
   document.getElementById('viewUsers').hidden = name !== 'users';
-  document.getElementById('dashboardTitle').textContent = name === 'users' ? 'Team & access' : 'Team activity at a glance';
-  document.getElementById('dashboardSubtitle').textContent = name === 'users'
-    ? 'Manage user accounts, departments, and access for your team.'
-    : 'See how your team is using the quotation tool today.';
-  document.getElementById('activityActions').hidden = name === 'users';
+  document.getElementById('viewRoles').hidden = name !== 'roles';
+  document.getElementById('dashboardTitle').textContent = TAB_META[name][0];
+  document.getElementById('dashboardSubtitle').textContent = TAB_META[name][1];
+  document.getElementById('activityActions').hidden = name !== 'overview';
   if (name === 'overview' && _lastStats) drawCharts(_lastStats);   // canvases need a visible box
+  // Users and roles are only fetched the first time their tab is opened.
+  if (name === 'users' && !_tabLoaded.users) {
+    _tabLoaded.users = true;
+    loadUsers().then(ok => { if (ok === false) _tabLoaded.users = false; });
+  }
+  if (name === 'roles' && !_tabLoaded.roles && window.AMTRoles) {
+    _tabLoaded.roles = true;
+    window.AMTRoles.load();
+  }
+  if (options.updateHash !== false) {
+    try { history.replaceState(null, '', name === 'overview' ? location.pathname + location.search : '#' + name); } catch (_) {}
+  }
 }
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => showTab(tab.dataset.tab)));
+document.getElementById('tabs').addEventListener('keydown', event => {
+  if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+  const tabs = [...document.querySelectorAll('.tab')].filter(tab => !tab.hidden);
+  const index = tabs.indexOf(document.activeElement);
+  if (index < 0) return;
+  event.preventDefault();
+  const next = tabs[(index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+  next.focus(); showTab(next.dataset.tab);
+});
+
+// Account tools (add user / reset password) switch
+function showAccountTool(name) {
+  const add = name === 'add';
+  document.getElementById('paneAdd').hidden = !add;
+  document.getElementById('paneReset').hidden = add;
+  for (const [id, on] of [['segAdd', add], ['segReset', !add]]) {
+    const el = document.getElementById(id);
+    el.classList.toggle('is-active', on);
+    el.setAttribute('aria-selected', String(on));
+  }
+}
+document.getElementById('segAdd').onclick = () => showAccountTool('add');
+document.getElementById('segReset').onclick = () => showAccountTool('reset');
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 let _currentUserId = null;
@@ -264,6 +317,8 @@ function showAccessError(status) {
     ? 'Session ended. Please sign in again.' : 'Access denied for your role.';
   document.getElementById('dashboardContent').hidden = true;
 }
+// Start the stats request immediately, in parallel with the permission check.
+const _earlyStats = fetch('/api/manager/stats').catch(() => null);
 fetch('/api/me').then(async response => {
   if (!response.ok) { showAccessError(response.status); return; }
   const user = await response.json();
@@ -273,14 +328,26 @@ fetch('/api/me').then(async response => {
   document.getElementById('accessLink').style.display = user.permissions.includes('leads.share_manage') ? 'inline-flex' : 'none';
   _currentUserId = user.id;
   _currentUserRole = user.role;
-  const rolesLink = document.getElementById('rolesLink');
-  if (rolesLink) rolesLink.hidden = !user.permissions.includes('roles.manage');
   const manage = user.permissions.includes('users.manage');
+  const rolesManage = user.permissions.includes('roles.manage');
   document.getElementById('dashboardContent').hidden = false;
-  document.getElementById('tabs').hidden = !manage;        // tabs only make sense with 2+ views
-  loadStats();
-  if (manage) loadUsers();
-  setInterval(loadStats, 60000);                           // auto-refresh every 60s
+  document.querySelector('.tab[data-tab="users"]').hidden = !manage;
+  document.querySelector('.tab[data-tab="roles"]').hidden = !rolesManage;
+  document.getElementById('tabs').hidden = !(manage || rolesManage);   // tabs only make sense with 2+ views
+  // Paint the last known numbers straight away, then refresh them.
+  _cacheKey = 'amt_mgr_stats:' + user.id;
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(_cacheKey) || 'null');
+    if (cached && cached.today) { _lastStats = cached; renderStats(cached); }
+  } catch (_) {}
+  loadStats(_earlyStats);
+  const wanted = (location.hash || '').slice(1);
+  if (wanted && wanted !== 'overview') showTab(wanted, {updateHash: false});
+  // Auto-refresh only while the Activity tab is on screen and the page is visible.
+  setInterval(() => { if (!document.hidden && !document.getElementById('viewOverview').hidden) loadStats(); }, 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && !document.getElementById('viewOverview').hidden && Date.now() - _statsAt > 60000) loadStats();
+  });
 }).catch(() => { document.getElementById('accessStatus').textContent = 'Unable to load permissions. Reload to retry.'; });
 
 let _resizeTimer;
@@ -297,10 +364,14 @@ let _selectedUserId = null;
 let _savingUser = false;
 const userRoleLabels = {user: 'Quotation User', manager: 'Manager', sales_executive: 'Sales Executive', sales_tl: 'Sales TL', admin: 'Admin'};
 
+const roleLabel = code => _roles[code] || userRoleLabels[code] || code;
+const avatarHue = name => [...String(name)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+const initials = name => String(name).trim().split(/[\s._-]+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase() || '?';
+
 async function loadUsers() {
   const resp = await fetch('/api/manager/users').catch(() => null);
-  if (!resp) { showMsg(document.getElementById('deleteMsg'), 'Unable to load users. Reload to retry.', false); return; }
-  if (!resp.ok) { showAccessError(resp.status); return; }
+  if (!resp) { showMsg(document.getElementById('deleteMsg'), 'Unable to load users. Reload to retry.', false); return false; }
+  if (!resp.ok) { showAccessError(resp.status); return false; }
   const data = await resp.json();
   _users = data.users || [];
   _departments = data.departments || [];
@@ -314,12 +385,30 @@ async function loadUsers() {
   const departmentInput = document.getElementById('newDepartment');
   const currentDepartment = departmentInput.value;
   fillDepartmentOptions(departmentInput, currentDepartment);
-  const tbody = document.getElementById('usersList');
-  renderUserRows(tbody, _users.filter(user => user.is_active), 'No active users.', 2);
-  renderUserRows(document.getElementById('inactiveUsersList'), _users.filter(user => !user.is_active), 'No inactive users.', 2);
+  const filter = document.getElementById('userRoleFilter');
+  const selectedFilter = filter.value;
+  filter.replaceChildren(new Option('All roles', ''), ...Object.entries(_roles).map(([code, label]) => new Option(label, code)));
+  if ([...filter.options].some(o => o.value === selectedFilter)) filter.value = selectedFilter;
+  renderActiveUsers();
+  renderUserRows(document.getElementById('inactiveUsersList'), _users.filter(user => !user.is_active), 'No inactive users.', 4);
   document.getElementById('inactiveUserCount').textContent = String(_users.filter(user => !user.is_active).length);
   document.getElementById('resetUserId').replaceChildren(..._users.map(u => new Option(u.username, u.id)));
+  return true;
 }
+
+function renderActiveUsers() {
+  const query = document.getElementById('userSearch').value.trim().toLowerCase();
+  const role = document.getElementById('userRoleFilter').value;
+  const active = _users.filter(user => user.is_active);
+  const shown = active.filter(user => (!role || user.role === role) &&
+    (!query || [user.username, user.department, roleLabel(user.role)].some(v => String(v || '').toLowerCase().includes(query))));
+  renderUserRows(document.getElementById('usersList'), shown, active.length ? 'No users match your search.' : 'No active users.', 4);
+  document.getElementById('activeUserCount').textContent = String(active.length);
+  document.getElementById('userCountNote').textContent = active.length
+    ? `Showing ${shown.length} of ${active.length} active ${active.length === 1 ? 'user' : 'users'}` : '';
+}
+document.getElementById('userSearch').addEventListener('input', renderActiveUsers);
+document.getElementById('userRoleFilter').addEventListener('change', renderActiveUsers);
 
 function renderUserRows(tbody, users, emptyText, columns) {
   tbody.replaceChildren();
@@ -327,16 +416,34 @@ function renderUserRows(tbody, users, emptyText, columns) {
     const row = document.createElement('tr');
     row.className = 'user-row';
     const name = document.createElement('td');
+    const cell = document.createElement('div');
+    cell.className = 'mg-user-cell';
+    const avatar = document.createElement('span');
+    avatar.className = 'mg-avatar';
+    avatar.style.setProperty('--h', avatarHue(user.username));
+    avatar.textContent = initials(user.username);
+    avatar.setAttribute('aria-hidden', 'true');
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'user-name-button';
     button.textContent = user.username;
     button.setAttribute('aria-label', `View details for ${user.username}`);
     button.setAttribute('aria-haspopup', 'dialog');
-    name.append(button);
+    cell.append(avatar, button);
+    name.append(cell);
     const role = document.createElement('td');
-    role.textContent = _roles[user.role] || userRoleLabels[user.role] || user.role;
-    row.append(name, role);
+    const badge = document.createElement('span');
+    badge.className = `mg-role mg-role-${String(user.role).replace(/[^a-z_]/gi, '')}`;
+    badge.textContent = roleLabel(user.role);
+    role.append(badge);
+    const dept = document.createElement('td');
+    dept.className = 'mg-col-dept mg-dept';
+    dept.textContent = user.department || '—';
+    const go = document.createElement('td');
+    go.className = 'mg-col-go';
+    go.setAttribute('aria-hidden', 'true');
+    go.textContent = '›';
+    row.append(name, role, dept, go);
     row.onclick = () => openUserDetails(user.id);
     tbody.append(row);
   });
