@@ -143,6 +143,12 @@ body{
 .account-name{font-weight:600}
 .user-row{cursor:pointer}
 .user-row:focus-visible{outline:3px solid #BFDBFE;outline-offset:-3px}
+.user-list-title{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.inactive-count{display:inline-grid;place-items:center;min-width:20px;height:20px;margin-left:5px;padding:0 5px;border-radius:999px;background:#EEF2F7;color:var(--ink-2);font-size:11px;font-weight:700}
+.inactive-users-dialog{width:min(760px,calc(100% - 32px));padding-bottom:12px}
+.inactive-users-hint{margin:18px 28px 12px;color:var(--muted);font-size:13px}
+.inactive-users-dialog .table-scroll{margin:0 18px}
+.inactive-users-dialog .tbl{min-width:0}
 .user-name-button{border:0;background:none;padding:0;color:inherit;font:inherit;font-weight:600;cursor:pointer;text-align:left}
 .user-name-button:focus-visible{outline:3px solid #BFDBFE;outline-offset:4px}
 .user-dialog{position:fixed;inset:0;margin:auto;width:min(600px,calc(100% - 32px));max-width:none;max-height:calc(100dvh - 48px);overflow:auto;border:1px solid #DCE5F1;border-radius:20px;padding:0;background:#fff;color:var(--ink);box-shadow:0 28px 90px #0F172A40}
@@ -203,6 +209,9 @@ body{
   .account-editor-footer{align-items:flex-start;flex-direction:column;gap:12px}
   .account-editor-footer .btn-sm{width:100%}
   .user-dialog{border-radius:16px;max-height:calc(100dvh - 28px)}
+  .user-list-title{align-items:flex-start;flex-direction:column}
+  .inactive-users-hint{margin:16px 20px 10px}
+  .inactive-users-dialog .table-scroll{margin:0 10px}
   .user-dialog-head{padding:20px}
   .user-dialog-head h2{font-size:18px}
   .user-dialog-identity{gap:10px}

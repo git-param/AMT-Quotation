@@ -188,12 +188,12 @@
     </div>
 
     <div class="panel" id="userListPanel">
-      <div class="panel-title">All users</div>
+      <div class="panel-title user-list-title"><span>Active users</span><button type="button" class="btn-sm btn-neutral" id="showInactiveUsers" aria-haspopup="dialog" aria-controls="inactiveUsersDialog">Inactive users <span class="inactive-count" id="inactiveUserCount">0</span></button></div>
       <div class="panel-sub">Click a user to view full details and edit their account.</div>
       <div class="table-scroll is-flat">
         <table class="tbl">
-          <thead><tr><th>Name</th><th>Role</th><th>Status</th></tr></thead>
-          <tbody id="usersList"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
+          <thead><tr><th>Name</th><th>Role</th></tr></thead>
+          <tbody id="usersList"><tr><td colspan="2" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
       <div class="msg" id="deleteMsg"></div>
@@ -201,6 +201,17 @@
   </section>
 
 </main>
+
+<dialog id="inactiveUsersDialog" class="user-dialog inactive-users-dialog" aria-labelledby="inactiveUsersTitle">
+  <div class="user-dialog-head">
+    <div class="user-dialog-identity"><span class="profile-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/></svg></span><div><p class="profile-eyebrow">Account management</p><h2 id="inactiveUsersTitle">Inactive users</h2></div></div>
+    <button type="button" class="btn-sm btn-neutral" id="closeInactiveUsers" aria-label="Close inactive users">Close</button>
+  </div>
+  <p class="inactive-users-hint">Select a user to view details or reactivate their account.</p>
+  <div class="table-scroll is-flat">
+    <table class="tbl"><thead><tr><th>Name</th><th>Role</th></tr></thead><tbody id="inactiveUsersList"></tbody></table>
+  </div>
+</dialog>
 
 <dialog id="userDetailsDialog" class="user-dialog" aria-labelledby="userDetailsTitle">
   <div class="user-dialog-head">

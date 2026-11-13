@@ -315,8 +315,15 @@ async function loadUsers() {
   const currentDepartment = departmentInput.value;
   fillDepartmentOptions(departmentInput, currentDepartment);
   const tbody = document.getElementById('usersList');
+  renderUserRows(tbody, _users.filter(user => user.is_active), 'No active users.', 2);
+  renderUserRows(document.getElementById('inactiveUsersList'), _users.filter(user => !user.is_active), 'No inactive users.', 2);
+  document.getElementById('inactiveUserCount').textContent = String(_users.filter(user => !user.is_active).length);
+  document.getElementById('resetUserId').replaceChildren(..._users.map(u => new Option(u.username, u.id)));
+}
+
+function renderUserRows(tbody, users, emptyText, columns) {
   tbody.replaceChildren();
-  _users.forEach(user => {
+  users.forEach(user => {
     const row = document.createElement('tr');
     row.className = 'user-row';
     const name = document.createElement('td');
@@ -329,23 +336,20 @@ async function loadUsers() {
     name.append(button);
     const role = document.createElement('td');
     role.textContent = _roles[user.role] || userRoleLabels[user.role] || user.role;
-    const status = document.createElement('td');
-    const badge = document.createElement('span');
-    badge.className = `account-status ${user.is_active ? 'is-active' : 'is-inactive'}`;
-    badge.textContent = user.is_active ? 'Active' : 'Inactive';
-    status.append(badge);
-    row.append(name, role, status);
+    row.append(name, role);
     row.onclick = () => openUserDetails(user.id);
     tbody.append(row);
   });
-  if (!_users.length) {
+  if (!users.length) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 3; cell.className = 'empty'; cell.textContent = 'No users found.';
+    cell.colSpan = columns; cell.className = 'empty'; cell.textContent = emptyText;
     row.append(cell); tbody.append(row);
   }
-  document.getElementById('resetUserId').replaceChildren(..._users.map(u => new Option(u.username, u.id)));
 }
+
+document.getElementById('showInactiveUsers').onclick = () => document.getElementById('inactiveUsersDialog').showModal();
+document.getElementById('closeInactiveUsers').onclick = () => document.getElementById('inactiveUsersDialog').close();
 
 function fillDepartmentOptions(select, selected = '') {
   select.replaceChildren(new Option(_departments.length ? 'Choose department' : 'Add departments in Configuration', ''),
