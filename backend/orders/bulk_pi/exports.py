@@ -193,7 +193,8 @@ def pdf(doc):
                   if not (section['name']=='annexure' and rule[0] in ('LINEABOVE','LINEBEFORE','LINEAFTER'))],*commands,*total_commands,
                 *([('LINEBELOW',(0,0),(-1,0),.6,colors.black)] if section['name']=='items' else []),
                 *([('LINEABOVE',(0,-1),(-1,-1),.6,colors.black)] if section['name']=='bank' else []),
-                *([('LINEBELOW',(0,0),(-1,0),1.2,colors.black),
+                *([('LINEAFTER',(-1,0),(-1,0),1.2,colors.black),
+                   ('LINEBELOW',(0,0),(-1,0),1.2,colors.black),
                    ('LINEBEFORE',(0,1),(0,-1),1.2,colors.black),
                    ('LINEAFTER',(-1,1),(-1,-1),1.2,colors.black),
                    ('LINEABOVE',(0,1),(-1,1),.6,colors.black)] if section['name']=='annexure' else [])]))
@@ -266,18 +267,18 @@ def xlsx(doc):
         format_values[kind]=values
         formats[kind]=book.add_format(values)
     required_format=book.add_format({'font_color':'#dc2626'})
-    def image(name,row,col,w,h):
+    def image(name,row,col,w,h,x_offset=4,y_offset=3):
         data=asset(doc,name)
         with PILImage.open(data) as im:
             scale=w/im.width if name=='header.png' else min(w/im.width,h/im.height)
             dpi=im.info.get('dpi',(96,96))
-        data.seek(0);sheet.insert_image(row,col,name,{'image_data':data,'x_scale':scale*dpi[0]/96,'y_scale':scale*dpi[1]/96,'object_position':1})
+        data.seek(0);sheet.insert_image(row,col,name,{'image_data':data,'x_scale':scale*dpi[0]/96,'y_scale':scale*dpi[1]/96,'x_offset':x_offset,'y_offset':y_offset,'object_position':1})
     def office_address_image(row):
         data=office_address_png(model['office_addresses'],sum(int(width*7+5) for width in model['widths']))
         with PILImage.open(data) as address_image:
             row_height=address_image.height*.375/5
         data.seek(0)
-        sheet.insert_image(row,0,'office-addresses.png',{'image_data':data,'x_scale':.5,'y_scale':.5,'object_position':1})
+        sheet.insert_image(row,0,'office-addresses.png',{'image_data':data,'x_scale':.5,'y_scale':.5,'x_offset':4,'y_offset':5,'object_position':1})
         return row_height
     for row in range(7):
         sheet.set_row(row,24)
@@ -351,15 +352,18 @@ def xlsx(doc):
                 if section['name']=='title':height=max(height,32)
                 sheet.set_row(row_index,min(409,height));row_index+=1
     footer_start=row_index
-    image('payment_options.jpg',footer_start,0,440,90);image('signature.png',footer_start,5,440,90)
-    for offset in range(4):
-        row=footer_start+offset;top=offset==0;bottom_edge=(1 if model['shipping_notice'] else 2) if offset==3 else 0
+    left_footer_width=sum(int(width*7+5) for width in model['widths'][:5])
+    right_footer_width=sum(int(width*7+5) for width in model['widths'][5:])
+    image('payment_options.jpg',footer_start,0,left_footer_width*.9,120)
+    image('signature.png',footer_start,5,right_footer_width*.8,120)
+    for offset in range(5):
+        row=footer_start+offset;top=offset==0;bottom_edge=(1 if model['shipping_notice'] else 2) if offset==4 else 0
         left=book.add_format({'left':2,'top':1 if top else 0,'bottom':bottom_edge,'border_color':'#000000'})
         right=book.add_format({'right':2,'top':1 if top else 0,'bottom':bottom_edge,'border_color':'#000000'})
         edge=book.add_format({'top':1 if top else 0,'bottom':bottom_edge,'border_color':'#000000'})
         sheet.set_row(row,20)
         for col in range(11):sheet.write_blank(row,col,None,left if col==0 else right if col==10 else edge)
-    row_index=footer_start+4
+    row_index=footer_start+5
     if model['shipping_notice']:
         notice_format=book.add_format({'font_name':'Cambria','font_size':11,'bold':True,
             'font_color':'#FF0000','bg_color':'#FFFF00','text_wrap':True,'valign':'vcenter',
@@ -376,7 +380,7 @@ def xlsx(doc):
         sheet.set_row(gap_row, 15)
     sheet.set_print_scale(70)
     sheet.set_h_pagebreaks([annexure_start])
-    annexure_subtotal = write_annexure(book, doc, coordinates, sheet, annexure_start, model['legal_notice'])
+    annexure_subtotal = write_annexure(book, doc, coordinates, sheet, annexure_start, model['legal_notice'], image)
     for row,col,fmt,path,cached in formula_cells:
         if path.endswith('.line_total'):
             prefix=path.rsplit('.',1)[0]
@@ -396,7 +400,7 @@ def xlsx(doc):
 
 
 
-def write_annexure(book, doc, cover_coordinates, sheet, start_row, legal_notice):
+def write_annexure(book, doc, cover_coordinates, sheet, start_row, legal_notice, insert_image):
     """Append the six-column annexure below the cover on the same sheet."""
     import textwrap
     model = annexure_section(doc)
@@ -418,7 +422,7 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row, legal_notice)
             if kind in ('head','center','bold_center','annexure_title'):
                 options['align']='center'
             if kind=='annexure_title':
-                options.update(font_name='Arial',font_size=12,valign='vcenter',border=0,left=0,right=0,top=0,bottom=2)
+                options.update(font_name='Arial',font_size=12,valign='vcenter',border=0,left=0,right=2,top=0,bottom=2)
             if cell.get('accounting'):
                 options.update(num_format='"'+symbol+'" #,##0.00',align='center')
             if cell.get('total_cell'):
@@ -431,14 +435,6 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row, legal_notice)
                 options['num_format'] = '0 "'+cell['uom']+'"'
             formats[key]=book.add_format(options)
         return formats[key]
-    def image(name,row,col,width,height):
-        data=asset(doc,name)
-        with PILImage.open(data) as im:
-            scale=width/im.width if name=='header.png' else min(width/im.width,height/im.height)
-            dpi=im.info.get('dpi',(96,96))
-        data.seek(0)
-        sheet.insert_image(row,col,name,{'image_data':data,'x_scale':scale*dpi[0]/96,
-            'y_scale':scale*dpi[1]/96,'object_position':1,'x_offset':6,'y_offset':4})
     header_width=sum(width*7+5 for width in WIDTHS)
     for row in range(start_row, start_row+7):
         sheet.set_row(row,24)
@@ -446,7 +442,7 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row, legal_notice)
             edge=book.add_format({'top':2 if row==start_row else 0,'left':2 if col==0 else 0,
                                  'right':2 if col==10 else 0})
             sheet.write_blank(row,col,None,edge)
-    image('header.png',start_row,0,header_width-12,125)
+    insert_image('header.png',start_row,0,header_width-12,125,x_offset=6,y_offset=4)
     row=start_row+7
     item_rows=[]
     summary=None
@@ -497,7 +493,21 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row, legal_notice)
                         else:sheet.write_number(row,col,float(Decimal(value)),style)
                 else:
                     sheet.write_string(row,col,value,style)
-            sheet.set_row(row,max(model['row_heights'][index],len(chunk)*14 if chunk else 0))
+            wrapped_lines=1
+            for cell in source:
+                value=str(cell.get('display_text',cell.get('text','')))
+                if cell.get('uom'):value+=' '+cell['uom']
+                width=max(1,int(ANNEXURE_WIDTHS[cell['col']]*cell.get('span',1)))
+                wrapped_lines=max(wrapped_lines,sum(max(1,len(textwrap.wrap(line,width,
+                    break_long_words=False,break_on_hyphens=False)))
+                    for line in value.splitlines() or ['']))
+            amount_words_row=any(cell.get('calculated')=='annexure_amount_in_words' for cell in source)
+            if amount_words_row:
+                row_height=max(model['row_heights'][index],45)
+            else:
+                row_height=max(model['row_heights'][index],len(chunk)*14 if chunk else 0,
+                               wrapped_lines*15+6)
+            sheet.set_row(row,row_height)
             row+=1
     # Keep payment and signatures framed, with the system notice below the frame.
     for offset in range(5):
@@ -506,9 +516,11 @@ def write_annexure(book, doc, cover_coordinates, sheet, start_row, legal_notice)
         right=book.add_format({'right':2,'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
         edge=book.add_format({'top':1 if top else 0,'bottom':2 if bottom_edge else 0,'border_color':'#000000'})
         for col in range(11):sheet.write_blank(row+offset,col,None,left if col==0 else right if col==10 else edge)
-        sheet.set_row(row+offset,18)
-    image('payment_options.jpg',row,0,header_width*.5,110)
-    image('signature.png',row,6,header_width*.47-10,110)
+        sheet.set_row(row+offset,20)
+    left_footer_width=sum(int(width*7+5) for width in WIDTHS[:5])
+    right_footer_width=sum(int(width*7+5) for width in WIDTHS[5:])
+    insert_image('payment_options.jpg',row,0,left_footer_width*.9,120)
+    insert_image('signature.png',row,5,right_footer_width*.8,120)
     legal=book.add_format({'font_name':'Cambria','font_size':8,'align':'center','valign':'vcenter','text_wrap':True})
     sheet.merge_range(row+5,0,row+5,10,legal_notice,legal)
     sheet.set_row(row+5,28)

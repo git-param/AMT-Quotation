@@ -508,13 +508,13 @@ def xlsx(doc):
         with PILImage.open(data) as im:
             scale=w/im.width if name=='header.png' else min(w/im.width,h/im.height)
             dpi=im.info.get('dpi',(96,96))
-        data.seek(0);sheet.insert_image(row,col,name,{'image_data':data,'x_scale':scale*dpi[0]/96,'y_scale':scale*dpi[1]/96,'object_position':1})
+        data.seek(0);sheet.insert_image(row,col,name,{'image_data':data,'x_scale':scale*dpi[0]/96,'y_scale':scale*dpi[1]/96,'x_offset':4,'y_offset':3,'object_position':1})
     def office_address_image(row):
         data=office_address_png(model['office_addresses'],sum(int(width*7+5) for width in model['widths']))
         with PILImage.open(data) as address_image:
             row_height=address_image.height*.375/5
         data.seek(0)
-        sheet.insert_image(row,0,'office-addresses.png',{'image_data':data,'x_scale':.5,'y_scale':.5,'object_position':1})
+        sheet.insert_image(row,0,'office-addresses.png',{'image_data':data,'x_scale':.5,'y_scale':.5,'x_offset':4,'y_offset':5,'object_position':1})
         return row_height
     for row in range(7):sheet.set_row(row,24)
     image('header.png',0,0,950,125)
@@ -586,7 +586,7 @@ def xlsx(doc):
                 if section['name']=='title':height=max(height,32)
                 sheet.set_row(row_index,min(409,height));row_index+=1
     footer_start=row_index
-    image('payment_options.jpg',footer_start,0,440,90);image('signature.png',footer_start,5,440,90)
+    image('payment_options.jpg',footer_start,0,480,100);image('signature.png',footer_start,5,480,100)
     for offset in range(4):
         row=footer_start+offset;top=offset==0;bottom_edge=(1 if model['shipping_notice'] else 2) if offset==3 else 0
         left=book.add_format({'left':2,'top':1 if top else 0,'bottom':bottom_edge,'border_color':'#000000'})

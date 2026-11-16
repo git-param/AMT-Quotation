@@ -91,7 +91,10 @@ def check_preview_edits(document, edits, user):
         if not isinstance(change, dict) or change.get('id') not in displayed:
             continue
         original = displayed[change['id']]
-        source = stored[change['id']]
+        # An edited historical PI can retain a line that no longer exists on
+        # the live order. Its saved totals still carry the server-owned
+        # manual_entry flag, so use that snapshot for the authorization check.
+        source = stored.get(change['id'], original)
         if 'unit_price' in change:
             try:
                 net = Decimal(str(change['unit_price']))

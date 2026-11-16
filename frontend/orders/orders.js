@@ -552,8 +552,12 @@ el('piCurrency').onchange=()=>{
   el('conversionHint').textContent=convert?'The latest available reference rates in Configuration will be applied automatically.':'Amounts already in the selected currency use their saved prices.';
 };
 function appendInvoice(invoice,id){
+  const existing=invoice.id==null?null:[...el('invoiceList').children].find(item=>item.dataset.invoiceId===String(invoice.id));
+  const createdAt=invoice.created_at||existing?.dataset.createdAt||'';
   const row=document.createElement('div');row.className='pi-download-row';
-  const title=document.createElement('strong');title.textContent=`${invoice.reference} / ${invoice.currency} / ${(invoice.created_at||'').slice(0,10)}`;row.append(title);
+  if(invoice.id!=null)row.dataset.invoiceId=String(invoice.id);
+  row.dataset.createdAt=createdAt;
+  const title=document.createElement('strong');title.textContent=`${invoice.reference} / ${invoice.currency} / ${createdAt.slice(0,10)}`;row.append(title);
   for(const format of [invoice.workbook_format||'xlsm',...(invoice.has_pdf?['pdf']:[])]){const link=document.createElement('a');link.textContent='Download '+format.toUpperCase();link.href=`/api/orders/${id}/invoices/${invoice.id}/download?format=${format}`;link.onclick=async event=>{event.preventDefault();try{await window.downloadPiFile(link.href);}catch(error){message(error.message,true);}};row.append(link);}
   if(current?.order.can_edit){
     const edit=document.createElement('button');edit.type='button';edit.className='pi-action-button pi-edit-button';edit.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16.5 3.5 4 4L8 20H4v-4L16.5 3.5Z"/><path d="m14 6 4 4"/></svg>';edit.title='Edit PI';edit.setAttribute('aria-label','Edit PI '+invoice.reference);
@@ -574,7 +578,7 @@ function appendInvoice(invoice,id){
     };
     row.append(remove);
   }
-  el('invoiceList').append(row);
+  if(existing)existing.replaceWith(row);else el('invoiceList').append(row);
 }
 const invoicePreview=window.createPiPreview(el('piPreview'),api,json,async result=>{
   appendInvoice({...result,currency:el('piCurrency').value,workbook_format:'xlsx',has_pdf:true},current.order.id);
